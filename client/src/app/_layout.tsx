@@ -2,12 +2,15 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type Theme } from 'expo-
 import { StatusBar } from 'expo-status-bar';
 import { useMemo } from 'react';
 
+import { DataProvider } from '@/data/DataProvider';
 import { AppThemeProvider, useAppTheme } from '@/theme/ThemeProvider';
 
 export default function RootLayout() {
   return (
     <AppThemeProvider>
-      <NavigationRoot />
+      <DataProvider>
+        <NavigationRoot />
+      </DataProvider>
     </AppThemeProvider>
   );
 }
