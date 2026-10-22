@@ -1,15 +1,18 @@
 {
   "expo": {
-    "name": "client",
-    "slug": "client",
+    "name": "Exercise Tracker",
+    "slug": "exercise-tracker",
+    "scheme": "exercisetracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gavynnygren.exercisetracker"
     },
     "android": {
+      "package": "com.gavynnygren.exercisetracker",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -18,7 +21,17 @@
       }
     },
     "web": {
+      "output": "static",
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-status-bar",
+      "expo-router",
+      "expo-sqlite",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
     }
   }
 }

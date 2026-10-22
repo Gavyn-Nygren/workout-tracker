@@ -1,5 +1,12 @@
 # AI-Powered Workout Tracker
 
+> **Status:** early development. This overview predates the current plan. The source of truth is [exercise-tracker-draft.md](exercise-tracker-draft.md) (product spec) and [ROADMAP.md](ROADMAP.md) (build order). Key changes since this README was written:
+> - The launch is iOS first; Android and web come later.
+> - The client uses Expo SDK 58 with custom development builds (not the managed workflow alone).
+> - Supabase Auth replaces the hand-built JWT + bcrypt plan.
+> - SQLite replaces MMKV as the offline store.
+> - The AI chat ships in a follow-up release.
+
 A cross-platform (Mobile + Web) workout tracking application featuring real-time, on-device AI exercise form analysis and a LangChain-powered conversational assistant for contextual workout insights. 
 
 ## 🚀 Features

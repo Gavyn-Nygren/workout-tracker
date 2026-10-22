@@ -1,3 +1,8 @@
+> **Superseded.** This was an early context prompt. Where it conflicts with [exercise-tracker-draft.md](exercise-tracker-draft.md) (the spec) or [ROADMAP.md](ROADMAP.md), those win. In particular:
+> - The design tokens, auth, storage, and platform scope below are outdated.
+> - The "June 2026 architecture specification" does not exist in this repo.
+> - The body-measurement profile is test/calibration data only.
+
 1. Technology Stack
 
 Frontend (Client): React Native, Expo (Managed Workflow), React Native Web.

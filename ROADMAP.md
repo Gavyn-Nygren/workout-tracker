@@ -4,14 +4,14 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G0.1
+**Current goal:** G0.2, waiting for the user to review it on their iPhone
 
 ## How we work
 
 - **Preview:** the app runs on the user's iPhone through **Expo Go**. The user is on Windows, so there's no iOS Simulator. Phases 0-3 must use only modules that work in Expo Go. Custom native code (camera, MediaPipe, Live Activity) waits for Phase 4.
 - **Design decisions:** when a visual choice isn't already settled in the spec, present 2-4 concrete options (with mockups where helpful) for the user to pick from.
 - **Review checkpoints:** a goal marked 👁 is done only when the user has looked at it on their phone and approved it.
-- **Expo version:** the project is on Expo SDK 57. Read the versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing Expo code (see [client/AGENTS.md](client/AGENTS.md)).
+- **Expo version:** the project is on Expo SDK 58, upgraded from 57 in G0.1 because the App Store's Expo Go now runs SDK 58 only. Read the versioned docs at https://docs.expo.dev/versions/v58.0.0/ before writing Expo code (see [client/AGENTS.md](client/AGENTS.md)).
 - **Outdated docs:** [README.md](README.md) and [codex_context.md](codex_context.md) describe an older plan (web at launch, hand-built auth, gradient cards, AI priming). Where they disagree with the spec, the spec wins.
 - **Defaults chosen for the build:**
   - TypeScript
@@ -26,18 +26,20 @@ The minimum setup needed to show anything on the phone.
 
 ### G0.1 Project housekeeping
 
-- [ ] Commit the current scaffold and spec to git.
-- [ ] Rename the app from `client` to its real name (or a placeholder) and set the iOS bundle ID.
-- [ ] Convert the client to TypeScript.
-- [ ] Add a root `CLAUDE.md` that points to the spec and this roadmap.
-- [ ] Mark README/codex_context as outdated, or rewrite them.
+- [x] Commit the current scaffold and spec to git.
+- [x] Rename the app from `client` to its real name (or a placeholder) and set the iOS bundle ID. *Placeholder: "Exercise Tracker", bundle ID `com.gavynnygren.exercisetracker`.*
+- [x] Convert the client to TypeScript (strict mode).
+- [x] Add a root `CLAUDE.md` that points to the spec and this roadmap.
+- [x] Mark README/codex_context as outdated, or rewrite them. *Status banners added.*
+- [x] Upgrade from Expo SDK 57 to SDK 58 so the app runs in the current Expo Go.
 
 **Done when:** the repo is committed, TypeScript compiles, and the docs point to the spec.
 
 ### G0.2 Navigation skeleton 👁
 
-- [ ] Set up Expo Router with the five tabs `Today | Plans | Home | Progress | Profile`, using placeholder screens.
-- [ ] Add a dark tab bar and dark header, with an explicit light/dark switch (not just the system setting).
+- [x] Set up Expo Router with the five tabs `Today | Plans | Home | Progress | Profile`, using placeholder screens.
+- [x] Add a dark tab bar and dark header, with an explicit light/dark switch (not just the system setting). *System / Light / Dark switch on Profile, saved on the device.*
+- [ ] The user has reviewed it on their iPhone.
 
 **Done when:** the user scans the QR code with Expo Go and can tap between all five tabs on their iPhone.
 
