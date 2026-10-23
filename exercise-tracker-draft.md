@@ -617,6 +617,13 @@ All token values live in `client/src/theme/tokens.ts`. Every text and background
   - **Loading:** skeletons shaped like the content.
   - **Failed save:** an error toast, "Couldn't save {thing}. Try again." The screen stays open with the user's input.
   - **Testing:** Profile → Developer → Component gallery has switches that make loads slow or fail, and saves fail.
+- **App icon:** the user picked a **black rubber weight plate with a blue color-code stripe** (blue is the competition color for 20 kg plates). It has these details:
+  - "45 LB" and "20 KG" stamped into the face, two cut-out grips, and a bolted steel hub.
+  - Stopwatch-style ticks around the rim light up in blue for progress.
+  - A gold hand points at the latest PR.
+  - iOS 18 dark and tinted versions are included.
+  - The source art is `client/assets/source/app-icon.svg`.
+- **Splash screen:** the user picked **follows the theme**: the plate centered on #F2F4F7 in light mode and #0B0D10 in dark mode, the same as the page background, so nothing flashes on launch. The window behind the app follows the theme too.
 - **VoiceOver:**
   - Every control has a spoken label, and steppers, timers and charts are adjustable (swipe up or down).
   - Set completion, rest ending, PRs and form-recording progress are announced.

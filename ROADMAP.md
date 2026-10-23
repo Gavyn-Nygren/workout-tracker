@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G2.12 (app icon & splash).
+**Current goal:** 🏁 Design sign-off.
 
 ## How we work
 
@@ -223,12 +223,12 @@ Load the `dataviz` skill before building any charts.
 - [x] Add VoiceOver labels. *Every control is labeled; steppers, timers, and charts are adjustable; sets, rest, PRs, and recording are announced.*
 - [x] Make every empty, loading, and error state consistent. *Shared states in one order (error, loading, not found, empty), a toast for every failed save, and developer switches to slow or fail data (Profile → Developer → Component gallery).*
 - [x] Refine motion. *Set complete pops the check, cards shrink when pressed, and the rest and workout bars slide in (user's picks). Reduce Motion turns movement off.*
-- [ ] The user has reviewed the polish pass on their iPhone.
+- [x] The user has reviewed the polish pass on their iPhone.
 
 ### G2.12 App icon & splash 👁
 
-- [ ] Present icon and splash options; the user picks.
-- [ ] Light and dark splash backgrounds, and a themed root background, so dark-mode launches don't flash white. *Expo Go shows its own splash; these take effect in the development build (G4.1).*
+- [x] Present icon and splash options; the user picks. *Five rounds on an options page. The user picked a black weight plate with a blue color-code stripe, stamped "45 LB / 20 KG", with lit progress ticks and a gold PR hand, plus a splash that follows the theme. iOS dark and tinted icons and Android adaptive icons are included.*
+- [x] Light and dark splash backgrounds, and a themed root background, so dark-mode launches don't flash white. *Expo Go shows its own splash; these take effect in the development build (G4.1).*
 
 ### 🏁 Design sign-off
 

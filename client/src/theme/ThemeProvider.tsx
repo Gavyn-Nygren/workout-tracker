@@ -1,5 +1,6 @@
 import Storage from 'expo-sqlite/kv-store';
 import { createContext, useContext, useMemo, useState, type ReactNode, useLayoutEffect } from 'react';
+import * as SystemUI from 'expo-system-ui';
 import { Appearance, useColorScheme } from 'react-native';
 
 import { colors, elevation, type ColorScheme, type ThemeColors } from './tokens';
@@ -55,6 +56,12 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
       elevation: elevation[scheme],
     };
   }, [preference, deviceScheme]);
+
+  // The window behind the app (seen during sheet and keyboard transitions) matches the page, so
+  // dark mode never flashes white. The splash screen uses the same two colors (app.json).
+  useLayoutEffect(() => {
+    SystemUI.setBackgroundColorAsync(colors[value.scheme].background).catch(() => {});
+  }, [value.scheme]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
