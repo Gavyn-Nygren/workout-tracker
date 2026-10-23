@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** 🏁 Design sign-off.
+**Current goal:** G3.2 (exercise library content).
 
 ## How we work
 
@@ -234,6 +234,8 @@ Load the `dataviz` skill before building any charts.
 
 The user approves the app's look end to end before Phase 3 starts. Later phases change behavior, not appearance.
 
+- [x] The user signed off the design.
+
 ---
 
 ## Phase 3: Core Functionality (local-first, still Expo Go)
@@ -242,8 +244,10 @@ Everything works on one phone, offline, with no server.
 
 ### G3.1 Local database
 
-- [ ] expo-sqlite schema and migrations, replacing the fake data layer.
-- [ ] Client-generated IDs and tombstones from the start, so cloud sync can be added later.
+- [x] expo-sqlite schema and migrations, replacing the fake data layer. *Screens are unchanged. Data now survives restarts, and the calendar keeps generating 28 days ahead as days pass.*
+- [x] Client-generated IDs and tombstones from the start, so cloud sync can be added later. *Sets are stored per row, and every change is queued in an outbox for Phase 5.*
+- [x] Sample data on first launch (user's pick). Profile → Developer has "Erase all data" (to start using the app for real) and "Load sample data". Sample data is never queued to sync.
+- [x] Automated tests: `npm test` runs the database tests on Node's built-in SQLite.
 
 ### G3.2 Exercise library content
 

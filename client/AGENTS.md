@@ -4,4 +4,6 @@ This project is on Expo SDK 58. Read the exact versioned docs at https://docs.ex
 
 - Import JS tabs from `expo-router/js-tabs`. The `Tabs` export from `expo-router` is deprecated.
 - If `npm run typecheck` reports route errors mentioning paths like `/../hooks/...`, the running dev server has written a stale `.expo/types/router.d.ts`. Delete that file or restart `npx expo start`; it's generated and gitignored.
+- Data lives in a local SQLite database (`src/data/db/`). Screens never touch it directly: they use the hooks in `src/data/hooks.ts`, which call the `DataRepository` in `src/data/repository.ts`. Schema changes go in a new entry in the `MIGRATIONS` list in `src/data/db/schema.ts`; never edit a shipped migration.
+- `npm test` runs unit tests in `tests/` with Node's test runner. Tests can't import React Native or Expo modules; database tests use Node's built-in SQLite through `tests/support/nodeSqlite.ts`. `npm run typecheck` checks the app and the tests.
 - The app is previewed in Expo Go on iOS. Only use modules that are "Included in Expo Go" until the roadmap's Phase 4 (EAS development build).

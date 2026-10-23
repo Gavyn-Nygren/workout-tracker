@@ -76,7 +76,12 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 
 - React Native with **Expo using custom development builds** (`expo-dev-client` with prebuild/Continuous Native Generation). **Expo Go is not supported**, because Vision Camera, MediaPipe, Skia, and the Live Activity extension all need native code.
 - Server state: TanStack Query.
-- **Local persistence uses an on-device SQLite database** (for example expo-sqlite, op-sqlite, or WatermelonDB; the library is still to be chosen). It holds workouts, plans, history, and the sync outbox. MMKV is kept only for small key-value data such as settings, UI state, and cached tokens.
+- **Local persistence uses an on-device SQLite database through expo-sqlite** (chosen in G3.1). It holds workouts, plans, history, and the sync outbox.
+  - Every synced row has a client-generated id, an `updated_at`, and a `deleted_at` tombstone.
+  - Logged sets are stored one row per set, so sync can merge per set.
+  - Every change is also written to an outbox table for the sync worker.
+  - Personal records, streaks, and badges are calculated from the stored history rather than stored, so edits never leave them stale.
+  - Small UI state (pinned graphs, theme, sign-in state) lives in expo-sqlite's key-value store.
 - Charts: **custom react-native-svg charts** for now. Victory Native XL was the plan, but its current release needs Skia 2.15+ while Expo SDK 58 / Expo Go ships Skia 2.14. The charts follow the dataviz rules (one axis, hairline grid, 2px lines, ringed markers, labelled endpoints, drag-to-read crosshair). Revisit Victory once on development builds (roadmap Phase 4).
 - Form analysis: Vision Camera, MediaPipe Pose Landmarker, and Skia overlays, **all running on-device**.
 - Live Activity rest timer: a native iOS widget extension.

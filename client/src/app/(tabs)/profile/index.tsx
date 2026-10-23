@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppText, Card, ListRow, SectionHeader, SegmentedControl } from '@/components/ui';
+import { AppText, Card, ListRow, SectionHeader, SegmentedControl, useToast } from '@/components/ui';
+import { useDevData } from '@/data/DataProvider';
 import { usePersonalRecords, useSessions, useStreak } from '@/data/hooks';
 import { formatClock, spokenDuration } from '@/hooks/useNow';
 import { authStore, resetFirstRun } from '@/features/auth/authStore';
@@ -21,6 +22,8 @@ export default function ProfileScreen() {
   const { colors, preference, setPreference } = useAppTheme();
   const { preferences } = useSettings();
   const { large } = useTextScale();
+  const toast = useToast();
+  const devData = useDevData();
   const auth = authStore.use();
   const account = { name: auth.name, method: auth.method === 'apple' ? 'Signed in with Apple' : auth.email ?? 'Signed in with email' };
   const { data: sessions } = useSessions();
@@ -104,11 +107,48 @@ export default function ProfileScreen() {
                 <Card padding="none">
                   <ListRow title="Component gallery" subtitle="Every shared component, in the current theme" icon="square.grid.2x2" onPress={() => router.push('/dev/gallery')} />
                   <ListRow
+                    title="Load sample data"
+                    subtitle="Replace everything with eight weeks of sample workouts ending today"
+                    icon="tray.and.arrow.down"
+                    onPress={() =>
+                      Alert.alert('Load sample data?', 'Every workout, plan, weigh-in, goal, and recording is replaced with sample data. Settings stay.', [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Load sample data',
+                          style: 'destructive',
+                          onPress: async () => {
+                            await devData.loadSample();
+                            toast.show({ message: 'Sample data loaded.', tone: 'success' });
+                          },
+                        },
+                      ])
+                    }
+                  />
+                  <ListRow
+                    title="Erase all data"
+                    subtitle={devData.holdsSampleData() ? 'Remove the sample data and start using the app for real' : 'Remove every workout, plan, weigh-in, goal, and recording'}
+                    icon="trash"
+                    destructive
+                    onPress={() =>
+                      Alert.alert('Erase all data?', 'Every workout, plan, weigh-in, goal, and recording is deleted from this phone. Settings stay. This can’t be undone.', [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Erase',
+                          style: 'destructive',
+                          onPress: async () => {
+                            await devData.eraseAll();
+                            toast.show({ message: 'All data erased.' });
+                          },
+                        },
+                      ])
+                    }
+                  />
+                  <ListRow
                     title="Restart first-run setup"
                     subtitle="Sign out and see welcome, sign-up, and onboarding as a new user"
                     icon="arrow.counterclockwise"
                     onPress={() =>
-                      Alert.alert('Restart first-run setup?', 'You will be signed out and taken through sign-up and onboarding. Your sample data stays.', [
+                      Alert.alert('Restart first-run setup?', 'You will be signed out and taken through sign-up and onboarding. Your data stays.', [
                         { text: 'Cancel', style: 'cancel' },
                         { text: 'Restart', onPress: resetFirstRun },
                       ])
