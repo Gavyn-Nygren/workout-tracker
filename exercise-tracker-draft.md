@@ -160,6 +160,39 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 - Users can start from curated starter templates or build custom plans.
 - Starter templates cover bodybuilding, powerlifting, ATG, CrossFit-style, athletic development, bodyweight, and gym/weighted training. They are **AI-drafted original programs reviewed by the developer**; branded programs are not reproduced.
 
+**Plans tab layout**
+
+- A segmented control at the top switches between **My plans / Templates / Exercises**.
+- **My plans:**
+  - Each plan is a card with its type, training days, a mini week grid, and the next workout.
+  - Active plans come first, then paused or archived ones.
+- **Plan detail:**
+  - A status card, then the **week grid** for the schedule.
+    - Weekly and fixed-length plans show seven day columns with workout chips.
+    - Rotating plans show the cycle as a row of steps.
+    - Fixed-length plans also show "Week N of M".
+  - Below the grid, the plan's workouts.
+  - The menu offers rename, pause/resume, and delete. Deleting removes upcoming workouts; logged history stays.
+- **New plan:** a short three-step setup, then the plan editor:
+  1. Plan type.
+  2. Name and start date (today or next Monday).
+  3. Training days and program length, or the rotating cycle.
+
+  Each training day starts as an empty workout to fill in.
+- **Workout editor:**
+  - Exercises show their sets × reps, rest, and progression.
+  - The ⋯ menu offers edit sets & reps, swap, superset with next / split up, move up or down, and remove.
+- **Sets & reps editor:**
+  - A per-set table of reps (a number or a range), effort, and rest, where you can change each set's type and add sets or warm-ups.
+  - A shared target weight (Auto by default), applied to every working set, and a shared tempo.
+  - The progression rule (none, rep range, or weekly %) and what to do on a miss (repeat, or deload after N misses).
+  - It saves with a Save button and warns before you discard unsaved edits.
+- **Templates:** category filter chips, then a card per template showing level, days per week, length, and equipment. A template's detail shows its schedule and workouts. **Use this template** copies it into a new plan starting today or next Monday.
+- **Exercises:**
+  - The library has search and muscle filters, with your custom exercises listed first.
+  - Each exercise's detail shows its muscles, when you last did it (with your best set), and which plans use it.
+  - The custom exercise form needs only a name. Linking it to a built-in movement groups its stats and inherits form analysis.
+
 **Today screen**
 
 - Today shows the scheduled workout(s) for the selected date, with a calendar wheel at the top for browsing past and future dates.

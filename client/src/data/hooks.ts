@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useRepository } from './DataProvider';
 import type { DateRange } from './repository';
-import type { ID, PlannedBlock, WorkoutSession } from './types';
+import type { Exercise, ID, Plan, PlannedBlock, WorkoutSession } from './types';
 
 // Writes. Each one refreshes the reads it affects.
 
@@ -22,6 +22,33 @@ export function useUpdatePlanWorkout() {
   return useMutation({
     mutationFn: (input: { planId: ID; workoutId: ID; blocks: PlannedBlock[] }) => repo.updatePlanWorkout(input.planId, input.workoutId, input.blocks),
     onSuccess: () => client.invalidateQueries({ queryKey: ['plans'] }),
+  });
+}
+
+export function useSavePlan() {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (plan: Plan) => repo.savePlan(plan),
+    onSuccess: () => Promise.all(['plans', 'occurrences'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+  });
+}
+
+export function useDeletePlan() {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (planId: ID) => repo.deletePlan(planId),
+    onSuccess: () => Promise.all(['plans', 'occurrences'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+  });
+}
+
+export function useSaveExercise() {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (exercise: Exercise) => repo.saveExercise(exercise),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['exercises'] }),
   });
 }
 

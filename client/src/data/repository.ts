@@ -17,8 +17,10 @@ import type {
   WorkoutSession,
 } from './types';
 import type { FakeDataset } from './fake';
+import { addDays } from './dates';
 import { deriveStreak } from './fake/derived';
 import { derivePersonalRecords } from './records';
+import { scheduleOccurrences } from './schedule';
 
 /** Inclusive date range. */
 export type DateRange = { from: ISODate; to: ISODate };
@@ -53,7 +55,19 @@ export interface DataRepository {
   saveSession(session: WorkoutSession): Promise<void>;
   /** Replaces a plan workout's blocks; affects future workouts only, since sessions keep their own copy. */
   updatePlanWorkout(planId: ID, workoutId: ID, blocks: PlannedBlock[]): Promise<void>;
+  /**
+   * Creates or replaces a plan and rebuilds its upcoming calendar (spec 2.5: edits change unstarted
+   * future workouts only). Past occurrences and anything already started are left alone.
+   */
+  savePlan(plan: Plan): Promise<void>;
+  /** Deletes a plan and its unstarted future occurrences. Logged history stays. */
+  deletePlan(planId: ID): Promise<void>;
+  /** Creates or updates a custom exercise. */
+  saveExercise(exercise: Exercise): Promise<void>;
 }
+
+/** How far ahead the calendar is generated. */
+const SCHEDULE_AHEAD_DAYS = 28;
 
 function inRange(date: ISODate | undefined, range?: DateRange): boolean {
   if (!range) return true;
@@ -114,6 +128,24 @@ export function createFakeRepository(data: FakeDataset): DataRepository {
               workouts: plan.workouts.map((w) => (w.id === workoutId ? { ...w, blocks } : w)),
             },
       );
+    },
+    savePlan: async (plan) => {
+      const existing = data.plans.find((p) => p.id === plan.id);
+      const saved: Plan = { ...plan, version: existing ? existing.version + 1 : plan.version, updatedAt: new Date().toISOString() };
+      data.plans = existing ? data.plans.map((p) => (p.id === plan.id ? saved : p)) : [...data.plans, saved];
+      const keep = data.occurrences.filter((o) => o.planId !== plan.id || o.scheduledDate < data.today || o.sessionId);
+      const kept = new Set(keep.map((o) => o.id));
+      const upcoming = scheduleOccurrences(saved, data.today, addDays(data.today, SCHEDULE_AHEAD_DAYS)).filter((o) => !kept.has(o.id));
+      data.occurrences = [...keep, ...upcoming];
+    },
+    deletePlan: async (planId) => {
+      data.plans = data.plans.filter((p) => p.id !== planId);
+      data.occurrences = data.occurrences.filter((o) => o.planId !== planId || o.scheduledDate < data.today || o.sessionId);
+    },
+    saveExercise: async (exercise) => {
+      const existing = data.exercises.some((e) => e.id === exercise.id);
+      data.exercises = existing ? data.exercises.map((e) => (e.id === exercise.id ? exercise : e)) : [...data.exercises, exercise];
+      exercisesById.set(exercise.id, exercise);
     },
   };
 }

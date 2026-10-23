@@ -35,7 +35,8 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Today', tabBarIcon: tabIcon('dumbbell', 'dumbbell.fill') }} />
-      <Tabs.Screen name="plans" options={{ title: 'Plans', tabBarIcon: tabIcon('calendar', 'calendar') }} />
+      {/* Plans has its own stack (and headers) for plan, workout, and exercise screens. */}
+      <Tabs.Screen name="plans" options={{ title: 'Plans', headerShown: false, tabBarIcon: tabIcon('calendar', 'calendar') }} />
       <Tabs.Screen name="home" options={{ title: 'Home', tabBarIcon: tabIcon('house', 'house.fill') }} />
       <Tabs.Screen
         name="progress"

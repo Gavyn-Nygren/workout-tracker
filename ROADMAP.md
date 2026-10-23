@@ -132,17 +132,20 @@ The most important screen.
 - [x] Total volume, new PRs, and a partial/complete badge. *Dark hero card plus comparison with the last time (user's picks).*
 - [x] PR celebration, with confetti only when there are PRs. *Brand confetti (user's pick).*
 - [x] A "save changes to plan?" prompt. *Lists the added, swapped, removed, and reordered exercises and set-count changes.*
-- [ ] The user has reviewed the summary on their iPhone.
+- [x] The user has reviewed the summary on their iPhone.
 
 *Finishing now saves the workout and plan changes into the in-memory sample data, so they show on Today and in "previous" values until the app restarts. Real storage comes in G3.1.*
 
 ### G2.4 Plans 👁
 
-- [ ] Plan list (multiple active plans) and plan detail with its calendar.
-- [ ] Plan editor for weekly, fixed-length, and rotating plans.
-- [ ] Prescription editor: sets, reps, weight, RPE/RIR, rest, tempo, warm-ups, progression rule.
-- [ ] Template browser by category.
-- [ ] Exercise picker and custom exercise form (with base-movement link).
+- [x] Plan list (multiple active plans) and plan detail with its calendar. *Segmented tab (My plans / Templates / Exercises) and week-grid schedule (user's picks).*
+- [x] Plan editor for weekly, fixed-length, and rotating plans. *Three-step setup, then the editor (user's pick); schedule editor for weekdays, program length, and rotating cycles.*
+- [x] Prescription editor: sets, reps, weight, RPE/RIR, rest, tempo, warm-ups, progression rule.
+- [x] Template browser by category. *Category chips + cards (user's pick). Four templates have full sample workouts; three are listing-only until G3.13.*
+- [x] Exercise picker and custom exercise form (with base-movement link).
+- [ ] The user has reviewed Plans on their iPhone.
+
+*Plan and exercise edits save into the in-memory sample data, and the upcoming calendar is rebuilt so Today shows them, until the app restarts.*
 
 ### G2.5 Home 👁
 

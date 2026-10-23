@@ -1,3 +1,4 @@
+import { fixedFromPattern } from '../schedule';
 import { lbToKg } from '../units';
 import type { PlannedBlock, PlannedExercise, Plan, PlanWorkout, SetPrescription, StarterTemplate } from '../types';
 
@@ -161,8 +162,127 @@ export const fakePlans: Plan[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Starter templates: stand-ins for the AI-drafted catalog (roadmap G3.13).
-// Only the first carries full workouts; the rest are listing-level for UI work.
+// Starter templates: stand-ins for the AI-drafted catalog (roadmap G3.13). Four carry full
+// workouts, one per plan type plus Upper/Lower; the rest are listing-level for UI work.
+
+const percent = (pct: number) => ({ type: 'percent_weekly', percent: pct, onMiss: { type: 'repeat' } }) as const;
+
+const pplPush: PlanWorkout = {
+  id: 'tw_ppl_push',
+  name: 'Push',
+  estimatedMinutes: 60,
+  blocks: [
+    single('tb_push_1', { id: 'tp_push_bench', exerciseId: 'ex_bench_press', sets: [...warmups([95, 135], 5), ...working(4, { min: 6, max: 10 }, 150)], progression: repRange(5) }),
+    single('tb_push_2', { id: 'tp_push_incline', exerciseId: 'ex_incline_db_press', sets: working(3, { min: 8, max: 12 }, 120) }),
+    single('tb_push_3', { id: 'tp_push_ohp', exerciseId: 'ex_overhead_press', sets: working(3, { min: 8, max: 10 }, 120) }),
+    {
+      id: 'tb_push_4',
+      type: 'superset',
+      roundRestSec: 75,
+      exercises: [
+        { id: 'tp_push_lateral', exerciseId: 'ex_lateral_raise', sets: working(3, { min: 12, max: 15 }, 0) },
+        { id: 'tp_push_pushdown', exerciseId: 'ex_triceps_pushdown', sets: working(3, { min: 10, max: 15 }, 0) },
+      ],
+    },
+  ],
+};
+
+const pplPull: PlanWorkout = {
+  id: 'tw_ppl_pull',
+  name: 'Pull',
+  estimatedMinutes: 60,
+  blocks: [
+    single('tb_pull_1', { id: 'tp_pull_pullup', exerciseId: 'ex_pull_up', sets: working(4, { min: 6, max: 10 }, 150) }),
+    single('tb_pull_2', { id: 'tp_pull_row', exerciseId: 'ex_barbell_row', sets: working(4, { min: 6, max: 10 }, 120), progression: repRange(5) }),
+    single('tb_pull_3', { id: 'tp_pull_pulldown', exerciseId: 'ex_lat_pulldown', sets: working(3, { min: 10, max: 12 }, 90) }),
+    {
+      id: 'tb_pull_4',
+      type: 'superset',
+      roundRestSec: 75,
+      exercises: [
+        { id: 'tp_pull_facepull', exerciseId: 'ex_face_pull', sets: working(3, { min: 12, max: 15 }, 0) },
+        { id: 'tp_pull_curl', exerciseId: 'ex_db_curl', sets: working(3, { min: 10, max: 12 }, 0) },
+      ],
+    },
+  ],
+};
+
+const pplLegs: PlanWorkout = {
+  id: 'tw_ppl_legs',
+  name: 'Legs',
+  estimatedMinutes: 70,
+  blocks: [
+    single('tb_legs_1', { id: 'tp_legs_squat', exerciseId: 'ex_back_squat', sets: [...warmups([135, 185], 5), ...working(4, { min: 6, max: 10 }, 180)], progression: repRange(5) }),
+    single('tb_legs_2', { id: 'tp_legs_rdl', exerciseId: 'ex_rdl', sets: working(3, { min: 8, max: 10 }, 150) }),
+    single('tb_legs_3', { id: 'tp_legs_press', exerciseId: 'ex_leg_press', sets: working(3, { min: 10, max: 15 }, 120) }),
+    single('tb_legs_4', { id: 'tp_legs_curl', exerciseId: 'ex_lying_leg_curl', sets: working(3, { min: 10, max: 15 }, 90) }),
+    single('tb_legs_5', { id: 'tp_legs_calf', exerciseId: 'ex_standing_calf_raise', sets: working(4, { min: 10, max: 15 }, 60) }),
+  ],
+};
+
+const foundationsA: PlanWorkout = {
+  id: 'tw_found_a',
+  name: 'Day A',
+  estimatedMinutes: 55,
+  blocks: [
+    single('tb_fa_1', { id: 'tp_fa_squat', exerciseId: 'ex_back_squat', sets: [...warmups([45, 95, 135], 5), ...working(5, 5, 180)], progression: percent(2.5) }),
+    single('tb_fa_2', { id: 'tp_fa_bench', exerciseId: 'ex_bench_press', sets: [...warmups([45, 95], 5), ...working(5, 5, 180)], progression: percent(2.5) }),
+    single('tb_fa_3', { id: 'tp_fa_row', exerciseId: 'ex_barbell_row', sets: working(3, 8, 120) }),
+  ],
+};
+
+const foundationsB: PlanWorkout = {
+  id: 'tw_found_b',
+  name: 'Day B',
+  estimatedMinutes: 55,
+  blocks: [
+    single('tb_fb_1', { id: 'tp_fb_squat', exerciseId: 'ex_back_squat', sets: [...warmups([45, 95, 135], 5), ...working(3, 5, 180)], progression: percent(2.5) }),
+    single('tb_fb_2', { id: 'tp_fb_ohp', exerciseId: 'ex_overhead_press', sets: [...warmups([45], 5), ...working(5, 5, 150)], progression: percent(2.5) }),
+    single('tb_fb_3', { id: 'tp_fb_deadlift', exerciseId: 'ex_deadlift', sets: [...warmups([135, 185], 3), ...working(1, 5, 210)], progression: percent(2.5) }),
+  ],
+};
+
+const bodyweightA: PlanWorkout = {
+  id: 'tw_bw_a',
+  name: 'Bodyweight A',
+  estimatedMinutes: 35,
+  blocks: [
+    {
+      id: 'tb_bwa_1',
+      type: 'circuit',
+      roundRestSec: 120,
+      transitionRestSec: 20,
+      exercises: [
+        { id: 'tp_bwa_pushup', exerciseId: 'ex_push_up', sets: working(3, { min: 8, max: 15 }, 0, { modifiers: ['amrap'] }) },
+        { id: 'tp_bwa_lunge', exerciseId: 'ex_reverse_lunge', sets: working(3, { min: 10, max: 12 }, 0) },
+        { id: 'tp_bwa_plank', exerciseId: 'ex_plank', sets: [1, 2, 3].map(() => ({ kind: 'timed_hold' as const, modifiers: [], targetDurationSec: 30, restSec: 0 })) },
+      ],
+    },
+  ],
+};
+
+const bodyweightB: PlanWorkout = {
+  id: 'tw_bw_b',
+  name: 'Bodyweight B',
+  estimatedMinutes: 35,
+  blocks: [
+    single('tb_bwb_1', { id: 'tp_bwb_pullup', exerciseId: 'ex_pull_up', sets: working(3, { min: 3, max: 8 }, 120, { modifiers: ['amrap'] }) }),
+    single('tb_bwb_2', { id: 'tp_bwb_dips', exerciseId: 'ex_dips', sets: working(3, { min: 6, max: 12 }, 120) }),
+    single('tb_bwb_3', { id: 'tp_bwb_bss', exerciseId: 'ex_bulgarian_split_squat', sets: working(3, { min: 8, max: 12 }, 90) }),
+    single('tb_bwb_4', { id: 'tp_bwb_legraise', exerciseId: 'ex_hanging_leg_raise', sets: working(3, { min: 8, max: 12 }, 60) }),
+  ],
+};
+
+const listing = (
+  id: string,
+  name: string,
+  category: StarterTemplate['category'],
+  level: StarterTemplate['level'],
+  daysPerWeek: number,
+  durationWeeks: number | undefined,
+  description: string,
+  equipment: StarterTemplate['equipment'],
+): StarterTemplate => ({ id, name, category, level, daysPerWeek, durationWeeks, description, equipment, schedule: { type: 'rotating', sequence: [] }, workouts: [] });
 
 export const fakeTemplates: StarterTemplate[] = [
   {
@@ -176,27 +296,51 @@ export const fakeTemplates: StarterTemplate[] = [
     schedule: fakePlans[0].schedule,
     workouts: [upperA, lowerA, upperB, lowerB],
   },
-  ...(
-    [
-      ['tpl_ppl', 'Push / Pull / Legs', 'bodybuilding', 'intermediate', 6, undefined, 'High-volume hypertrophy split that hits each muscle twice a week.', ['barbell', 'dumbbell', 'cable', 'machine']],
-      ['tpl_powerbuilding', 'Strength Foundations 12-Week', 'powerlifting', 'beginner', 3, 12, 'Squat, bench, and deadlift focus with weekly percentage progression.', ['barbell']],
-      ['tpl_atg', 'Knees-Over-Toes Mobility Strength', 'atg', 'beginner', 3, 8, 'Full range-of-motion lower-body work: split squats, tibialis, and deep squats.', ['bodyweight', 'dumbbell']],
-      ['tpl_conditioning', 'Gym Conditioning Circuits', 'crossfit', 'intermediate', 4, undefined, 'Mixed-modal circuits pairing barbell lifts with bodyweight movements.', ['barbell', 'kettlebell', 'bodyweight']],
-      ['tpl_athlete', 'Field Athlete Power', 'athletic', 'intermediate', 3, 10, 'Explosive lower-body strength and single-leg stability for field sports.', ['barbell', 'dumbbell', 'bodyweight']],
-      ['tpl_calisthenics', 'Bodyweight Basics', 'bodyweight', 'beginner', 3, undefined, 'Push-ups, pull-ups, squats, and core progressions with no equipment.', ['bodyweight']],
-    ] as const
-  ).map(
-    ([id, name, category, level, daysPerWeek, durationWeeks, description, equipment]): StarterTemplate => ({
-      id,
-      name,
-      category,
-      level,
-      daysPerWeek,
-      durationWeeks,
-      description,
-      equipment: [...equipment],
-      schedule: { type: 'rotating', sequence: [] },
-      workouts: [],
-    }),
-  ),
+  {
+    id: 'tpl_ppl',
+    name: 'Push / Pull / Legs',
+    category: 'bodybuilding',
+    level: 'intermediate',
+    daysPerWeek: 6,
+    description: 'High-volume hypertrophy split that trains each muscle twice a week, with supersets to keep sessions near an hour.',
+    equipment: ['barbell', 'dumbbell', 'cable', 'machine'],
+    schedule: {
+      type: 'weekly',
+      days: [
+        { weekday: 1, workoutIds: ['tw_ppl_push'] },
+        { weekday: 2, workoutIds: ['tw_ppl_pull'] },
+        { weekday: 3, workoutIds: ['tw_ppl_legs'] },
+        { weekday: 4, workoutIds: ['tw_ppl_push'] },
+        { weekday: 5, workoutIds: ['tw_ppl_pull'] },
+        { weekday: 6, workoutIds: ['tw_ppl_legs'] },
+      ],
+    },
+    workouts: [pplPush, pplPull, pplLegs],
+  },
+  {
+    id: 'tpl_powerbuilding',
+    name: 'Strength Foundations 12-Week',
+    category: 'powerlifting',
+    level: 'beginner',
+    daysPerWeek: 3,
+    durationWeeks: 12,
+    description: 'Twelve weeks of squat, bench, overhead press, and deadlift, adding about 2.5% a week. Alternates two short sessions.',
+    equipment: ['barbell'],
+    schedule: fixedFromPattern(12, { 1: ['tw_found_a'], 2: [], 3: ['tw_found_b'], 4: [], 5: ['tw_found_a'], 6: [], 7: [] }),
+    workouts: [foundationsA, foundationsB],
+  },
+  {
+    id: 'tpl_calisthenics',
+    name: 'Bodyweight Basics',
+    category: 'bodyweight',
+    level: 'beginner',
+    daysPerWeek: 3,
+    description: 'Push-ups, pull-ups, lunges, and core on a rotating cycle: train, rest, train, rest. No gym needed.',
+    equipment: ['bodyweight'],
+    schedule: { type: 'rotating', sequence: ['tw_bw_a', 'rest', 'tw_bw_b', 'rest'] },
+    workouts: [bodyweightA, bodyweightB],
+  },
+  listing('tpl_atg', 'Knees-Over-Toes Mobility Strength', 'atg', 'beginner', 3, 8, 'Full range-of-motion lower-body work: split squats, tibialis raises, and deep squats.', ['bodyweight', 'dumbbell']),
+  listing('tpl_conditioning', 'Gym Conditioning Circuits', 'crossfit', 'intermediate', 4, undefined, 'Mixed-modal circuits pairing barbell lifts with bodyweight movements.', ['barbell', 'kettlebell', 'bodyweight']),
+  listing('tpl_athlete', 'Field Athlete Power', 'athletic', 'intermediate', 3, 10, 'Explosive lower-body strength and single-leg stability for field sports.', ['barbell', 'dumbbell', 'bodyweight']),
 ];

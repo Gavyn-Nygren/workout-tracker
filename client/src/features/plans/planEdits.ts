@@ -1,0 +1,200 @@
+import { addDays, isoWeekday, todayISO } from '@/data/dates';
+import { weeklyFromPattern, fixedFromPattern, weekPattern } from '@/data/schedule';
+import type {
+  ISODate,
+  Plan,
+  PlannedBlock,
+  PlannedExercise,
+  PlanSchedule,
+  PlanWorkout,
+  SetPrescription,
+  StarterTemplate,
+  Weekday,
+} from '@/data/types';
+import { newId } from '@/lib/id';
+
+// Pure edits to a plan. Screens apply one and save the result (the repository rebuilds the
+// upcoming calendar; logged history is never touched).
+
+export function updateWorkout(plan: Plan, workoutId: string, fn: (w: PlanWorkout) => PlanWorkout): Plan {
+  return { ...plan, workouts: plan.workouts.map((w) => (w.id === workoutId ? fn(w) : w)) };
+}
+
+export function updatePlanned(plan: Plan, workoutId: string, plannedId: string, fn: (p: PlannedExercise) => PlannedExercise): Plan {
+  return updateWorkout(plan, workoutId, (w) => ({
+    ...w,
+    blocks: w.blocks.map((b) => ({ ...b, exercises: b.exercises.map((e) => (e.id === plannedId ? fn(e) : e)) })),
+  }));
+}
+
+/** Three straight sets of 8-12 with the exercise type's default rest. */
+export function defaultSets(category: 'compound' | 'isolation' = 'compound'): SetPrescription[] {
+  const restSec = category === 'compound' ? 150 : 90;
+  return [1, 2, 3].map(() => ({ kind: 'normal' as const, modifiers: [], targetReps: { min: 8, max: 12 }, targetRir: 2, restSec }));
+}
+
+export function addExercise(plan: Plan, workoutId: string, exerciseId: string, category?: 'compound' | 'isolation'): Plan {
+  const block: PlannedBlock = {
+    id: newId('pb'),
+    type: 'single',
+    exercises: [{ id: newId('pe'), exerciseId, sets: defaultSets(category) }],
+  };
+  return updateWorkout(plan, workoutId, (w) => ({ ...w, blocks: [...w.blocks, block] }));
+}
+
+export function swapExercise(plan: Plan, workoutId: string, plannedId: string, exerciseId: string): Plan {
+  return updatePlanned(plan, workoutId, plannedId, (p) => ({ ...p, exerciseId }));
+}
+
+export function removeExercise(plan: Plan, workoutId: string, plannedId: string): Plan {
+  return updateWorkout(plan, workoutId, (w) => ({
+    ...w,
+    blocks: w.blocks
+      .map((b) => {
+        const exercises = b.exercises.filter((e) => e.id !== plannedId);
+        return { ...b, exercises, type: exercises.length > 1 ? b.type : 'single' };
+      })
+      .filter((b) => b.exercises.length > 0),
+  }));
+}
+
+export function moveBlock(plan: Plan, workoutId: string, from: number, to: number): Plan {
+  return updateWorkout(plan, workoutId, (w) => {
+    const blocks = [...w.blocks];
+    const [moved] = blocks.splice(from, 1);
+    if (moved) blocks.splice(Math.max(0, Math.min(blocks.length, to)), 0, moved);
+    return { ...w, blocks };
+  });
+}
+
+/** Joins a block with the next one into a superset, keeping the first block's position. */
+export function supersetWithNext(plan: Plan, workoutId: string, blockIndex: number): Plan {
+  return updateWorkout(plan, workoutId, (w) => {
+    const current = w.blocks[blockIndex];
+    const next = w.blocks[blockIndex + 1];
+    if (!current || !next) return w;
+    const merged: PlannedBlock = {
+      id: current.id,
+      type: current.type === 'circuit' || current.exercises.length + next.exercises.length > 2 ? 'circuit' : 'superset',
+      roundRestSec: current.roundRestSec ?? 90,
+      transitionRestSec: current.transitionRestSec,
+      exercises: [...current.exercises, ...next.exercises].map((e) => ({ ...e, sets: e.sets.map((s) => ({ ...s, restSec: 0 })) })),
+    };
+    return { ...w, blocks: [...w.blocks.slice(0, blockIndex), merged, ...w.blocks.slice(blockIndex + 2)] };
+  });
+}
+
+/** Splits a superset or circuit back into single exercises with default rest. */
+export function ungroup(plan: Plan, workoutId: string, blockIndex: number): Plan {
+  return updateWorkout(plan, workoutId, (w) => {
+    const block = w.blocks[blockIndex];
+    if (!block || block.type === 'single') return w;
+    const singles: PlannedBlock[] = block.exercises.map((e) => ({
+      id: newId('pb'),
+      type: 'single',
+      exercises: [{ ...e, sets: e.sets.map((s) => ({ ...s, restSec: s.restSec || block.roundRestSec || 90 })) }],
+    }));
+    return { ...w, blocks: [...w.blocks.slice(0, blockIndex), ...singles, ...w.blocks.slice(blockIndex + 1)] };
+  });
+}
+
+export function addWorkout(plan: Plan, name: string): { plan: Plan; workoutId: string } {
+  const workout: PlanWorkout = { id: newId('pw'), name, blocks: [], estimatedMinutes: 45 };
+  return { plan: { ...plan, workouts: [...plan.workouts, workout] }, workoutId: workout.id };
+}
+
+/** Removes a workout and every place the schedule uses it. */
+export function removeWorkout(plan: Plan, workoutId: string): Plan {
+  const schedule: PlanSchedule =
+    plan.schedule.type === 'rotating'
+      ? { ...plan.schedule, sequence: plan.schedule.sequence.filter((s) => s !== workoutId) }
+      : plan.schedule.type === 'weekly'
+        ? { ...plan.schedule, days: plan.schedule.days.map((d) => ({ ...d, workoutIds: d.workoutIds.filter((id) => id !== workoutId) })).filter((d) => d.workoutIds.length) }
+        : { ...plan.schedule, days: plan.schedule.days.map((d) => ({ ...d, workoutIds: d.workoutIds.filter((id) => id !== workoutId) })).filter((d) => d.workoutIds.length) };
+  return { ...plan, schedule, workouts: plan.workouts.filter((w) => w.id !== workoutId) };
+}
+
+/** Adds or removes a workout on a weekday (weekly and fixed plans; fixed plans change every week). */
+export function toggleWeekday(plan: Plan, weekday: Weekday, workoutId: string): Plan {
+  if (plan.schedule.type === 'rotating') return plan;
+  const pattern = weekPattern(plan.schedule);
+  pattern[weekday] = pattern[weekday].includes(workoutId) ? pattern[weekday].filter((id) => id !== workoutId) : [...pattern[weekday], workoutId];
+  const schedule = plan.schedule.type === 'weekly' ? weeklyFromPattern(pattern) : fixedFromPattern(plan.schedule.weeks, pattern);
+  return { ...plan, schedule };
+}
+
+export function setProgramWeeks(plan: Plan, weeks: number): Plan {
+  if (plan.schedule.type !== 'fixed') return plan;
+  return { ...plan, schedule: fixedFromPattern(weeks, weekPattern(plan.schedule)) };
+}
+
+export function setSequence(plan: Plan, sequence: (string | 'rest')[]): Plan {
+  if (plan.schedule.type !== 'rotating') return plan;
+  return { ...plan, schedule: { type: 'rotating', sequence } };
+}
+
+/** Next Monday on or after `from` (or `from` itself if it's a Monday). */
+export function nextMonday(from: ISODate = todayISO()): ISODate {
+  const offset = (8 - isoWeekday(from)) % 7;
+  return addDays(from, offset);
+}
+
+/** Copies a template into a new plan with fresh ids, so later template changes never touch it. */
+export function planFromTemplate(template: StarterTemplate, startDate: ISODate): Plan {
+  const workoutIds = new Map(template.workouts.map((w) => [w.id, newId('pw')]));
+  const mapId = (id: string) => workoutIds.get(id) ?? id;
+  const schedule: PlanSchedule =
+    template.schedule.type === 'rotating'
+      ? { type: 'rotating', sequence: template.schedule.sequence.map((s) => (s === 'rest' ? s : mapId(s))) }
+      : template.schedule.type === 'weekly'
+        ? { type: 'weekly', days: template.schedule.days.map((d) => ({ ...d, workoutIds: d.workoutIds.map(mapId) })) }
+        : { type: 'fixed', weeks: template.schedule.weeks, days: template.schedule.days.map((d) => ({ ...d, workoutIds: d.workoutIds.map(mapId) })) };
+  const now = new Date().toISOString();
+  return {
+    id: newId('plan'),
+    name: template.name,
+    templateId: template.id,
+    version: 1,
+    status: 'active',
+    startDate,
+    schedule,
+    workouts: template.workouts.map((w) => ({
+      ...w,
+      id: mapId(w.id),
+      blocks: w.blocks.map((b) => ({ ...b, id: newId('pb'), exercises: b.exercises.map((e) => ({ ...e, id: newId('pe'), sets: e.sets.map((s) => ({ ...s, modifiers: [...s.modifiers] })) })) })),
+    })),
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/** A blank plan from the setup steps: one workout per training day, or per cycle step. */
+export function newPlan(input: {
+  name: string;
+  startDate: ISODate;
+  type: PlanSchedule['type'];
+  weekdays: Weekday[];
+  weeks: number;
+  cycle: ('workout' | 'rest')[];
+}): Plan {
+  const now = new Date().toISOString();
+  const names = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+  const dayNames: Record<Weekday, string> = { 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday', 7: 'Sunday' };
+  let workouts: PlanWorkout[];
+  let schedule: PlanSchedule;
+
+  if (input.type === 'rotating') {
+    let n = 0;
+    const sequence = input.cycle.map((step) => (step === 'rest' ? ('rest' as const) : `w${n++}`));
+    workouts = Array.from({ length: n }, (_, i) => ({ id: newId('pw'), name: `Workout ${names[i] ?? i + 1}`, blocks: [], estimatedMinutes: 45 }));
+    schedule = { type: 'rotating', sequence: sequence.map((s) => (s === 'rest' ? s : workouts[Number(s.slice(1))].id)) };
+  } else {
+    const days = [...input.weekdays].sort();
+    workouts = days.map((d) => ({ id: newId('pw'), name: dayNames[d], blocks: [], estimatedMinutes: 45 }));
+    const pattern = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] } as Record<Weekday, string[]>;
+    days.forEach((d, i) => (pattern[d] = [workouts[i].id]));
+    schedule = input.type === 'weekly' ? weeklyFromPattern(pattern) : fixedFromPattern(input.weeks, pattern);
+  }
+
+  return { id: newId('plan'), name: input.name.trim() || 'My plan', version: 1, status: 'active', startDate: input.startDate, schedule, workouts, createdAt: now, updatedAt: now };
+}
