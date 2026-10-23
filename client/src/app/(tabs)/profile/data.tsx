@@ -9,6 +9,7 @@ import { shareText } from '@/features/settings/shareFile';
 import { authStore, signOut } from '@/features/auth/authStore';
 import { useSettings } from '@/features/settings/useSettings';
 import { spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 /** Data export, sign-in, and account deletion (spec 2.3). */
 export default function DataAccountScreen() {
@@ -47,7 +48,7 @@ export default function DataAccountScreen() {
   const completed = (sessions ?? []).filter((s) => s.status === 'completed').length;
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView contentContainerStyle={[styles.content, readable]}>
       <View style={styles.section}>
         <SectionHeader title="Export your data" />
         <Card padding="none">

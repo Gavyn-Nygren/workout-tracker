@@ -6,6 +6,7 @@ import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { AppText, Button, Card, Icon, TextField } from '@/components/ui';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 const TIMELINE: { when: string; what: string; icon: SFSymbol }[] = [
   { when: 'Right away', what: "You're signed out and the account is deactivated. Form videos on this phone are deleted.", icon: 'person.crop.circle.badge.xmark' },
@@ -21,7 +22,7 @@ export default function DeleteAccountScreen() {
   const ready = confirm.trim().toUpperCase() === 'DELETE';
 
   return (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+    <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
       <AppText variant="title2">What happens when you delete your account</AppText>
       <Card padding="none">
         {TIMELINE.map((step, i) => (

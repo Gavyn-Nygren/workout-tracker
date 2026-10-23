@@ -10,6 +10,7 @@ import { ExerciseList } from '@/features/exercises/ExerciseList';
 import { CATEGORY_LABEL } from '@/features/plans/describe';
 import { PlanCard } from '@/features/plans/PlanCard';
 import { TemplateCard } from '@/features/plans/TemplateCard';
+import { dashboard, Grid, readable } from '@/theme/layout';
 import { spacing } from '@/theme/tokens';
 
 type Segment = 'plans' | 'templates' | 'exercises';
@@ -27,8 +28,10 @@ export default function PlansScreen() {
   const [segment, setSegment] = useState<Segment>(params.segment ?? 'plans');
 
   return (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-      <SegmentedControl label="Plans sections" options={SEGMENTS} value={segment} onChange={setSegment} />
+    <ScrollView contentContainerStyle={[styles.content, dashboard]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+      <View style={readable}>
+        <SegmentedControl label="Plans sections" options={SEGMENTS} value={segment} onChange={setSegment} />
+      </View>
       {segment === 'plans' && <MyPlans />}
       {segment === 'templates' && <Templates />}
       {segment === 'exercises' && <Exercises />}
@@ -48,17 +51,22 @@ function MyPlans() {
   return (
     <View style={styles.section}>
       {active.length > 0 && <SectionHeader title={`Active · ${active.length}`} />}
-      {active.map((plan) => (
-        <PlanCard key={plan.id} plan={plan} today={today} onPress={() => open(plan.id)} />
-      ))}
+      {/* Two cards per row on iPad. */}
+      <Grid>
+        {active.map((plan) => (
+          <PlanCard key={plan.id} plan={plan} today={today} onPress={() => open(plan.id)} />
+        ))}
+      </Grid>
       {!plans?.length && (
         <EmptyState icon="calendar.badge.plus" title="No plans yet" message="Create your own plan, or start from a template and adjust it as you go." />
       )}
       <Button title="New plan" icon="plus" fullWidth onPress={() => router.push('/plans/new')} />
       {inactive.length > 0 && <SectionHeader title={`Paused & archived · ${inactive.length}`} />}
-      {inactive.map((plan) => (
-        <PlanCard key={plan.id} plan={plan} today={today} onPress={() => open(plan.id)} />
-      ))}
+      <Grid>
+        {inactive.map((plan) => (
+          <PlanCard key={plan.id} plan={plan} today={today} onPress={() => open(plan.id)} />
+        ))}
+      </Grid>
     </View>
   );
 }
@@ -77,9 +85,11 @@ function Templates() {
           <Chip key={c} label={CATEGORY_LABEL[c]} selected={category === c} onPress={() => setCategory(category === c ? null : c)} />
         ))}
       </ScrollView>
-      {list.map((t) => (
-        <TemplateCard key={t.id} template={t} onPress={() => router.push({ pathname: '/plans/template', params: { id: t.id } })} />
-      ))}
+      <Grid>
+        {list.map((t) => (
+          <TemplateCard key={t.id} template={t} onPress={() => router.push({ pathname: '/plans/template', params: { id: t.id } })} />
+        ))}
+      </Grid>
       {!list.length && <EmptyState icon="square.stack.3d.up" title="No templates here yet" message="More programs are being written. Try another category." />}
     </View>
   );
@@ -88,13 +98,16 @@ function Templates() {
 function Exercises() {
   const { data: exercises, isLoading } = useExercises();
   if (isLoading) return <Skeleton height={300} radius={16} />;
+  // A long list reads best at a readable width, even on iPad.
   return (
-    <ExerciseList
-      exercises={exercises ?? []}
-      groupCustom
-      onPick={(e) => router.push({ pathname: '/plans/exercise', params: { id: e.id } })}
-      accessory={<Button title="New custom exercise" variant="secondary" icon="plus" fullWidth onPress={() => router.push('/plans/exercise-form')} />}
-    />
+    <View style={readable}>
+      <ExerciseList
+        exercises={exercises ?? []}
+        groupCustom
+        onPick={(e) => router.push({ pathname: '/plans/exercise', params: { id: e.id } })}
+        accessory={<Button title="New custom exercise" variant="secondary" icon="plus" fullWidth onPress={() => router.push('/plans/exercise-form')} />}
+      />
+    </View>
   );
 }
 

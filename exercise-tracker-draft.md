@@ -585,6 +585,16 @@ All token values live in `client/src/theme/tokens.ts`. Every text and background
 - **Active workout layout:** **dense table rows** in the Strong/Hevy style. Each set row shows set, previous, weight, reps, and a complete check. A camera button and a menu sit in the exercise header.
 - **Feedback:** a light haptic on set complete and a stronger one when the timer ends. A brief animated badge appears on a PR, and confetti only when a workout with PRs finishes. Both can be toggled off in Settings.
 - **Overall style:** athletic and high-contrast, with dark persistent header and navigation, baby-blue primary buttons and active navigation, and high-energy exercise cards.
+- **iPad layout:** the user picked **two-column dashboards**. A screen counts as wide at **700 pt** or more, which covers every iPad including the iPad mini in portrait.
+  - **Dashboards** (Today, Home, Progress, Plans, Profile) use two columns, up to 1120 pt wide:
+    - **Today:** the week strip spans the top; the day's workouts are on the left, with Coming up beside them.
+    - **Home:** this week and goals on the left; recent wins and badges on the right.
+    - **Progress:** key exercises on the left; your graphs, bodyweight, and all exercises on the right.
+    - **Plans:** plan and template cards two per row. The exercise library stays one readable column.
+    - **Profile:** account and appearance on the left; settings on the right.
+  - **Detail screens and forms** (plan editor, history, graphs, settings pages, sign-in, the active workout, the summary, the form report) stay one centered column, up to 720 pt wide.
+  - **Sheets** become iPad's centered cards automatically.
+  - On iPhone nothing changes: the right column's sections follow the left column's.
 
 ---
 
@@ -721,7 +731,6 @@ any ──delete──▶ tombstone (stats recalculate)
 
 - Full color token set: success, warning, error, chart series colors, and disabled states.
 - Spacing scale, motion specs, and empty, loading, and error states.
-- iPad layouts.
 - Usability guidance for the camera screen.
 - Accessibility targets: WCAG AA contrast, VoiceOver, and Dynamic Type at large sizes.
 

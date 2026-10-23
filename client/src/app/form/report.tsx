@@ -16,6 +16,7 @@ import { SkeletonFigure, useRepLoop } from '@/features/form/SkeletonFigure';
 import { Change, Legend } from '@/features/progress/ProgressParts';
 import { SchemeOverride, useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 const JOINT_LABEL: Record<Joint, string> = { knee: 'knee', hip: 'hip', ankle: 'ankle' };
 const OBS_ICON: Record<Observation['kind'], SFSymbol> = { change: 'chart.line.downtrend.xyaxis', consistency: 'equal.circle', quality: 'exclamationmark.triangle' };
@@ -134,7 +135,7 @@ export default function FormReportScreen() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.huge }]}>
+      <ScrollView contentContainerStyle={[styles.content, readable, { paddingBottom: insets.bottom + spacing.huge }]}>
         {sample === '1' && (
           <View style={[styles.banner, { backgroundColor: colors.accentSubtle }]}>
             <Icon name="info.circle" color={colors.accentText} size={14} />

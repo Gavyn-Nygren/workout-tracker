@@ -11,6 +11,7 @@ import { unitLabel } from '@/lib/format';
 import { updatePlanned } from '@/features/plans/planEdits';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing, tabularNums, typography } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 const KIND_OPTIONS: [SetKind, string][] = [
   ['normal', 'Normal'],
@@ -114,7 +115,7 @@ export default function PrescriptionScreen() {
   return (
     <>
       <Stack.Screen options={{ title: exercise?.name ?? 'Sets & reps' }} />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+      <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <View style={styles.header}>
           <AppText variant="title2">{exercise?.name ?? 'Exercise'}</AppText>
           <AppText variant="subhead" tone="secondary">

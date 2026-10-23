@@ -4,13 +4,14 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Card, ListRow, useToast } from '@/components/ui';
 import { spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 /** App info and legal links (privacy policy and terms are written in G6.3). */
 export default function AboutScreen() {
   const toast = useToast();
   const soon = () => toast.show({ message: 'Written before launch (roadmap G6.3).' });
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView contentContainerStyle={[styles.content, readable]}>
       <View style={styles.header}>
         <AppText variant="title2">{Constants.expoConfig?.name ?? 'Exercise Tracker'}</AppText>
         <AppText variant="subhead" tone="secondary">{`Version ${Constants.expoConfig?.version ?? '1.0.0'} · preview build`}</AppText>

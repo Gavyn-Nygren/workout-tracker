@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G2.10 (iPad layouts).
+**Current goal:** G2.11 (polish pass).
 
 ## How we work
 
@@ -205,13 +205,16 @@ Load the `dataviz` skill before building any charts.
 - [x] Optional onboarding steps and the recommendation result (1-3 templates). *One question per screen (user's pick); rule-based matching.*
 - [x] Optional tutorial. *Swipeable cards (user's pick).*
 - [x] Notification permission explainer screen. *Shown before the real iOS prompt when a notification is first turned on.*
-- [ ] The user has reviewed sign-in and onboarding on their iPhone.
+- [x] The user has reviewed sign-in and onboarding on their iPhone.
 
 *Accounts are mocked on the phone until Supabase Auth (G5.1): any valid email and password signs in. Profile → Developer → "Restart first-run setup" replays the whole new-user flow.*
 
 ### G2.10 iPad layouts 👁
 
-- [ ] Adapt every screen for iPad, for example split views for Plans, Progress, and the form report.
+- [x] Adapt every screen for iPad. *Two-column dashboards (user's pick) for Today, Home, Progress, Plans, and Profile; every other screen is one centered column at a readable width.*
+- [ ] Review on an iPad. *The user has no iPad, so this waits for the TestFlight beta (G6.5) or a borrowed device. Phone layouts are unchanged.*
+
+*The app is portrait-only (app.json). Before App Store submission (G6.6), decide whether iPad may rotate. Apple requires full-screen mode for iPad apps that don't support every orientation, which turns off Split View.*
 
 ### G2.11 Polish pass 👁
 

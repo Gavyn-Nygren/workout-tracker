@@ -15,9 +15,9 @@ export function templateMeta(template: StarterTemplate): string {
 export function TemplateCard({ template, onPress }: { template: StarterTemplate; onPress: () => void }) {
   const { colors } = useAppTheme();
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${template.name}. ${CATEGORY_LABEL[template.category]}. ${templateMeta(template)}`}>
+    <Pressable onPress={onPress} style={styles.fill} accessibilityRole="button" accessibilityLabel={`${template.name}. ${CATEGORY_LABEL[template.category]}. ${templateMeta(template)}`}>
       {({ pressed }) => (
-        <Card style={{ opacity: pressed ? 0.85 : 1 }}>
+        <Card style={[styles.fill, { opacity: pressed ? 0.85 : 1 }]}>
           <View style={styles.stack}>
             <View style={styles.row}>
               <View style={[styles.category, { backgroundColor: colors.accentSubtle }]}>
@@ -55,6 +55,10 @@ export function TemplateCard({ template, onPress }: { template: StarterTemplate;
 }
 
 const styles = StyleSheet.create({
+  // Fills a grid cell on iPad so cards in a row match heights.
+  fill: {
+    flexGrow: 1,
+  },
   stack: {
     gap: spacing.sm,
   },

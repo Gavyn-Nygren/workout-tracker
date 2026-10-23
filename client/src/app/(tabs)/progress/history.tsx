@@ -11,6 +11,7 @@ import { reportAngle } from '@/features/home/goals';
 import { useProgressData } from '@/features/progress/useProgressData';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 const RECORD_ROWS: { type: PRType; label: string }[] = [
   { type: 'heaviest_weight', label: 'Heaviest weight' },
@@ -56,7 +57,7 @@ export default function ExerciseHistoryScreen() {
   return (
     <>
       <Stack.Screen options={{ title: exercise.name }} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, readable]}>
         <View style={styles.section}>
           <SectionHeader title="Personal records" />
           <Card padding="none">

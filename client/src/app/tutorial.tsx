@@ -7,6 +7,7 @@ import { Sparkline } from '@/components/charts/Sparkline';
 import { AppText, Button, Icon, ProgressRing } from '@/components/ui';
 import { SkeletonFigure, useRepLoop } from '@/features/form/SkeletonFigure';
 import { SchemeOverride, useAppTheme } from '@/theme/ThemeProvider';
+import { readable, READABLE_MAX } from '@/theme/layout';
 import { radius, spacing } from '@/theme/tokens';
 
 type Card = { key: string; title: string; body: string; art: () => ReactNode };
@@ -48,7 +49,7 @@ export default function TutorialScreen() {
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / width))}
         renderItem={({ item, index }) => (
-          <View style={[styles.page, { width }]} accessible accessibilityLabel={`${index + 1} of ${CARDS.length}. ${item.title}. ${item.body}`}>
+          <View style={[styles.page, { width, paddingHorizontal: Math.max(spacing.xl, (width - READABLE_MAX) / 2) }]} accessible accessibilityLabel={`${index + 1} of ${CARDS.length}. ${item.title}. ${item.body}`}>
             <View style={styles.art}>{index === page ? item.art() : null}</View>
             <AppText variant="title1" style={styles.center}>
               {item.title}
@@ -64,7 +65,7 @@ export default function TutorialScreen() {
           <View key={c.key} style={[styles.dot, { backgroundColor: i === page ? colors.accentText : colors.border }, i === page && styles.dotActive]} />
         ))}
       </View>
-      <View style={styles.footer}>
+      <View style={[styles.footer, readable]}>
         <Button
           title={last ? 'Start training' : 'Next'}
           icon={last ? 'checkmark' : undefined}

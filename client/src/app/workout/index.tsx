@@ -17,6 +17,7 @@ import { WorkoutHeader } from '@/features/workout/WorkoutHeader';
 import { lastEntryFor, previousSets } from '@/features/workout/history';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
@@ -130,7 +131,7 @@ export default function ActiveWorkoutScreen() {
       <WorkoutHeader title={session.name} startedAt={session.startedAt} counts={counts} onMinimize={() => router.back()} onFinish={finish} />
 
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + (rest ? 120 : spacing.huge) }]}
+        contentContainerStyle={[styles.content, readable, { paddingBottom: insets.bottom + (rest ? 120 : spacing.huge) }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         automaticallyAdjustKeyboardInsets

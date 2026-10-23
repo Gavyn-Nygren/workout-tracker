@@ -5,6 +5,7 @@ import { ScrollView, StyleSheet } from 'react-native';
 import { AppText, Button, Card, ListRow, TextField, Toggle } from '@/components/ui';
 import { spacing } from '@/theme/tokens';
 import { EMAIL_PATTERN } from '@/features/auth/validation';
+import { readable } from '@/theme/layout';
 
 /** Create an account with email. The 16+ age requirement is confirmed here (spec 2.3). */
 export default function SignUpScreen() {
@@ -25,7 +26,7 @@ export default function SignUpScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+    <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
       <AppText variant="title1">Create your account</AppText>
       <TextField label="First name (optional)" value={name} onChangeText={setName} autoComplete="given-name" textContentType="givenName" />
       <TextField

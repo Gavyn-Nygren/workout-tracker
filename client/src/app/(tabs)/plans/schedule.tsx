@@ -11,6 +11,7 @@ import { ALL_WEEKDAYS, WEEKDAY_SHORT } from '@/features/plans/describe';
 import { setProgramWeeks, setSequence, toggleWeekday } from '@/features/plans/planEdits';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 /** Edit when a plan's workouts happen. Saves immediately; the calendar updates from today forward. */
 export default function ScheduleScreen() {
@@ -31,7 +32,7 @@ export default function ScheduleScreen() {
   const save = (next: Plan) => savePlan.mutate(next);
 
   return (
-    <ScrollView contentContainerStyle={styles.content} scrollEnabled={!dragging}>
+    <ScrollView contentContainerStyle={[styles.content, readable]} scrollEnabled={!dragging}>
       <AppText variant="subhead" tone="secondary" style={styles.intro}>
         Changes apply from today forward. Days you've already logged stay as they were.
       </AppText>

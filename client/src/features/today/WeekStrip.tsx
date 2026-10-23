@@ -35,9 +35,15 @@ function describeDay(items: DayItem[]): string {
   return [...counts].map(([status, n]) => `${plural(n, 'workout')} ${words[status]}`).join(', ');
 }
 
-/** Seven days at a time; swipe for other weeks. Dots: filled = done, ring = planned or missed. */
+/**
+ * Seven days at a time; swipe for other weeks. Dots: filled = done, ring = planned or missed.
+ * Pages size to the strip's own width (not the window), so it fits an iPad dashboard.
+ */
 export function WeekStrip({ agenda, today, selected, onSelect, range }: Props) {
-  const { width } = useWindowDimensions();
+  // Phones span the window, so that guess is exact; on iPad the measured width replaces it.
+  const screen = useWindowDimensions();
+  const [measured, setMeasured] = useState<number>();
+  const width = measured ?? screen.width;
   const haptics = useHaptics();
   const { colors } = useAppTheme();
   const list = useRef<FlatList<ISODate>>(null);
@@ -73,7 +79,7 @@ export function WeekStrip({ agenda, today, selected, onSelect, range }: Props) {
   const monthLabel = weeks[visibleWeek] ? formatMonthYear(addDays(weeks[visibleWeek], 3)) : '';
 
   return (
-    <View style={styles.wrap}>
+    <View style={styles.wrap} onLayout={(e) => setMeasured(Math.round(e.nativeEvent.layout.width))}>
       <View style={styles.header}>
         <AppText variant="headline" weight="700" accessibilityRole="header">
           {monthLabel}
@@ -105,13 +111,15 @@ export function WeekStrip({ agenda, today, selected, onSelect, range }: Props) {
       </View>
 
       <FlatList
+        // Remount on resize (rotation, Split View) so paging lines up with the new width.
+        key={width}
         ref={list}
         data={weeks}
         keyExtractor={(w) => w}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        initialScrollIndex={Math.max(0, selectedWeek)}
+        initialScrollIndex={Math.max(0, visibleWeek)}
         getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
         onMomentumScrollEnd={(e) => {
           const index = Math.round(e.nativeEvent.contentOffset.x / width);

@@ -12,6 +12,7 @@ import { addWorkout } from '@/features/plans/planEdits';
 import { ScheduleGrid } from '@/features/plans/ScheduleGrid';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 /** One plan: status, schedule week grid, and its workouts. */
 export default function PlanDetailScreen() {
@@ -87,7 +88,7 @@ export default function PlanDetailScreen() {
           ),
         }}
       />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, readable]}>
         <Card>
           <View style={styles.stack}>
             <View style={styles.row}>

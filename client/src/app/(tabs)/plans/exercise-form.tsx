@@ -8,6 +8,7 @@ import type { Equipment, Exercise, MuscleGroup } from '@/data/types';
 import { newId } from '@/lib/id';
 import { EQUIPMENT_LABEL, MUSCLE_LABEL } from '@/features/exercises/ExerciseList';
 import { spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 const EQUIPMENT = Object.keys(EQUIPMENT_LABEL) as Equipment[];
 const MUSCLES = Object.keys(MUSCLE_LABEL) as MuscleGroup[];
@@ -76,7 +77,7 @@ function ExerciseForm({ exercises, existing }: { exercises: Exercise[]; existing
   return (
     <>
       <Stack.Screen options={{ title: existing ? 'Edit exercise' : 'New exercise' }} />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+      <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <TextField label="Name" value={name} onChangeText={setName} placeholder="e.g. Pause Squat" error={showErrors ? nameError : undefined} autoFocus={!existing} />
 
         <View style={styles.section}>

@@ -6,6 +6,7 @@ import { AppText, Button, Icon, TextField } from '@/components/ui';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { EMAIL_PATTERN } from '@/features/auth/validation';
+import { readable } from '@/theme/layout';
 
 /** Password reset by email link (spec 2.3). Sending is mocked until Supabase Auth (G5.1). */
 export default function ResetPasswordScreen() {
@@ -34,7 +35,7 @@ export default function ResetPasswordScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+    <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
       <AppText variant="title1">Reset your password</AppText>
       <AppText variant="body" tone="secondary">
         We'll email you a link to choose a new one.

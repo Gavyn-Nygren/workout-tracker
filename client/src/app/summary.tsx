@@ -13,6 +13,7 @@ import { buildSummary } from '@/features/summary/summarize';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 /**
  * Workout summary (roadmap G2.3). Opened right after Finish (`fresh=1`: celebrate PRs and offer to
@@ -71,7 +72,7 @@ export default function SummaryScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={[styles.padded, { paddingBottom: insets.bottom + spacing.huge }]}>
+      <ScrollView contentContainerStyle={[styles.padded, readable, { paddingBottom: insets.bottom + spacing.huge }]}>
         <SummaryHero session={session} planName={plan?.name} summary={summary} units={preferences.units} />
         {diff && diff.changes.length > 0 && plan && workout && (
           <SavePlanCard

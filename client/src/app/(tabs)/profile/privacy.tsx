@@ -6,6 +6,7 @@ import { AppText, Card, Icon, ListRow, SectionHeader, SegmentedControl, Toggle, 
 import { useSettings } from '@/features/settings/useSettings';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 /**
  * Face ID lock and data sharing (spec 2.3 and 2.2). Turning the lock on asks for Face ID once to
@@ -39,7 +40,7 @@ export default function PrivacyScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView contentContainerStyle={[styles.content, readable]}>
       <View style={styles.section}>
         <SectionHeader title="App lock" />
         <Card padding="none">

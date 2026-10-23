@@ -42,9 +42,9 @@ export function PlanCard({ plan, today, onPress }: { plan: Plan; today: ISODate;
   const week = programWeek(plan, today);
 
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${plan.name}, ${plan.status}, ${describeSchedule(plan.schedule)}`}>
+    <Pressable onPress={onPress} style={styles.fill} accessibilityRole="button" accessibilityLabel={`${plan.name}, ${plan.status}, ${describeSchedule(plan.schedule)}`}>
       {({ pressed }) => (
-        <Card style={{ opacity: pressed ? 0.85 : 1 }}>
+        <Card style={[styles.fill, { opacity: pressed ? 0.85 : 1 }]}>
           <View style={styles.stack}>
             <View style={styles.row}>
               <View style={styles.flex}>
@@ -75,6 +75,10 @@ export function PlanCard({ plan, today, onPress }: { plan: Plan; today: ISODate;
 }
 
 const styles = StyleSheet.create({
+  // Fills a grid cell on iPad so cards in a row match heights.
+  fill: {
+    flexGrow: 1,
+  },
   stack: {
     gap: spacing.md,
   },

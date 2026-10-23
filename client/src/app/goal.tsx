@@ -13,6 +13,7 @@ import { reportAngle } from '@/features/home/goals';
 import { useHomeData } from '@/features/home/useHomeData';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 type GoalType = Goal['type'];
 const JOINTS: Record<FormMovementFamily, Joint[]> = { squat: ['knee', 'hip', 'ankle'], lunge: ['knee', 'hip', 'ankle'], deadlift: ['hip', 'knee'], calf_raise: ['ankle'] };
@@ -124,7 +125,7 @@ function GoalForm({ existing, home }: { existing?: Goal; home: ReturnType<typeof
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+      <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <SegmentedControl
           label="Goal type"
           options={[

@@ -12,6 +12,7 @@ import { ALL_WEEKDAYS, WEEKDAY_SHORT } from '@/features/plans/describe';
 import { newPlan, nextMonday } from '@/features/plans/planEdits';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 type PlanType = PlanSchedule['type'];
 
@@ -44,7 +45,7 @@ export default function NewPlanScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+    <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
       <View style={styles.progress} accessibilityLabel={`Step ${step} of 3`}>
         {[1, 2, 3].map((s) => (
           <View key={s} style={[styles.progressBar, { backgroundColor: s <= step ? colors.accentText : colors.input }]} />

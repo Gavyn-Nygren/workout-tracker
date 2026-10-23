@@ -11,6 +11,7 @@ import { changeOverTime, exerciseSeries, METRICS, metricLabel, metricShort, toDi
 import { formatMetric, formatMetricDelta, useProgressData } from '@/features/progress/useProgressData';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 /**
  * Full graph. Opened from Your graphs it pages through every saved graph (swipe, spec 2.10);
@@ -110,7 +111,7 @@ function GraphPage({
   const sessionName = (id?: string) => data.sessions.find((s) => s.id === id)?.name;
 
   return (
-    <ScrollView contentContainerStyle={styles.content} scrollEnabled={!scrubbing}>
+    <ScrollView contentContainerStyle={[styles.content, readable]} scrollEnabled={!scrubbing}>
       <View style={styles.readout} accessibilityLiveRegion="polite">
         <AppText variant="title2">{exercise?.name ?? 'Exercise'}</AppText>
         <AppText variant="subhead" tone="secondary">

@@ -11,6 +11,7 @@ import { formatBest } from '@/features/summary/SummaryCards';
 import { bestSet } from '@/features/summary/summarize';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 /** Exercise details: what it trains, where it's used, and when you last did it. */
 export default function ExerciseScreen() {
@@ -73,7 +74,7 @@ export default function ExerciseScreen() {
               : undefined,
         }}
       />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, readable]}>
         <View style={styles.header}>
           <View style={[styles.iconWell, { backgroundColor: colors.accentSubtle }]}>
             <Icon name={EQUIPMENT_ICON[exercise.equipment ?? 'other']} color={colors.accentText} size={26} />

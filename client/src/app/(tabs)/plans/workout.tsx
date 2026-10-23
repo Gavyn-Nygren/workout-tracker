@@ -11,6 +11,7 @@ import { describeProgression, exerciseName, prescriptionSummary, workoutDays } f
 import { moveBlock, removeExercise, removeWorkout, supersetWithNext, ungroup, updateWorkout } from '@/features/plans/planEdits';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 /** Edit one plan workout: its exercises, order, and supersets. Changes save immediately. */
 export default function PlanWorkoutScreen() {
@@ -87,7 +88,7 @@ export default function PlanWorkoutScreen() {
           ),
         }}
       />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, readable]}>
         <View style={styles.header}>
           <AppText variant="title2">{workout.name}</AppText>
           <AppText variant="subhead" tone="secondary">

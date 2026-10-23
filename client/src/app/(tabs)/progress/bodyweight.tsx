@@ -11,6 +11,7 @@ import { bodyweightSeries, toDisplay, type Point } from '@/features/progress/ser
 import { formatMetric, formatMetricDelta, useProgressData } from '@/features/progress/useProgressData';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 /** Bodyweight (spec 2.10): weigh-ins as dots plus a 7-day trend line (user's pick), and the log. */
 export default function BodyweightScreen() {
@@ -34,7 +35,7 @@ export default function BodyweightScreen() {
   const entries = [...data.bodyweight].sort((a, b) => b.date.localeCompare(a.date));
 
   return (
-    <ScrollView contentContainerStyle={styles.content} scrollEnabled={!scrubbing}>
+    <ScrollView contentContainerStyle={[styles.content, readable]} scrollEnabled={!scrubbing}>
       <View style={styles.readout} accessibilityLiveRegion="polite">
         <AppText variant="subhead" tone="secondary">
           {selected ? `Weigh-in · ${formatShortDate(selected.date)}` : latest ? `Latest · ${formatShortDate(latest.date)}` : 'No weigh-ins yet'}

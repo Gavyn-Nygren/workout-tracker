@@ -8,6 +8,7 @@ import { AppText, Button, useToast } from '@/components/ui';
 import { signIn } from '@/features/auth/authStore';
 import { SkeletonFigure, useRepLoop } from '@/features/form/SkeletonFigure';
 import { SchemeOverride } from '@/theme/ThemeProvider';
+import { readable, READABLE_MAX } from '@/theme/layout';
 import { radius, spacing } from '@/theme/tokens';
 
 /**
@@ -50,7 +51,7 @@ function Welcome() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.lg }]}>
-      <View style={styles.top}>
+      <View style={[styles.top, readable]}>
         <AppText variant="label" tone="accent">
           Exercise Tracker
         </AppText>
@@ -60,11 +61,11 @@ function Welcome() {
         </AppText>
       </View>
 
-      <View style={styles.figure} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <SkeletonFigure family="squat" depth={loop.depth} withBar width={width - spacing.xl * 2} height={figure} />
+      <View style={[styles.figure, readable]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <SkeletonFigure family="squat" depth={loop.depth} withBar width={Math.min(width - spacing.xl * 2, READABLE_MAX)} height={figure} />
       </View>
 
-      <View style={styles.buttons}>
+      <View style={[styles.buttons, readable]}>
         {appleAvailable && (
           <AppleAuthentication.AppleAuthenticationButton
             buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}

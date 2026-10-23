@@ -8,6 +8,7 @@ import type { Preferences, Weekday } from '@/data/types';
 import { dateToTime, timeToDate, useSettings } from '@/features/settings/useSettings';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 type Toggles = 'workoutReminders' | 'restTimer' | 'missedWorkout' | 'weeklySummary' | 'formAnalysisComplete';
 
@@ -51,7 +52,7 @@ export default function NotificationsScreen() {
   );
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView contentContainerStyle={[styles.content, readable]}>
       <AppText variant="subhead" tone="secondary" style={styles.hint}>
         Everything is off until you turn it on; iOS asks for permission the first time. Lock-screen alerts show workout names unless iOS "Show Previews" is off.
       </AppText>

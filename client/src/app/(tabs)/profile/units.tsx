@@ -7,6 +7,7 @@ import { EQUIPMENT_LABEL } from '@/features/exercises/ExerciseList';
 import { useSettings } from '@/features/settings/useSettings';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 const ROUNDED: Equipment[] = ['barbell', 'dumbbell', 'machine', 'cable', 'kettlebell'];
 
@@ -17,7 +18,7 @@ export default function UnitsScreen() {
   const unit = preferences.units === 'imperial' ? 'lb' : 'kg';
 
   return (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+    <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
       <View style={styles.section}>
         <SectionHeader title="Units" />
         <SegmentedControl

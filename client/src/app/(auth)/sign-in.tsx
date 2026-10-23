@@ -6,6 +6,7 @@ import { AppText, Button, TextField } from '@/components/ui';
 import { signIn } from '@/features/auth/authStore';
 import { EMAIL_PATTERN } from '@/features/auth/validation';
 import { spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 /** Email sign-in. Fields are tagged so iOS offers saved passwords (spec 2.3: credential autofill). */
 export default function SignInScreen() {
@@ -26,7 +27,7 @@ export default function SignInScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+    <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
       <AppText variant="title1">Welcome back</AppText>
       <TextField
         label="Email"

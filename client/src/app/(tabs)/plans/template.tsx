@@ -12,6 +12,7 @@ import { templateMeta } from '@/features/plans/TemplateCard';
 import { EQUIPMENT_LABEL } from '@/features/exercises/ExerciseList';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 /** A starter template's details, and "Use this template" to copy it into a new plan. */
 export default function TemplateScreen() {
@@ -58,7 +59,7 @@ export default function TemplateScreen() {
   return (
     <>
       <Stack.Screen options={{ title: template.name }} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, readable]}>
         <View style={styles.header}>
           <View style={[styles.category, { backgroundColor: colors.accentSubtle }]}>
             <AppText variant="caption" weight="800" tone="accent">

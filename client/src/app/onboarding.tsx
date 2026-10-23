@@ -18,6 +18,7 @@ import { nextMonday, planFromTemplate } from '@/features/plans/planEdits';
 import { templateMeta } from '@/features/plans/TemplateCard';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 const STEPS = ['experience', 'goal', 'equipment', 'days', 'body', 'limits'] as const;
 
@@ -115,7 +116,7 @@ export default function OnboardingScreen() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+      <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         {phase === 'questions' && step === -1 && (
           <View style={styles.stack}>
             <AppText variant="largeTitle">{`Hi ${name}. Let's set up your training.`}</AppText>

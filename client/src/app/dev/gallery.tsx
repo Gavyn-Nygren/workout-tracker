@@ -26,6 +26,7 @@ import {
 import { useHaptics } from '@/hooks/useHaptics';
 import { useAppTheme, type ThemePreference } from '@/theme/ThemeProvider';
 import { radius, spacing, typography, type ThemeColors, type TypographyVariant } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 const THEME_OPTIONS = [
   { value: 'system', label: 'System' },
@@ -58,7 +59,7 @@ export default function ComponentGallery() {
   const [celebration, setCelebration] = useState(0);
 
   return (
-    <ScrollView contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic">
+    <ScrollView contentContainerStyle={[styles.content, readable]} contentInsetAdjustmentBehavior="automatic">
       <SegmentedControl label="Theme" options={THEME_OPTIONS} value={preference} onChange={setPreference} />
 
       <Section title="Typography">

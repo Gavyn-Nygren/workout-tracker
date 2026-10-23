@@ -5,6 +5,7 @@ import { formatClock } from '@/hooks/useNow';
 import { useSettings } from '@/features/settings/useSettings';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { readable } from '@/theme/layout';
 
 const REST_ROWS = [
   { key: 'compound', label: 'Compound lifts', hint: 'Squats, presses, rows, deadlifts' },
@@ -18,7 +19,7 @@ export default function WorkoutDefaultsScreen() {
   const { preferences, update } = useSettings();
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView contentContainerStyle={[styles.content, readable]}>
       <View style={styles.section}>
         <SectionHeader title="Default rest" />
         <Card padding="none">

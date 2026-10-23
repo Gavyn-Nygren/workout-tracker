@@ -14,6 +14,7 @@ import { WorkoutPager } from '@/features/today/WorkoutPager';
 import { latestMissed, summarizeSession, type Agenda, type DayItem } from '@/features/today/agenda';
 import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
 import { formatMonthDay, formatShortDate, formatWeekday } from '@/lib/format';
+import { Columns, dashboard } from '@/theme/layout';
 import { spacing } from '@/theme/tokens';
 
 function headerTitle(date: ISODate, items: DayItem[]): string {
@@ -93,7 +94,7 @@ export default function TodayScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic">
+    <ScrollView contentContainerStyle={[styles.content, dashboard]} contentInsetAdjustmentBehavior="automatic">
       <WeekStrip agenda={agenda} today={today} selected={selected} onSelect={setSelected} range={range} />
 
       {isLoading ? (
@@ -108,47 +109,56 @@ export default function TodayScreen() {
           </Card>
         </View>
       ) : (
-        <>
-          {selected === today && missed && (
-            <View style={styles.gutter}>
-              <MissedBanner key={missed.key} missed={missed} today={today} onView={() => setSelected(missed.date)} />
-            </View>
-          )}
-
-          <View style={styles.gutter}>
-            <SectionHeader title={selected === today ? `Today · ${formatMonthDay(selected)}` : formatShortDate(selected)} />
-          </View>
-
-          {items.length ? (
-            <WorkoutPager
-              key={selected}
-              items={items}
-              renderCard={(item, index) => (
-                <WorkoutCard
-                  item={item}
-                  index={index}
-                  total={items.length}
-                  today={today}
-                  summary={item.session && item.session.status === 'completed' ? summarizeSession(item.session, exercisesById, records) : undefined}
-                  exercisesById={exercisesById}
-                  units={units}
-                  onStart={() => begin(item, () => active.startFromItem(item, { index, total: items.length }))}
-                  onReopen={() => item.session && begin(item, () => active.reopen(item.session!, { index, total: items.length }))}
-                  onRepeat={() => item.session && begin({ ...item, status: 'planned' }, () => active.repeat(item, item.session!))}
-                  onViewSummary={() => item.session && router.push({ pathname: '/summary', params: { session: item.session.id } })}
-                />
+        // iPad: the day's workouts on the left, Coming up beside them. Each section keeps its own gutter.
+        <Columns
+          gap={spacing.lg}
+          columnGap={0}
+          leftFlex={1.4}
+          left={
+            <>
+              {selected === today && missed && (
+                <View style={styles.gutter}>
+                  <MissedBanner key={missed.key} missed={missed} today={today} onView={() => setSelected(missed.date)} />
+                </View>
               )}
-            />
-          ) : (
-            <View style={styles.gutter}>
-              <RestDayCard date={selected} today={today} next={coming[0]} onShowNext={() => coming[0] && setSelected(coming[0].date)} />
-            </View>
-          )}
 
-          <View style={styles.gutter}>
-            <ComingUp items={items.length ? coming : coming.slice(1)} onSelect={setSelected} />
-          </View>
-        </>
+              <View style={styles.gutter}>
+                <SectionHeader title={selected === today ? `Today · ${formatMonthDay(selected)}` : formatShortDate(selected)} />
+              </View>
+
+              {items.length ? (
+                <WorkoutPager
+                  key={selected}
+                  items={items}
+                  renderCard={(item, index) => (
+                    <WorkoutCard
+                      item={item}
+                      index={index}
+                      total={items.length}
+                      today={today}
+                      summary={item.session && item.session.status === 'completed' ? summarizeSession(item.session, exercisesById, records) : undefined}
+                      exercisesById={exercisesById}
+                      units={units}
+                      onStart={() => begin(item, () => active.startFromItem(item, { index, total: items.length }))}
+                      onReopen={() => item.session && begin(item, () => active.reopen(item.session!, { index, total: items.length }))}
+                      onRepeat={() => item.session && begin({ ...item, status: 'planned' }, () => active.repeat(item, item.session!))}
+                      onViewSummary={() => item.session && router.push({ pathname: '/summary', params: { session: item.session.id } })}
+                    />
+                  )}
+                />
+              ) : (
+                <View style={styles.gutter}>
+                  <RestDayCard date={selected} today={today} next={coming[0]} onShowNext={() => coming[0] && setSelected(coming[0].date)} />
+                </View>
+              )}
+            </>
+          }
+          right={
+            <View style={styles.gutter}>
+              <ComingUp items={items.length ? coming : coming.slice(1)} onSelect={setSelected} />
+            </View>
+          }
+        />
       )}
     </ScrollView>
   );
