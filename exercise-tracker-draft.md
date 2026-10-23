@@ -142,6 +142,29 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 - Users choose RPE or RIR display in Settings (see 2.6).
 - The theme is chosen explicitly in Settings (light or dark) and can be changed at any time. The app does not simply follow the system theme.
 
+**Sign-in and first-run screens**
+
+- **Welcome** (user's pick: dark hero):
+  - The app name, a one-line pitch, and the animated skeleton lifter.
+  - **Apple's official Sign in with Apple button** (white style) to keep within Apple's design rules, then **Continue with email** and **Create an account**.
+  - The 16+ age requirement and the Terms/Privacy line.
+- **Email:**
+  - Sign in with iOS password autofill.
+  - Create account (optional first name, email, password with iOS strong-password suggestions, and a required "I'm 16 or older" toggle).
+  - **Verify email** ("Check your inbox", Open Mail, resend with a 30-second cooldown).
+  - **Reset password**: the reply is the same whether or not the account exists, so it doesn't reveal which emails are registered.
+- **Access rules** (navigation guards): signed out, only the welcome and sign-in screens exist. New accounts see onboarding first; skipping it counts as finishing it.
+- **Onboarding** (user's pick: one question per screen):
+  - A progress bar, Skip on every question, and "Skip setup" at any time.
+  - Questions: experience, main goal, equipment, days per week, height and bodyweight (bodyweight becomes the first weigh-in), and limitations with notes. The limitations step states that the app doesn't give medical advice.
+  - Then **1–3 recommended templates** with the reasons each fits, "Start this plan" (today or next Monday), or build your own.
+  - Then the optional tour.
+- **Recommendation rules (V1):**
+  - Templates that need equipment the user lacks are left out.
+  - The rest are scored by goal → category, experience level, and days per week, with ready-to-use templates first.
+- **Tour** (user's pick: swipeable cards): five cards (Today, logging and rest, form recording, progress, goals and streaks), illustrated with the app's own components. Skip any time, and replay from Profile → About.
+- **Notification permission:** the first time a notification type is turned on, an explainer screen lists the benefits before iOS asks. If permission was denied earlier, it links to iOS Settings instead.
+
 ### 2.5 Plans, calendar, and workout lifecycle
 
 **Plan types**

@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { router } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Card, ListRow, useToast } from '@/components/ui';
@@ -17,6 +18,9 @@ export default function AboutScreen() {
           For independent lifters. Logging, plans, progress, and on-device form analysis.
         </AppText>
       </View>
+      <Card padding="none">
+        <ListRow title="Replay the tour" icon="play.rectangle" onPress={() => router.push('/tutorial')} separator={false} />
+      </Card>
       <Card padding="none">
         <ListRow title="Privacy policy" icon="hand.raised" onPress={soon} />
         <ListRow title="Terms of use" icon="doc.plaintext" onPress={soon} />

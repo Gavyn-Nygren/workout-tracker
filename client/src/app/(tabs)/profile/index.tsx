@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Card, ListRow, SectionHeader, SegmentedControl } from '@/components/ui';
 import { usePersonalRecords, useSessions, useStreak } from '@/data/hooks';
 import { formatClock } from '@/hooks/useNow';
+import { authStore, resetFirstRun } from '@/features/auth/authStore';
 import { useSettings } from '@/features/settings/useSettings';
 import { useAppTheme, type ThemePreference } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
@@ -14,13 +15,12 @@ const THEME_OPTIONS = [
   { value: 'dark', label: 'Dark' },
 ] as const satisfies readonly { value: ThemePreference; label: string }[];
 
-/** Sample account until sign-in exists (G2.9 screens, G5.1 Supabase). */
-const ACCOUNT = { name: 'Gavyn', method: 'Signed in with Apple' };
-
 /** Profile (roadmap G2.8): account card with lifetime stats, then settings groups. */
 export default function ProfileScreen() {
   const { colors, preference, setPreference } = useAppTheme();
   const { preferences } = useSettings();
+  const auth = authStore.use();
+  const account = { name: auth.name, method: auth.method === 'apple' ? 'Signed in with Apple' : auth.email ?? 'Signed in with email' };
   const { data: sessions } = useSessions();
   const { data: streak } = useStreak();
   const { data: records } = usePersonalRecords();
@@ -35,13 +35,13 @@ export default function ProfileScreen() {
         <View style={styles.account}>
           <View style={[styles.avatar, { backgroundColor: colors.accent }]}>
             <AppText variant="title2" tone="onAccent">
-              {ACCOUNT.name.slice(0, 1)}
+              {account.name.slice(0, 1)}
             </AppText>
           </View>
           <View style={styles.flex}>
-            <AppText variant="title2">{ACCOUNT.name}</AppText>
+            <AppText variant="title2">{account.name}</AppText>
             <AppText variant="footnote" tone="secondary">
-              {ACCOUNT.method}
+              {account.method}
             </AppText>
           </View>
         </View>
@@ -80,7 +80,19 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <SectionHeader title="Developer" />
           <Card padding="none">
-            <ListRow title="Component gallery" subtitle="Every shared component, in the current theme" icon="square.grid.2x2" onPress={() => router.push('/dev/gallery')} separator={false} />
+            <ListRow title="Component gallery" subtitle="Every shared component, in the current theme" icon="square.grid.2x2" onPress={() => router.push('/dev/gallery')} />
+            <ListRow
+              title="Restart first-run setup"
+              subtitle="Sign out and see welcome, sign-up, and onboarding as a new user"
+              icon="arrow.counterclockwise"
+              onPress={() =>
+                Alert.alert('Restart first-run setup?', 'You will be signed out and taken through sign-up and onboarding. Your sample data stays.', [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Restart', onPress: resetFirstRun },
+                ])
+              }
+              separator={false}
+            />
           </Card>
         </View>
       )}

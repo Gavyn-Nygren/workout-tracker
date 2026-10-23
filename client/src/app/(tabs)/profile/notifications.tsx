@@ -1,4 +1,6 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as Notifications from 'expo-notifications';
+import { router } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Card, ListRow, SectionHeader, SegmentedControl, Toggle } from '@/components/ui';
@@ -27,6 +29,14 @@ export default function NotificationsScreen() {
   const n = preferences.notifications;
   const set = (patch: Partial<Preferences['notifications']>) => update((p) => ({ ...p, notifications: { ...p.notifications, ...patch } }));
 
+  // The first time one is turned on, explain before iOS asks (spec 2.11).
+  const toggle = async (key: Toggles, on: boolean) => {
+    if (!on) return set({ [key]: false });
+    const permission = await Notifications.getPermissionsAsync().catch(() => undefined);
+    if (permission?.granted) set({ [key]: true });
+    else router.push({ pathname: '/notifications-permission', params: { key } });
+  };
+
   const picker = (value: string, onChange: (time: string) => void, label: string) => (
     <DateTimePicker
       value={timeToDate(value)}
@@ -43,7 +53,7 @@ export default function NotificationsScreen() {
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <AppText variant="subhead" tone="secondary" style={styles.hint}>
-        Everything is off until you turn it on. Lock-screen alerts show workout names unless iOS "Show Previews" is off.
+        Everything is off until you turn it on; iOS asks for permission the first time. Lock-screen alerts show workout names unless iOS "Show Previews" is off.
       </AppText>
 
       <Card padding="none">
@@ -53,7 +63,7 @@ export default function NotificationsScreen() {
               title={row.title}
               subtitle={row.subtitle}
               icon={row.icon}
-              trailing={<Toggle label={row.title} value={n[row.key]} onChange={(v) => set({ [row.key]: v })} />}
+              trailing={<Toggle label={row.title} value={n[row.key]} onChange={(v) => toggle(row.key, v)} />}
               separator={i < ROWS.length - 1 || (row.key === 'weeklySummary' && n.weeklySummary)}
             />
             {row.key === 'workoutReminders' && n.workoutReminders && (

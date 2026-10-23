@@ -6,6 +6,7 @@ import { AppText, Card, ListRow, SectionHeader, useToast } from '@/components/ui
 import { useBodyweight, useExercises, useFormReports, useGoals, usePlans, useSessions } from '@/data/hooks';
 import { everythingJson, workoutsCsv } from '@/features/settings/exportData';
 import { shareText } from '@/features/settings/shareFile';
+import { authStore, signOut } from '@/features/auth/authStore';
 import { useSettings } from '@/features/settings/useSettings';
 import { spacing } from '@/theme/tokens';
 
@@ -13,6 +14,7 @@ import { spacing } from '@/theme/tokens';
 export default function DataAccountScreen() {
   const toast = useToast();
   const { preferences } = useSettings();
+  const auth = authStore.use();
   const { data: sessions } = useSessions();
   const { data: exercises } = useExercises();
   const { data: plans } = usePlans();
@@ -71,14 +73,14 @@ export default function DataAccountScreen() {
       <View style={styles.section}>
         <SectionHeader title="Account" />
         <Card padding="none">
-          <ListRow title="Sign-in method" value="Apple" icon="apple.logo" />
+          <ListRow title="Sign-in method" value={auth.method === 'apple' ? 'Apple' : 'Email'} subtitle={auth.method === 'email' ? auth.email : undefined} icon={auth.method === 'apple' ? 'apple.logo' : 'envelope'} />
           <ListRow
             title="Sign out"
             icon="rectangle.portrait.and.arrow.right"
             onPress={() =>
               Alert.alert('Sign out?', 'Anything not yet synced stays on this phone and uploads when you sign back in.', [
                 { text: 'Cancel', style: 'cancel' },
-                { text: 'Sign out', style: 'destructive', onPress: () => toast.show({ message: 'Accounts arrive with sign-in (G2.9 screens, G5.1 service).' }) },
+                { text: 'Sign out', style: 'destructive', onPress: signOut },
               ])
             }
           />

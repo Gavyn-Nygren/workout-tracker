@@ -9,7 +9,8 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.gavynnygren.exercisetracker"
+      "bundleIdentifier": "com.gavynnygren.exercisetracker",
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "com.gavynnygren.exercisetracker",

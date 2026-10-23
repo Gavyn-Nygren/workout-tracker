@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G2.8 (Profile & Settings).
+**Current goal:** G2.10 (iPad layouts).
 
 ## How we work
 
@@ -194,17 +194,20 @@ Load the `dataviz` skill before building any charts.
   - Face ID and lock timing *(real Face ID prompt to turn it on; enforcing the lock is G4.8)*
   - haptics/celebrations toggle, telemetry opt-out
 - [x] Data export, and delete account with the 7-day grace explanation. *CSV and JSON export really work through the share sheet; deletion is a preview until G5.4.*
-- [ ] The user has reviewed Profile on their iPhone.
+- [x] The user has reviewed Profile on their iPhone.
 
 *Week-start (Monday or Sunday) isn't a setting yet; it's decided with the calendar rules in G3.7. Settings changes reset when the app restarts, like the rest of the sample data.*
 
 ### G2.9 Auth, onboarding, tutorial 👁
 
-- [ ] Sign in and sign up: email + Sign in with Apple, following Apple's button guidelines, and showing the age-16 requirement.
-- [ ] Verify-email and reset-password screens.
-- [ ] Optional onboarding steps and the recommendation result (1-3 templates).
-- [ ] Optional tutorial.
-- [ ] Notification permission explainer screen.
+- [x] Sign in and sign up: email + Sign in with Apple, following Apple's button guidelines, and showing the age-16 requirement. *Dark hero welcome (user's pick); Apple's official button; a real Apple sign-in sheet in Expo Go.*
+- [x] Verify-email and reset-password screens.
+- [x] Optional onboarding steps and the recommendation result (1-3 templates). *One question per screen (user's pick); rule-based matching.*
+- [x] Optional tutorial. *Swipeable cards (user's pick).*
+- [x] Notification permission explainer screen. *Shown before the real iOS prompt when a notification is first turned on.*
+- [ ] The user has reviewed sign-in and onboarding on their iPhone.
+
+*Accounts are mocked on the phone until Supabase Auth (G5.1): any valid email and password signs in. Profile → Developer → "Restart first-run setup" replays the whole new-user flow.*
 
 ### G2.10 iPad layouts 👁
 
