@@ -6,6 +6,7 @@ import { formatRepTarget, unitLabel } from '@/lib/format';
 import { formatClock } from '@/hooks/useNow';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
+import { isFormAnalysisSupported } from '../form/capability';
 import { SET_COLUMNS, SetRow } from './SetRow';
 
 type Props = {
@@ -63,7 +64,8 @@ export function ExerciseSection(props: Props) {
             {entry.skipped ? 'Skipped' : targetSummary(entry)}
           </AppText>
         </View>
-        {exercise?.formAnalysis && !entry.skipped && (
+        {/* Hidden on phones older than iPhone 12 (spec 2.2). */}
+        {exercise?.formAnalysis && !entry.skipped && isFormAnalysisSupported() && (
           <Pressable onPress={onCamera} accessibilityRole="button" accessibilityLabel={`Record a set of ${name} for form analysis`} hitSlop={8} style={[styles.iconButton, { backgroundColor: colors.accentSubtle }]}>
             <Icon name="video.fill" color={colors.accentText} size={16} />
           </Pressable>

@@ -29,6 +29,8 @@ type Props = {
   onSelect?: (point: Point | undefined) => void;
   /** Lets parents pause their own scrolling while a finger is on the chart. */
   onScrubbingChange?: (scrubbing: boolean) => void;
+  /** Which extreme gets the "Best" label; 'min' for joint angles, where smaller is deeper. */
+  bestIs?: 'max' | 'min';
   /** Read by VoiceOver; the screen also lists every value in a table below. */
   label: string;
 };
@@ -40,7 +42,7 @@ const PAD = { top: 18, right: 44, bottom: 24, left: 44 };
  * specs: one axis, hairline grid, 2px lines, 10% area wash, ringed markers, the endpoint and best
  * value labelled, and a crosshair that snaps to the nearest point while dragging.
  */
-export function LineChart({ series, primaryKey, height = 220, formatValue, onSelect, onScrubbingChange, label }: Props) {
+export function LineChart({ series, primaryKey, height = 220, formatValue, onSelect, onScrubbingChange, bestIs = 'max', label }: Props) {
   const { colors } = useAppTheme();
   const haptics = useHaptics();
   const [width, setWidth] = useState(0);
@@ -120,7 +122,7 @@ export function LineChart({ series, primaryKey, height = 220, formatValue, onSel
   const baseline = height - PAD.bottom;
   const first = primary.points[0];
   const last = primary.points[primary.points.length - 1];
-  const bestIndex = primary.points.reduce((bi, p, i, arr) => (p.value > arr[bi].value ? i : bi), 0);
+  const bestIndex = primary.points.reduce((bi, p, i, arr) => ((bestIs === 'max' ? p.value > arr[bi].value : p.value < arr[bi].value) ? i : bi), 0);
   const showBest = primary.points.length > 2 && bestIndex < primary.points.length - 2;
   const textStyle = { fontSize: typography.caption.fontSize, fontWeight: '600' as const };
 
@@ -171,7 +173,13 @@ export function LineChart({ series, primaryKey, height = 220, formatValue, onSel
             </SvgText>
           )}
           {showBest && selected === undefined && (
-            <SvgText x={scale.x(primary.points[bestIndex].date)} y={scale.y(primary.points[bestIndex].value) - 10} textAnchor="middle" fill={colors.textSecondary} {...textStyle}>
+            <SvgText
+              x={scale.x(primary.points[bestIndex].date)}
+              y={scale.y(primary.points[bestIndex].value) + (bestIs === 'max' ? -10 : 18)}
+              textAnchor="middle"
+              fill={colors.textSecondary}
+              {...textStyle}
+            >
               {`Best ${formatValue(primary.points[bestIndex].value)}`}
             </SvgText>
           )}

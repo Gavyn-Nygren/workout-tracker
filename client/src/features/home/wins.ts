@@ -12,6 +12,8 @@ export type Win = {
   title: string;
   detail: string;
   icon: SFSymbol;
+  /** Form wins open their report. */
+  reportId?: string;
 };
 
 /** Most notable PR type first, so each exercise-and-session shows one line. */
@@ -70,8 +72,11 @@ export function buildWins(input: {
       const previous = reports[i - 1];
       const date = report.createdAt.slice(0, 10);
       if (!previous || date < since) return;
-      const now = reportAngle(report, report.primaryJoint);
-      const before = reportAngle(previous, report.primaryJoint);
+      // Whole degrees, as shown in the report.
+      const nowRaw = reportAngle(report, report.primaryJoint);
+      const beforeRaw = reportAngle(previous, report.primaryJoint);
+      const now = nowRaw === undefined ? undefined : Math.round(nowRaw);
+      const before = beforeRaw === undefined ? undefined : Math.round(beforeRaw);
       if (now === undefined || before === undefined || before - now < 5) return;
       wins.push({
         id: `form_${report.id}`,
@@ -80,6 +85,7 @@ export function buildWins(input: {
         title: `${name(report.exerciseId)} · ${Math.round(before - now)}° deeper`,
         detail: `${JOINT_LABEL[report.primaryJoint]} angle ${Math.round(now)}° vs ${Math.round(before)}° last recording`,
         icon: 'video.fill',
+        reportId: report.id,
       });
     });
   }

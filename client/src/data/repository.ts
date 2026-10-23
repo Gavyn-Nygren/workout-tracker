@@ -69,6 +69,10 @@ export interface DataRepository {
   /** One weigh-in per day: saving on a date that already has one replaces it. */
   saveBodyweight(entry: BodyweightEntry): Promise<void>;
   deleteBodyweight(entryId: ID): Promise<void>;
+  /** Deletes a recording's video and annotated replay; its metrics and report stay (spec 2.8). */
+  deleteRecordingVideo(recordingId: ID): Promise<void>;
+  /** Deletes a form report, its recording, and the set's link to it. */
+  deleteFormReport(reportId: ID): Promise<void>;
 }
 
 /** How far ahead the calendar is generated. */
@@ -166,6 +170,21 @@ export function createFakeRepository(data: FakeDataset): DataRepository {
     },
     deleteBodyweight: async (entryId) => {
       data.bodyweight = data.bodyweight.filter((e) => e.id !== entryId);
+    },
+    deleteRecordingVideo: async (recordingId) => {
+      data.recordings = data.recordings.map((r) => (r.id === recordingId ? { ...r, videoUri: undefined } : r));
+      data.formReports = data.formReports.map((r) => (r.recordingId === recordingId ? { ...r, hasReplay: false, updatedAt: new Date().toISOString() } : r));
+    },
+    deleteFormReport: async (reportId) => {
+      const report = data.formReports.find((r) => r.id === reportId);
+      if (!report) return;
+      data.formReports = data.formReports.filter((r) => r.id !== reportId);
+      data.recordings = data.recordings.filter((r) => r.id !== report.recordingId);
+      data.sessions = data.sessions.map((s) =>
+        s.id !== report.sessionId
+          ? s
+          : { ...s, blocks: s.blocks.map((b) => ({ ...b, exercises: b.exercises.map((e) => ({ ...e, sets: e.sets.map((x) => (x.recordingId === report.recordingId ? { ...x, recordingId: undefined } : x)) })) })) },
+      );
     },
   };
 }

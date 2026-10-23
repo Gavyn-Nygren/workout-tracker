@@ -2,10 +2,12 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppText, Button, Card, EmptyState, Icon, PRBadge, SectionHeader } from '@/components/ui';
+import { AppText, Button, Card, EmptyState, Icon, ListRow, PRBadge, SectionHeader } from '@/components/ui';
+import { useFormReports } from '@/data/hooks';
 import { countsForPRs } from '@/data/calculations';
 import type { LoggedSet, PRType } from '@/data/types';
 import { formatLoad, formatLoadValue, formatShortDate } from '@/lib/format';
+import { reportAngle } from '@/features/home/goals';
 import { useProgressData } from '@/features/progress/useProgressData';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -33,6 +35,9 @@ export default function ExerciseHistoryScreen() {
         .sort((a, b) => (b.session.completedAt ?? '').localeCompare(a.session.completedAt ?? '')),
     [data.sessions, id],
   );
+
+  const { data: allReports } = useFormReports({ exerciseId: id });
+  const reports = [...(allReports ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   const records = data.records.filter((r) => r.exerciseId === id);
   const best = (type: PRType) => records.filter((r) => r.type === type).sort((a, b) => b.value - a.value)[0];
@@ -78,6 +83,27 @@ export default function ExerciseHistoryScreen() {
         </View>
 
         <Button title="Open graph" variant="secondary" icon="chart.xyaxis.line" fullWidth onPress={() => router.push({ pathname: '/progress/graph', params: { exercise: id, metric: 'e1rm' } })} />
+
+        {reports.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeader title={`Form recordings · ${reports.length}`} />
+            <Card padding="none">
+              {reports.map((r, i) => {
+                const angle = reportAngle(r, r.primaryJoint);
+                return (
+                  <ListRow
+                    key={r.id}
+                    title={formatShortDate(r.createdAt.slice(0, 10))}
+                    subtitle={`${angle !== undefined ? `${Math.round(angle)}° average ${r.primaryJoint} angle` : 'Analyzed'} · ${r.detectedReps} reps${r.hasReplay ? '' : ' · video deleted'}`}
+                    icon={r.hasReplay ? 'video.fill' : 'video.slash'}
+                    onPress={() => router.push({ pathname: '/form/report', params: { id: r.id } })}
+                    separator={i < reports.length - 1}
+                  />
+                );
+              })}
+            </Card>
+          </View>
+        )}
 
         <View style={styles.section}>
           <SectionHeader title={`Sessions · ${sessions.length}`} />

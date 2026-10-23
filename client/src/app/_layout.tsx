@@ -78,6 +78,10 @@ function NavigationRoot() {
           <Stack.Screen name="badge" options={sheet([0.6])} />
           <Stack.Screen name="graph-builder" options={sheet([0.85, 1])} />
           <Stack.Screen name="log-weight" options={sheet([0.55])} />
+          {/* Form analysis: setup and recording take the whole screen like the camera will. */}
+          <Stack.Screen name="form/setup" options={{ presentation: 'fullScreenModal', headerShown: false }} />
+          <Stack.Screen name="form/record" options={{ presentation: 'fullScreenModal', headerShown: false, gestureEnabled: false }} />
+          <Stack.Screen name="form/report" options={{ presentation: 'modal', headerShown: false }} />
         </Stack>
         <ToastViewport />
       </ToastProvider>

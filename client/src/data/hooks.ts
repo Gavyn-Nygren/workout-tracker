@@ -88,6 +88,24 @@ export function useDeleteBodyweight() {
   });
 }
 
+export function useDeleteRecordingVideo() {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (recordingId: ID) => repo.deleteRecordingVideo(recordingId),
+    onSuccess: () => Promise.all(['formReports', 'recordings'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+  });
+}
+
+export function useDeleteFormReport() {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (reportId: ID) => repo.deleteFormReport(reportId),
+    onSuccess: () => Promise.all(['formReports', 'recordings', 'sessions'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+  });
+}
+
 // Reads. One hook per repository read; screens use these and never touch the repository directly.
 
 export function usePreferences() {

@@ -385,6 +385,34 @@ Sumo deadlifts are excluded because they are hard to read from a side view.
 - Reports **contain no pain or injury language in V1.** A static notice reads: "Educational, not medical advice. Stop if you feel pain."
 - Reports never diagnose injuries or prescribe treatment or rehabilitation.
 
+**Form screens layout**
+
+- **Setup** (user's pick: live preview + checklist):
+  - The full-screen camera view has a dashed body outline to stand inside, and live check pills for side view, full body, and lighting.
+  - A movement-specific orientation tip (for example, landscape for deadlifts and lunges).
+  - A 5 s or 10 s countdown, then **Start recording**.
+  - Warnings explain that recording still works and unclear reps get flagged.
+  - The **?** button opens placement tips: side-on at hip height, about 3 m back, face the light, nobody else in frame.
+- **Recording:**
+  - A big countdown, then REC with elapsed time, a framing status pill, and a **large live rep counter** with a tap per rep.
+  - There are no corrective cues during the set.
+  - It stops automatically about 2 seconds after the last rep, or with the Stop button.
+- **Analyzing:** an on-device analysis progress list, with "Your video never leaves this device."
+- **Review:** confirm or correct the rep count, which fills in the set's reps. Shows the quality summary and the comparison used, plus **Save reps to set**, **View report**, and **Discard**.
+- **Report** (user's pick: summary first):
+  1. A summary card: average bottom angle of the primary joint, the change vs the comparison (under 5° shows as "no meaningful change"), range of motion, reps (and how many were unclear), time per rep, and framing quality.
+  2. The comparison picker: the last two recordings, **Older…**, or None.
+  3. The **annotated replay**: the skeleton with the live angle and rep markers, or a "Video deleted, metrics kept" state.
+  4. **Dots per rep vs comparison** (user's pick): newest shade strongest, unclear reps as hollow rings, tap a rep to compare.
+  5. Depth over time.
+  6. A rep-by-rep table.
+  7. "What changed": observations with neutral cues.
+  8. The educational notice.
+
+  The ⋯ menu offers Export video, Delete video (keep metrics), and Delete report.
+- **Where reports open from:** Home form wins, and exercise history (Progress → exercise → Form recordings).
+- **Older phones:** below iPhone 12, the camera button is hidden and setup explains why.
+
 **Video lifecycle**
 
 - Raw video is recorded only when the user starts a recording and is stored on the device.

@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G2.6 (Progress).
+**Current goal:** G2.8 (Profile & Settings).
 
 ## How we work
 
@@ -163,23 +163,26 @@ Load the `dataviz` skill before building any charts.
 - [x] Custom graph builder: exercise × metric.
 - [x] Exercise history and PR list.
 - [x] Bodyweight log. *Dots + 7-day trend (user's pick); log and delete weigh-ins.*
-- [ ] The user has reviewed Progress on their iPhone.
+- [x] The user has reviewed Progress on their iPhone.
 
 *Charts use react-native-svg instead of Victory Native XL (Skia version mismatch with Expo Go on SDK 58); see spec 2.2.*
 
 ### G2.7 Form analysis (visual mock only) 👁
 
-- [ ] Device-unavailable state for phones older than iPhone 12.
-- [ ] Camera setup guide: side placement, portrait/landscape tip, framing warnings.
-- [ ] Countdown and recording overlay with a live rep count, using a still image in place of the camera.
-- [ ] Report:
+- [x] Device-unavailable state for phones older than iPhone 12. *Detected with expo-device; previewable from the setup tips in dev builds.*
+- [x] Camera setup guide: side placement, portrait/landscape tip, framing warnings. *Live preview + checklist (user's pick).*
+- [x] Countdown and recording overlay with a live rep count, using a still image in place of the camera. *An animated skeleton lifter stands in for the camera.*
+- [x] Report:
   - replay placeholder with skeleton overlay
   - joint-angle charts
   - rep-by-rep breakdown
   - comparison picker (last 2, or any earlier recording)
   - observations and cues
   - educational notice
-- [ ] Delete video vs. delete report.
+
+  *Summary first, dots-per-rep chart (user's picks).*
+- [x] Delete video vs. delete report.
+- [ ] The user has reviewed the form screens on their iPhone.
 
 ### G2.8 Profile & Settings 👁
 

@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Card, Icon, ProgressBar, ProgressRing } from '@/components/ui';
@@ -79,7 +80,14 @@ export function WinsFeed({ wins }: { wins: Win[] }) {
       {wins.map((win, i) => {
         const color = win.kind === 'pr' ? colors.pr : win.kind === 'form' ? colors.accentText : colors.successFill;
         return (
-          <View key={win.id} style={[styles.win, i < wins.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+          <Pressable
+            key={win.id}
+            disabled={!win.reportId}
+            onPress={() => win.reportId && router.push({ pathname: '/form/report', params: { id: win.reportId } })}
+            accessibilityRole={win.reportId ? 'button' : undefined}
+            accessibilityHint={win.reportId ? 'Opens the form report' : undefined}
+            style={({ pressed }) => [styles.win, i < wins.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }, pressed && { backgroundColor: colors.input }]}
+          >
             <View style={[styles.winIcon, { backgroundColor: win.kind === 'pr' ? colors.input : colors.accentSubtle }]}>
               <Icon name={win.icon} color={color} size={15} />
             </View>
@@ -94,7 +102,8 @@ export function WinsFeed({ wins }: { wins: Win[] }) {
             <AppText variant="caption" tone="tertiary" numeric>
               {formatMonthDay(win.date)}
             </AppText>
-          </View>
+            {win.reportId && <Icon name="chevron.right" color={colors.textTertiary} size={12} />}
+          </Pressable>
         );
       })}
     </Card>

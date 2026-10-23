@@ -157,7 +157,11 @@ export default function ActiveWorkoutScreen() {
                   onOpenSet={(setId) => router.push({ pathname: '/workout/set', params: { entry: entry.id, set: setId } })}
                   onAddSet={() => dispatch({ type: 'addSet', entryId: entry.id })}
                   onOpenMenu={() => openMenu(entry)}
-                  onCamera={() => toast.show({ message: 'Recording a set arrives in G2.7.' })}
+                  onCamera={() => {
+                    // Record the next set that isn't logged yet (or the last set if all are done).
+                    const next = entry.sets.find((x) => !x.completedAt) ?? entry.sets[entry.sets.length - 1];
+                    router.push({ pathname: '/form/setup', params: { exercise: entry.exerciseId, entry: entry.id, set: next?.id } });
+                  }}
                   onUnskip={() => dispatch({ type: 'toggleSkip', entryId: entry.id })}
                 />
               )}
