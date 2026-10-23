@@ -73,6 +73,7 @@ export interface DataRepository {
   deleteRecordingVideo(recordingId: ID): Promise<void>;
   /** Deletes a form report, its recording, and the set's link to it. */
   deleteFormReport(reportId: ID): Promise<void>;
+  savePreferences(preferences: Preferences): Promise<void>;
 }
 
 /** How far ahead the calendar is generated. */
@@ -174,6 +175,9 @@ export function createFakeRepository(data: FakeDataset): DataRepository {
     deleteRecordingVideo: async (recordingId) => {
       data.recordings = data.recordings.map((r) => (r.id === recordingId ? { ...r, videoUri: undefined } : r));
       data.formReports = data.formReports.map((r) => (r.recordingId === recordingId ? { ...r, hasReplay: false, updatedAt: new Date().toISOString() } : r));
+    },
+    savePreferences: async (preferences) => {
+      data.preferences = preferences;
     },
     deleteFormReport: async (reportId) => {
       const report = data.formReports.find((r) => r.id === reportId);

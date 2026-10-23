@@ -182,18 +182,21 @@ Load the `dataviz` skill before building any charts.
 
   *Summary first, dots-per-rep chart (user's picks).*
 - [x] Delete video vs. delete report.
-- [ ] The user has reviewed the form screens on their iPhone.
+- [x] The user has reviewed the form screens on their iPhone.
 
 ### G2.8 Profile & Settings 👁
 
-- [ ] Account section.
-- [ ] Every setting from the spec:
+- [x] Account section. *Account card with lifetime stats (user's pick); sample account until sign-in exists.*
+- [x] Every setting from the spec: *Grouped sub-pages (user's pick).*
   - units, RPE/RIR, theme
   - rounding increments, rest defaults
   - notifications with quiet hours
-  - Face ID and lock timing
+  - Face ID and lock timing *(real Face ID prompt to turn it on; enforcing the lock is G4.8)*
   - haptics/celebrations toggle, telemetry opt-out
-- [ ] Data export, and delete account with the 7-day grace explanation.
+- [x] Data export, and delete account with the 7-day grace explanation. *CSV and JSON export really work through the share sheet; deletion is a preview until G5.4.*
+- [ ] The user has reviewed Profile on their iPhone.
+
+*Week-start (Monday or Sunday) isn't a setting yet; it's decided with the calendar rules in G3.7. Settings changes reset when the app restarts, like the rest of the sample data.*
 
 ### G2.9 Auth, onboarding, tutorial 👁
 

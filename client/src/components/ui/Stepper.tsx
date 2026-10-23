@@ -15,9 +15,11 @@ type Props = {
   min?: number;
   max?: number;
   unit?: string;
+  /** Custom display, e.g. seconds shown as "3:00". */
+  formatValue?: (value: number) => string;
 };
 
-function format(value: number): string {
+function defaultFormat(value: number): string {
   return String(Math.round(value * 100) / 100);
 }
 
@@ -25,8 +27,9 @@ function format(value: number): string {
  * Minus/plus control for quick adjustments (weight by the rounding increment, reps by 1).
  * Round buttons sit either side of the value so they're easy to hit mid-set.
  */
-export function Stepper({ label, value, onChange, step = 1, min = 0, max = 9999, unit }: Props) {
+export function Stepper({ label, value, onChange, step = 1, min = 0, max = 9999, unit, formatValue }: Props) {
   const { colors } = useAppTheme();
+  const format = formatValue ?? defaultFormat;
   const haptics = useHaptics();
   const set = (next: number) => {
     const clamped = Math.min(max, Math.max(min, Math.round(next * 100) / 100));

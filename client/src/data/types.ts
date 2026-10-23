@@ -386,6 +386,10 @@ export type Preferences = {
     missedWorkout: boolean;
     weeklySummary: boolean;
     formAnalysisComplete: boolean;
+    /** Time of day ("HH:MM") for workout reminders on training days. */
+    reminderTime: string;
+    weeklySummaryAt: { weekday: Weekday; time: string };
+    /** No notifications between these times ("HH:MM"), wrapping past midnight. */
     quietHours?: { start: string; end: string };
   };
 };

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useRepository } from './DataProvider';
 import type { DateRange } from './repository';
-import type { BodyweightEntry, Exercise, Goal, ID, Plan, PlannedBlock, WorkoutSession } from './types';
+import type { BodyweightEntry, Exercise, Goal, ID, Plan, PlannedBlock, Preferences, WorkoutSession } from './types';
 
 // Writes. Each one refreshes the reads it affects.
 
@@ -103,6 +103,17 @@ export function useDeleteFormReport() {
   return useMutation({
     mutationFn: (reportId: ID) => repo.deleteFormReport(reportId),
     onSuccess: () => Promise.all(['formReports', 'recordings', 'sessions'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+  });
+}
+
+export function useSavePreferences() {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (preferences: Preferences) => repo.savePreferences(preferences),
+    // Optimistic: settings screens update instantly.
+    onMutate: (preferences) => client.setQueryData(['preferences'], preferences),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['preferences'] }),
   });
 }
 

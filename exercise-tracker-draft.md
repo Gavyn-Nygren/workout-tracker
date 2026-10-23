@@ -459,6 +459,21 @@ Sumo deadlifts are excluded because they are hard to read from a side view.
   - consistency: week-streak lengths, completing a full program
   - form: first analyzed set, N recordings of a movement, range-of-motion improvement
 - **Profile** owns account, settings, data export, deletion, and (later) subscriptions.
+- **Profile layout** (user's picks):
+  - An **account card** with an initial avatar, name, sign-in method, and **lifetime stats**: workouts, current streak, and PRs set.
+  - Then Appearance (System / Light / Dark), and **grouped settings pages** like iOS Settings:
+    - **Units & logging:** lb/kg, which also resets rounding to that unit's defaults; RPE or RIR; per-equipment rounding increments, decimals allowed.
+    - **Workout defaults:** rest for compound, isolation, and warm-up sets, in 15-second steps; the haptics and PR-celebration toggles.
+    - **Notifications:** five opt-in categories, a reminder time, the weekly summary day and time, and quiet hours with start and end times. A rest timer still alerts during quiet hours.
+    - **Privacy & security:**
+      - The Face ID lock confirms with a real Face ID prompt when you turn it on, and locks after Immediately, 5 min, or 1 hour.
+      - The anonymous usage data toggle.
+      - A note that videos never leave the phone.
+    - **Data & account:**
+      - **Workouts as CSV** (one row per logged set) and **Everything as JSON**, both through the iOS share sheet.
+      - Sign-in method and sign out.
+      - Delete account, with a timeline of what happens when (right away, 7-day restore window, permanent deletion, backups within 30 days) and typing DELETE to confirm.
+    - **About:** version, legal links, and the not-medical-advice line.
 
 ### 2.10 Progress analytics
 
