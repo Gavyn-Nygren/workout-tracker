@@ -2,7 +2,7 @@ import { router, useNavigation } from 'expo-router';
 import { useLayoutEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
-import { Card, EmptyState, SectionHeader, Skeleton, useToast } from '@/components/ui';
+import { Card, EmptyState, SectionHeader, Skeleton } from '@/components/ui';
 import type { ISODate } from '@/data/types';
 import { ComingUp } from '@/features/today/ComingUp';
 import { MissedBanner } from '@/features/today/MissedBanner';
@@ -33,7 +33,6 @@ function upcoming(agenda: Agenda, after: ISODate, limit: number): DayItem[] {
 
 export default function TodayScreen() {
   const navigation = useNavigation();
-  const toast = useToast();
   const { today, range, agenda, exercisesById, records, units, isLoading, error, retry } = useAgenda();
   const active = useActiveWorkout();
   const [selected, setSelected] = useState<ISODate>(today);
@@ -56,8 +55,6 @@ export default function TodayScreen() {
   useLayoutEffect(() => {
     navigation.setOptions({ headerTitle: isLoading ? 'TODAY' : headerTitle(selected, items) });
   }, [navigation, selected, items, isLoading]);
-
-  const comingSoon = (what: string, goal: string) => () => toast.show({ message: `${what} arrives in ${goal}.` });
 
   /** Only one workout runs at a time; offer to resume or discard the current one first. */
   const begin = (item: DayItem, start: () => void) => {
@@ -138,7 +135,7 @@ export default function TodayScreen() {
                   onStart={() => begin(item, () => active.startFromItem(item, { index, total: items.length }))}
                   onReopen={() => item.session && begin(item, () => active.reopen(item.session!, { index, total: items.length }))}
                   onRepeat={() => item.session && begin({ ...item, status: 'planned' }, () => active.repeat(item, item.session!))}
-                  onViewSummary={comingSoon('The workout summary', 'G2.3')}
+                  onViewSummary={() => item.session && router.push({ pathname: '/summary', params: { session: item.session.id } })}
                 />
               )}
             />

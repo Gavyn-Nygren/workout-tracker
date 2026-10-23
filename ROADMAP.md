@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G2.2 (active workout screen).
+**Current goal:** G2.4 (Plans).
 
 ## How we work
 
@@ -123,15 +123,18 @@ The most important screen.
 - [x] Skip an exercise, and finish as partial.
 - [x] A camera button on the exercise header (opens the mock flow from G2.7). *Shows a note until G2.7.*
 - [x] Opens as a sheet that minimizes to a mini bar above the tabs (user's pick).
-- [ ] The user has reviewed the workout screen on their iPhone.
+- [x] The user has reviewed the workout screen on their iPhone.
 
 *The workout lives in memory only: it survives minimizing and switching tabs, but not closing the app, and finishing doesn't save it to history yet. Saving comes with G3.4.*
 
 ### G2.3 Workout summary 👁
 
-- [ ] Total volume, new PRs, and a partial/complete badge.
-- [ ] PR celebration, with confetti only when there are PRs.
-- [ ] A "save changes to plan?" prompt.
+- [x] Total volume, new PRs, and a partial/complete badge. *Dark hero card plus comparison with the last time (user's picks).*
+- [x] PR celebration, with confetti only when there are PRs. *Brand confetti (user's pick).*
+- [x] A "save changes to plan?" prompt. *Lists the added, swapped, removed, and reordered exercises and set-count changes.*
+- [ ] The user has reviewed the summary on their iPhone.
+
+*Finishing now saves the workout and plan changes into the in-memory sample data, so they show on Today and in "previous" values until the app restarts. Real storage comes in G3.1.*
 
 ### G2.4 Plans 👁
 

@@ -200,6 +200,16 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 - **Reopen** resumes the *same* session, for example after an accidental finish or to fix a log. Volume, PRs, and badges recalculate.
 - **Repeat** creates a *new* session with the same exercises. It is linked to the original and counted separately.
 - When a workout finishes, a quick summary appears immediately, including total volume and new PRs.
+- **Summary layout:**
+  - A **dark hero card** shows "WORKOUT COMPLETE" or "PARTIAL WORKOUT", the name, the date, and the plan, with time, volume, sets, and PR count.
+  - Below it, in order:
+    1. The "update your plan?" prompt, when the workout differed from the plan.
+    2. New PRs, grouped by exercise, each showing its previous value.
+    3. A **comparison with the last time** the same workout was done: volume, time, and sets.
+    4. Each exercise's best set and how it changed.
+  - Increases show in green. Decreases are neutral, never red. Time changes are always neutral.
+- **Celebration:** workouts with new PRs get a 2-second burst of **baby-blue, gold, and white confetti** and a success haptic. It's skipped when celebrations are off or Reduce Motion is on.
+- **Viewing later:** the same summary opens from Today's "View summary" for any past workout. Past summaries don't show confetti or the plan prompt.
 
 ### 2.6 Workout composition and logging
 

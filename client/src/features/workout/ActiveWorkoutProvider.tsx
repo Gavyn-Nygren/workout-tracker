@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 
-import { useBodyweight, useExercises, usePreferences, useSessions } from '@/data/hooks';
+import { toISODate } from '@/data/dates';
+import { useBodyweight, useExercises, usePreferences, useSaveSession, useSessions } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import type { Exercise, LoggedSet, SessionBlock, SessionExercise, WorkoutSession } from '@/data/types';
 import { useHaptics } from '@/hooks/useHaptics';
@@ -41,7 +42,13 @@ type ContextValue = {
   adjustRest: (deltaSec: number) => void;
   togglePauseRest: () => void;
   skipRest: () => void;
+  /** Discards the in-progress workout without saving. */
   end: () => void;
+  /**
+   * Saves the workout as completed: 'full', or 'partial' if any set is unlogged or an exercise was
+   * skipped. Unlogged sets stay in the session (they don't count anywhere) so the plan diff stays accurate.
+   */
+  finish: () => Promise<WorkoutSession | null>;
 };
 
 const Context = createContext<ContextValue | null>(null);
@@ -61,6 +68,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
   const [restJustEnded, setRestJustEnded] = useState(false);
   const [prSetIds, setPrSetIds] = useState<ReadonlySet<string>>(new Set());
   const haptics = useHaptics();
+  const saveSession = useSaveSession();
 
   const sessions = useSessions();
   const exercises = useExercises();
@@ -192,8 +200,30 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
         setPrSetIds(new Set());
         dispatch({ type: 'end' });
       },
+      finish: async () => {
+        if (!workout) return null;
+        const { session, mode } = workout;
+        const { done, total } = countSets(session);
+        const anySkipped = session.blocks.some((b) => b.exercises.some((e) => e.skipped));
+        const now = new Date();
+        const finished: WorkoutSession = {
+          ...session,
+          status: 'completed',
+          completion: done < total || anySkipped ? 'partial' : 'full',
+          // Reopening keeps the original day so history and streaks don't move (spec 2.5).
+          completedAt: mode === 'reopen' && session.completedAt ? session.completedAt : now.toISOString(),
+          completedDate: mode === 'reopen' && session.completedDate ? session.completedDate : toISODate(now),
+          updatedAt: now.toISOString(),
+        };
+        await saveSession.mutateAsync(finished);
+        setRest(null);
+        setRestJustEnded(false);
+        setPrSetIds(new Set());
+        dispatch({ type: 'end' });
+        return finished;
+      },
     }),
-    [workout, rest, restJustEnded, prSetIds, exercisesById, history, preferences, completeSet, startRest],
+    [workout, rest, restJustEnded, prSetIds, exercisesById, history, preferences, completeSet, startRest, saveSession],
   );
 
   return <Context.Provider value={value}>{children}</Context.Provider>;

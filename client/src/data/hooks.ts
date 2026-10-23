@@ -1,10 +1,31 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useRepository } from './DataProvider';
 import type { DateRange } from './repository';
-import type { ID } from './types';
+import type { ID, PlannedBlock, WorkoutSession } from './types';
 
-// One hook per repository read. Screens use these and never touch the repository directly.
+// Writes. Each one refreshes the reads it affects.
+
+export function useSaveSession() {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (session: WorkoutSession) => repo.saveSession(session),
+    onSuccess: () =>
+      Promise.all(['sessions', 'occurrences', 'personalRecords', 'streak'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+  });
+}
+
+export function useUpdatePlanWorkout() {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { planId: ID; workoutId: ID; blocks: PlannedBlock[] }) => repo.updatePlanWorkout(input.planId, input.workoutId, input.blocks),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['plans'] }),
+  });
+}
+
+// Reads. One hook per repository read; screens use these and never touch the repository directly.
 
 export function usePreferences() {
   const repo = useRepository();

@@ -2,6 +2,7 @@ export { AppText, type TextTone } from './AppText';
 export { Button, type ButtonVariant } from './Button';
 export { Card } from './Card';
 export { Chip } from './Chip';
+export { Confetti } from './Confetti';
 export { EmptyState } from './EmptyState';
 export { Icon } from './Icon';
 export { ListRow } from './ListRow';

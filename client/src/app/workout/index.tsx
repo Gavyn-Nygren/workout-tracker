@@ -27,7 +27,7 @@ export default function ActiveWorkoutScreen() {
   const toast = useToast();
   const haptics = useHaptics();
   const preferences = usePreferences().data ?? defaultPreferences;
-  const { workout, counts, prSetIds, exercisesById, history, dispatch, completeSet, uncompleteSet, rest, end } = useActiveWorkout();
+  const { workout, counts, prSetIds, exercisesById, history, dispatch, completeSet, uncompleteSet, rest, end, finish: saveWorkout } = useActiveWorkout();
 
   // Last time's sets per exercise, for the PREVIOUS column.
   const lastByExercise = useMemo(() => {
@@ -97,11 +97,9 @@ export default function ActiveWorkoutScreen() {
 
   const finish = () => {
     const remaining = counts.total - counts.done;
-    const close = () => {
-      haptics.success();
-      end();
-      router.back();
-      toast.show({ message: `${session.name} saved. The summary screen arrives in G2.3.`, tone: 'success' });
+    const close = async () => {
+      const saved = await saveWorkout();
+      if (saved) router.replace({ pathname: '/summary', params: { session: saved.id, fresh: '1' } });
     };
     if (counts.done === 0) {
       Alert.alert('No sets logged yet', 'Complete at least one set to save this workout, or discard it.', [

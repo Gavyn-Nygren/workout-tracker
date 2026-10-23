@@ -8,6 +8,7 @@ import type {
   ISODate,
   PersonalRecord,
   Plan,
+  PlannedBlock,
   Preferences,
   Recording,
   ScheduledOccurrence,
@@ -16,6 +17,8 @@ import type {
   WorkoutSession,
 } from './types';
 import type { FakeDataset } from './fake';
+import { deriveStreak } from './fake/derived';
+import { derivePersonalRecords } from './records';
 
 /** Inclusive date range. */
 export type DateRange = { from: ISODate; to: ISODate };
@@ -44,6 +47,12 @@ export interface DataRepository {
   listFormReports(filter?: { exerciseId?: ID }): Promise<FormReport[]>;
   getFormReport(id: ID): Promise<FormReport | undefined>;
   getRecording(id: ID): Promise<Recording | undefined>;
+
+  // Writes
+  /** Inserts or replaces a session; links it to its scheduled occurrence and recalculates records. */
+  saveSession(session: WorkoutSession): Promise<void>;
+  /** Replaces a plan workout's blocks; affects future workouts only, since sessions keep their own copy. */
+  updatePlanWorkout(planId: ID, workoutId: ID, blocks: PlannedBlock[]): Promise<void>;
 }
 
 function inRange(date: ISODate | undefined, range?: DateRange): boolean {
@@ -51,8 +60,17 @@ function inRange(date: ISODate | undefined, range?: DateRange): boolean {
   return date !== undefined && date >= range.from && date <= range.to;
 }
 
+/** In-memory repository over the sample data. Writes last until the app restarts (real storage: G3.1). */
 export function createFakeRepository(data: FakeDataset): DataRepository {
   const resolve = <T,>(value: T) => Promise.resolve(value);
+  const exercisesById = new Map(data.exercises.map((e) => [e.id, e]));
+
+  const recalculate = () => {
+    const chronological = [...data.sessions].sort((a, b) => (a.completedAt ?? '').localeCompare(b.completedAt ?? ''));
+    data.personalRecords = derivePersonalRecords(chronological, exercisesById);
+    data.streak = deriveStreak(data.sessions, data.today, data.streak.thisWeekTarget);
+  };
+
   return {
     today: () => data.today,
     getPreferences: () => resolve(data.preferences),
@@ -77,5 +95,25 @@ export function createFakeRepository(data: FakeDataset): DataRepository {
     listFormReports: (filter) => resolve(data.formReports.filter((r) => !filter?.exerciseId || r.exerciseId === filter.exerciseId)),
     getFormReport: (id) => resolve(data.formReports.find((r) => r.id === id)),
     getRecording: (id) => resolve(data.recordings.find((r) => r.id === id)),
+
+    saveSession: async (session) => {
+      data.sessions = [...data.sessions.filter((s) => s.id !== session.id), session];
+      if (session.occurrenceId) {
+        data.occurrences = data.occurrences.map((o) => (o.id === session.occurrenceId ? { ...o, sessionId: session.id } : o));
+      }
+      recalculate();
+    },
+    updatePlanWorkout: async (planId, workoutId, blocks) => {
+      data.plans = data.plans.map((plan) =>
+        plan.id !== planId
+          ? plan
+          : {
+              ...plan,
+              version: plan.version + 1,
+              updatedAt: new Date().toISOString(),
+              workouts: plan.workouts.map((w) => (w.id === workoutId ? { ...w, blocks } : w)),
+            },
+      );
+    },
   };
 }

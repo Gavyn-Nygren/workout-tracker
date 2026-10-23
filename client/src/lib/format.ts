@@ -46,6 +46,19 @@ export function formatDuration(minutes: number): string {
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
 }
 
+/** "+1,240 lb" / "−320 lb" (true minus sign). */
+export function formatSignedLoad(kg: number, units: UnitSystem): string {
+  const sign = kg > 0 ? '+' : kg < 0 ? '−' : '±';
+  return `${sign}${formatLoad(Math.abs(kg), units)}`;
+}
+
+/** "+4 min", "−2 sets", "±0 s" */
+export function formatSigned(value: number, unit: string): string {
+  const rounded = Math.round(value);
+  const sign = rounded > 0 ? '+' : rounded < 0 ? '−' : '±';
+  return `${sign}${Math.abs(rounded)} ${unit}`;
+}
+
 export function plural(count: number, one: string, many = `${one}s`): string {
   return `${count} ${count === 1 ? one : many}`;
 }
