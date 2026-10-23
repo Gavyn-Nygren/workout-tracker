@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G1.2. G0.2 and G1.1 still need the user's on-phone review.
+**Current goal:** G1.2, waiting for the user to pick the four component styles in the gallery's "Choices" section and review it on their phone.
 
 ## How we work
 
@@ -39,7 +39,7 @@ The minimum setup needed to show anything on the phone.
 
 - [x] Set up Expo Router with the five tabs `Today | Plans | Home | Progress | Profile`, using placeholder screens.
 - [x] Add a dark tab bar and dark header, with an explicit light/dark switch (not just the system setting). *System / Light / Dark switch on Profile, saved on the device.*
-- [ ] The user has reviewed it on their iPhone.
+- [x] The user has reviewed it on their iPhone.
 
 **Done when:** the user scans the QR code with Expo Go and can tap between all five tabs on their iPhone.
 
@@ -75,13 +75,13 @@ The minimum setup needed to show anything on the phone.
   - shadows/elevation
 - [x] Propose options for the colors the spec hasn't set yet (success, warning, error, disabled, and chart series colors) and let the user pick. *Picked: Classic status colors, Gold PRs, Sky blue charts, one-blue comparison shades; disabled = 40% opacity. Recorded in spec 2.13.*
 - [x] Check WCAG AA contrast for every text and background pair in both themes. *54 pairs checked, all pass.*
-- [ ] The user has reviewed the tokens on their iPhone.
+- [x] The user has reviewed the tokens on their iPhone.
 
 **Done when:** the user has approved the full token set, and the light/dark toggle switches the whole app.
 
 ### G1.2 Core components 👁
 
-- [ ] Build the shared components:
+- [x] Build the shared components:
   - buttons (primary pill, secondary, ghost, destructive)
   - card, list row, section header
   - dark screen header and tab bar using SF Symbols, with a baby-blue active tab
@@ -91,7 +91,8 @@ The minimum setup needed to show anything on the phone.
   - bottom sheet and modal
   - toast
   - empty state and skeleton loader
-- [ ] Add haptics (light tap, success, warning) and a brief PR celebration animation.
+- [x] Add haptics (light tap, success, warning) and a brief PR celebration animation. *Haptics respect the Settings toggle; animations respect Reduce Motion. Sheets use the native iOS sheet.*
+- [ ] The user picks the four unsettled styles in the gallery's "Choices" section (secondary button, stepper, selected chip, text field).
 
 **Done when:** a dev-only **component gallery** screen shows every component in both themes, and the user has approved it on their phone.
 

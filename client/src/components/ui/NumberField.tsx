@@ -1,0 +1,93 @@
+import { useEffect, useState } from 'react';
+import { StyleSheet, TextInput, View } from 'react-native';
+
+import { useAppTheme } from '@/theme/ThemeProvider';
+import { radius, spacing, tabularNums, typography } from '@/theme/tokens';
+import { AppText } from './AppText';
+
+type Props = {
+  /** Read by VoiceOver, e.g. "Weight". */
+  label: string;
+  value: number | undefined;
+  onChange: (value: number | undefined) => void;
+  /** Unit suffix shown inside the field, e.g. "lb". */
+  unit?: string;
+  /** Allow decimals such as 2.5 lb or 1.25 kg. */
+  decimal?: boolean;
+  placeholder?: string;
+  width?: number;
+};
+
+/** Accepts both "." and "," as the decimal separator. */
+export function parseNumber(text: string, decimal: boolean): number | undefined {
+  const normalized = text.replace(',', '.').trim();
+  if (normalized === '' || normalized === '.') return undefined;
+  const value = decimal ? Number.parseFloat(normalized) : Number.parseInt(normalized, 10);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function formatNumber(value: number | undefined): string {
+  if (value === undefined) return '';
+  return String(Math.round(value * 100) / 100);
+}
+
+/** Compact numeric input for weights, reps, and times. Uses the number or decimal keypad. */
+export function NumberField({ label, value, onChange, unit, decimal = false, placeholder, width = 88 }: Props) {
+  const { colors } = useAppTheme();
+  const [text, setText] = useState(formatNumber(value));
+  const [focused, setFocused] = useState(false);
+
+  // Follow outside changes (e.g. a stepper) without clobbering what the user is typing.
+  useEffect(() => {
+    if (!focused) setText(formatNumber(value));
+  }, [value, focused]);
+
+  return (
+    <View
+      style={[
+        styles.field,
+        { width, backgroundColor: colors.input, borderColor: focused ? colors.accentText : 'transparent' },
+      ]}
+    >
+      <TextInput
+        value={text}
+        onChangeText={(next) => {
+          const cleaned = next.replace(decimal ? /[^0-9.,]/g : /[^0-9]/g, '');
+          setText(cleaned);
+          onChange(parseNumber(cleaned, decimal));
+        }}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        keyboardType={decimal ? 'decimal-pad' : 'number-pad'}
+        selectTextOnFocus
+        placeholder={placeholder}
+        placeholderTextColor={colors.textTertiary}
+        selectionColor={colors.accentText}
+        accessibilityLabel={unit ? `${label}, ${unit}` : label}
+        style={[typography.headline, tabularNums, styles.input, { color: colors.text }]}
+      />
+      {unit && (
+        <AppText variant="footnote" tone="secondary">
+          {unit}
+        </AppText>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  field: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 44,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    paddingHorizontal: spacing.sm + 2,
+    gap: spacing.xs,
+  },
+  input: {
+    flex: 1,
+    textAlign: 'right',
+    paddingVertical: spacing.xs,
+  },
+});

@@ -2,8 +2,10 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type Theme } from 'expo-
 import { StatusBar } from 'expo-status-bar';
 import { useMemo } from 'react';
 
+import { ToastProvider } from '@/components/ui';
 import { DataProvider } from '@/data/DataProvider';
 import { AppThemeProvider, useAppTheme } from '@/theme/ThemeProvider';
+import { radius } from '@/theme/tokens';
 
 export default function RootLayout() {
   return (
@@ -35,11 +37,33 @@ function NavigationRoot() {
 
   return (
     <ThemeProvider value={navigationTheme}>
-      {/* The header is dark in both themes, so the status bar is always light. */}
-      <StatusBar style="light" />
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      </Stack>
+      <ToastProvider>
+        {/* The header is dark in both themes, so the status bar is always light. */}
+        <StatusBar style="light" />
+        <Stack
+          screenOptions={{
+            headerStyle: { backgroundColor: colors.chrome },
+            headerTintColor: colors.onChrome,
+            headerTitleStyle: { fontWeight: '800' },
+            headerShadowVisible: false,
+            contentStyle: { backgroundColor: colors.background },
+          }}
+        >
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="dev/gallery" options={{ title: 'Component gallery' }} />
+          <Stack.Screen
+            name="dev/sheet"
+            options={{
+              presentation: 'formSheet',
+              headerShown: false,
+              sheetAllowedDetents: [0.6, 1],
+              sheetGrabberVisible: true,
+              sheetCornerRadius: radius.card,
+              contentStyle: { backgroundColor: colors.cardElevated },
+            }}
+          />
+        </Stack>
+      </ToastProvider>
     </ThemeProvider>
   );
 }
