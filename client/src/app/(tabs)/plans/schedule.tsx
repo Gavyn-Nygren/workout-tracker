@@ -2,8 +2,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActionSheetIOS, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppText, Button, Card, EmptyState, Icon, SectionHeader, Stepper } from '@/components/ui';
-import { usePlans, useSavePlan } from '@/data/hooks';
+import { AppText, Button, Card, EmptyState, ErrorState, Icon, NotFoundState, ScreenSkeleton, SectionHeader, Stepper } from '@/components/ui';
+import { usePlan, useSavePlan } from '@/data/hooks';
 import { weekPattern } from '@/data/schedule';
 import type { Plan, Weekday } from '@/data/types';
 import { ReorderList } from '@/features/workout/ReorderList';
@@ -16,18 +16,14 @@ import { readable } from '@/theme/layout';
 /** Edit when a plan's workouts happen. Saves immediately; the calendar updates from today forward. */
 export default function ScheduleScreen() {
   const { plan: planId } = useLocalSearchParams<{ plan: string }>();
-  const { data: plans } = usePlans();
+  const planQuery = usePlan(planId);
   const savePlan = useSavePlan();
   const [dragging, setDragging] = useState(false);
-  const plan = plans?.find((p) => p.id === planId);
 
-  if (!plan) {
-    return (
-      <View style={styles.center}>
-        <EmptyState icon="calendar" title="Plan not found" message="It may have been deleted." actionLabel="Back" onAction={() => router.back()} />
-      </View>
-    );
-  }
+  if (planQuery.error) return <ErrorState fill title="Couldn't load this plan" onRetry={() => planQuery.refetch()} />;
+  if (planQuery.isPending) return <ScreenSkeleton />;
+  const plan = planQuery.data;
+  if (!plan) return <NotFoundState thing="Plan" icon="calendar" />;
 
   const save = (next: Plan) => savePlan.mutate(next);
 
@@ -36,7 +32,16 @@ export default function ScheduleScreen() {
       <AppText variant="subhead" tone="secondary" style={styles.intro}>
         Changes apply from today forward. Days you've already logged stay as they were.
       </AppText>
-      {plan.schedule.type === 'rotating' ? <CycleEditor plan={plan} save={save} onDraggingChange={setDragging} /> : <WeekEditor plan={plan} save={save} />}
+      {!plan.workouts.length ? (
+        // Nothing to put on a day yet: every "+" would open an empty menu.
+        <Card>
+          <EmptyState icon="dumbbell" title="No workouts to schedule" message="Add a workout to this plan first, then choose the days it happens here." actionLabel="Back to plan" onAction={() => router.back()} />
+        </Card>
+      ) : plan.schedule.type === 'rotating' ? (
+        <CycleEditor plan={plan} save={save} onDraggingChange={setDragging} />
+      ) : (
+        <WeekEditor plan={plan} save={save} />
+      )}
     </ScrollView>
   );
 }
@@ -202,10 +207,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
   },
 });

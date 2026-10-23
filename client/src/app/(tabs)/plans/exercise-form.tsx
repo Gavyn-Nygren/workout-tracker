@@ -2,12 +2,12 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppText, Button, Card, Chip, ListRow, SectionHeader, SegmentedControl, Skeleton, TextField, Toggle, useToast } from '@/components/ui';
-import { useExercises, useSaveExercise } from '@/data/hooks';
+import { AppText, Button, Card, Chip, ErrorState, ListRow, NotFoundState, SectionHeader, SegmentedControl, Skeleton, TextField, Toggle, useToast } from '@/components/ui';
+import { succeeded, useExercises, useSaveExercise } from '@/data/hooks';
 import type { Equipment, Exercise, MuscleGroup } from '@/data/types';
 import { newId } from '@/lib/id';
 import { EQUIPMENT_LABEL, MUSCLE_LABEL } from '@/features/exercises/ExerciseList';
-import { spacing } from '@/theme/tokens';
+import { radius, spacing } from '@/theme/tokens';
 import { readable } from '@/theme/layout';
 
 const EQUIPMENT = Object.keys(EQUIPMENT_LABEL) as Equipment[];
@@ -19,10 +19,14 @@ const MUSCLES = Object.keys(MUSCLE_LABEL) as MuscleGroup[];
  */
 export default function ExerciseFormScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { data: exercises, isLoading } = useExercises();
+  const exercises = useExercises();
+  if (exercises.error) return <ErrorState fill title="Couldn't load your exercises" onRetry={() => exercises.refetch()} />;
   // Wait for the library so editing starts from the saved values, not blanks.
-  if (isLoading || !exercises) return <Skeleton height={240} radius={16} style={styles.loading} />;
-  return <ExerciseForm exercises={exercises} existing={exercises.find((e) => e.id === id)} />;
+  if (exercises.isPending) return <Skeleton height={240} radius={radius.card} style={styles.loading} />;
+  const existing = id ? exercises.data?.find((e) => e.id === id) : undefined;
+  // An id that doesn't match must not quietly open a blank "New exercise" form.
+  if (id && !existing) return <NotFoundState thing="Exercise" icon="dumbbell" />;
+  return <ExerciseForm exercises={exercises.data ?? []} existing={existing} />;
 }
 
 function ExerciseForm({ exercises, existing }: { exercises: Exercise[]; existing?: Exercise }) {
@@ -48,6 +52,7 @@ function ExerciseForm({ exercises, existing }: { exercises: Exercise[]; existing
   const nameError = !name.trim() ? 'Give the exercise a name.' : duplicate ? 'An exercise with this name already exists.' : undefined;
 
   const save = async () => {
+    if (saveExercise.isPending) return;
     if (nameError) {
       setShowErrors(true);
       return;
@@ -69,7 +74,7 @@ function ExerciseForm({ exercises, existing }: { exercises: Exercise[]; existing
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };
-    await saveExercise.mutateAsync(exercise);
+    if (!(await succeeded(saveExercise.mutateAsync(exercise)))) return;
     router.back();
     toast.show({ message: existing ? 'Exercise updated.' : `${exercise.name} added to your exercises.`, tone: 'success' });
   };

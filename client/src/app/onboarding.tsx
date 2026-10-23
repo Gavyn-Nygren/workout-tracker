@@ -4,9 +4,9 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { ActionSheetIOS, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppText, Button, Card, Chip, Icon, NumberField, Stepper, TextField, useToast } from '@/components/ui';
+import { AppText, Button, Card, Chip, EmptyState, ErrorState, Icon, NumberField, PressableScale, Skeleton, Stepper, TextField, useToast } from '@/components/ui';
 import { useRepository } from '@/data/DataProvider';
-import { useSaveBodyweight, useSavePlan, useTemplates } from '@/data/hooks';
+import { succeeded, useSaveBodyweight, useSavePlan, useTemplates } from '@/data/hooks';
 import type { Equipment, ExperienceLevel } from '@/data/types';
 import { lbToKg } from '@/data/units';
 import { formatShortDate } from '@/lib/format';
@@ -54,7 +54,8 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const toast = useToast();
   const today = useRepository().today();
-  const { data: templates } = useTemplates();
+  const templatesQuery = useTemplates();
+  const templates = templatesQuery.data;
   const savePlan = useSavePlan();
   const saveBodyweight = useSaveBodyweight();
   const name = authStore.use().name;
@@ -87,7 +88,7 @@ export default function OnboardingScreen() {
       { title: `Start ${template.name}`, options: ['Start today', `Start ${formatShortDate(monday)}`, 'Cancel'], cancelButtonIndex: 2, userInterfaceStyle: scheme },
       async (i) => {
         if (i > 1) return;
-        await savePlan.mutateAsync(planFromTemplate(template, i === 0 ? today : monday));
+        if (!(await succeeded(savePlan.mutateAsync(planFromTemplate(template, i === 0 ? today : monday))))) return;
         toast.show({ message: `${template.name} is in your plans.`, tone: 'success' });
         setPhase('tour');
       },
@@ -212,40 +213,51 @@ export default function OnboardingScreen() {
             <AppText variant="body" tone="secondary">
               Based on your answers. Pick one to start, or build your own later in Plans.
             </AppText>
-            {recommendations.map(({ template, reasons }, i) => (
-              <Card key={template.id} style={i === 0 ? { borderColor: colors.accentText, borderWidth: 2 } : undefined}>
-                <View style={styles.stack}>
-                  {i === 0 && (
-                    <View style={[styles.best, { backgroundColor: colors.accent }]}>
-                      <AppText variant="caption" weight="800" tone="onAccent">
-                        BEST MATCH
-                      </AppText>
-                    </View>
-                  )}
-                  <AppText variant="title3" weight="700">
-                    {template.name}
-                  </AppText>
-                  <AppText variant="footnote" weight="600" numeric>
-                    {templateMeta(template)}
-                  </AppText>
-                  {reasons.map((r) => (
-                    <View key={r} style={styles.reason}>
-                      <Icon name="checkmark" color={colors.successText} size={12} weight="bold" />
-                      <AppText variant="subhead" tone="secondary">
-                        {r}
-                      </AppText>
-                    </View>
-                  ))}
-                  {template.workouts.length ? (
-                    <Button title="Start this plan" variant={i === 0 ? 'primary' : 'secondary'} size="sm" loading={savePlan.isPending} onPress={() => startTemplate(template.id)} />
-                  ) : (
-                    <AppText variant="footnote" tone="tertiary">
-                      This program is still being written.
+            {templatesQuery.error ? (
+              <ErrorState title="Couldn't load plans" message="You can also pick one later in Plans." onRetry={() => templatesQuery.refetch()} />
+            ) : templatesQuery.isLoading ? (
+              <>
+                <Skeleton height={190} radius={radius.card} />
+                <Skeleton height={160} radius={radius.card} />
+              </>
+            ) : !recommendations.length ? (
+              <EmptyState icon="square.stack.3d.up" title="No plans match yet" message="None of the starter plans fit your equipment. Browse them all, or build your own, in Plans." />
+            ) : (
+              recommendations.map(({ template, reasons }, i) => (
+                <Card key={template.id} style={i === 0 ? { borderColor: colors.accentText, borderWidth: 2 } : undefined}>
+                  <View style={styles.stack}>
+                    {i === 0 && (
+                      <View style={[styles.best, { backgroundColor: colors.accent }]}>
+                        <AppText variant="caption" weight="800" tone="onAccent">
+                          BEST MATCH
+                        </AppText>
+                      </View>
+                    )}
+                    <AppText variant="title3" weight="700">
+                      {template.name}
                     </AppText>
-                  )}
-                </View>
-              </Card>
-            ))}
+                    <AppText variant="footnote" weight="600" numeric>
+                      {templateMeta(template)}
+                    </AppText>
+                    {reasons.map((r) => (
+                      <View key={r} style={styles.reason}>
+                        <Icon name="checkmark" color={colors.successText} size={12} weight="bold" />
+                        <AppText variant="subhead" tone="secondary">
+                          {r}
+                        </AppText>
+                      </View>
+                    ))}
+                    {template.workouts.length ? (
+                      <Button title="Start this plan" variant={i === 0 ? 'primary' : 'secondary'} size="sm" loading={savePlan.isPending} onPress={() => startTemplate(template.id)} />
+                    ) : (
+                      <AppText variant="footnote" tone="tertiary">
+                        This program is still being written.
+                      </AppText>
+                    )}
+                  </View>
+                </Card>
+              ))
+            )}
             <Button title="I'll build my own later" variant="ghost" onPress={() => setPhase('tour')} style={styles.centerSelf} />
           </View>
         )}
@@ -312,7 +324,7 @@ function Question({ title, subtitle, children }: { title: string; subtitle?: str
 function Option({ title, body, icon, selected, onPress }: { title: string; body?: string; icon?: SFSymbol; selected: boolean; onPress: () => void }) {
   const { colors } = useAppTheme();
   return (
-    <Pressable onPress={onPress} accessibilityRole="radio" accessibilityState={{ checked: selected }} accessibilityLabel={body ? `${title}. ${body}` : title}>
+    <PressableScale onPress={onPress} accessibilityRole="radio" accessibilityState={{ checked: selected }} accessibilityLabel={body ? `${title}. ${body}` : title}>
       <View style={[styles.option, { backgroundColor: selected ? colors.accentSubtle : colors.card, borderColor: selected ? colors.accentText : colors.border }]}>
         {icon && <Icon name={icon} color={selected ? colors.accentText : colors.textSecondary} size={20} />}
         <View style={styles.flex}>
@@ -327,7 +339,7 @@ function Option({ title, body, icon, selected, onPress }: { title: string; body?
         </View>
         {selected && <Icon name="checkmark.circle.fill" color={colors.accentText} size={20} />}
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 

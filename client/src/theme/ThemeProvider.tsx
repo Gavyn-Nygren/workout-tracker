@@ -1,5 +1,5 @@
 import Storage from 'expo-sqlite/kv-store';
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, useState, type ReactNode, useLayoutEffect } from 'react';
 import { Appearance, useColorScheme } from 'react-native';
 
 import { colors, elevation, type ColorScheme, type ThemeColors } from './tokens';
@@ -33,8 +33,8 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
   const [preference, setPreferenceState] = useState<ThemePreference>(readStoredPreference);
   const deviceScheme = useColorScheme();
 
-  // Keep native UI (keyboard, alerts, pickers) in step with the chosen theme.
-  useEffect(() => {
+  // Keep native UI (keyboard, alerts, pickers) in step with the chosen theme, before the first paint.
+  useLayoutEffect(() => {
     Appearance.setColorScheme(preference === 'system' ? 'unspecified' : preference);
   }, [preference]);
 

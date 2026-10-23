@@ -1,6 +1,6 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { AppText, Icon, ProgressRing } from '@/components/ui';
+import { AppText, Icon, PressableScale, ProgressRing } from '@/components/ui';
 import { daysBetween } from '@/data/dates';
 import type { ISODate, StreakState } from '@/data/types';
 import { plural } from '@/lib/format';
@@ -39,7 +39,7 @@ function Body({ streak, week, today, onPress, outerScheme }: Props & { outerSche
   const daysLeft = Math.max(1, daysBetween(today, week[6].date) + 1);
 
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityHint="Opens Today">
+    <PressableScale onPress={onPress} accessibilityRole="button" accessibilityHint="Opens Today">
       <View
         style={[
           styles.card,
@@ -101,7 +101,7 @@ function Body({ streak, week, today, onPress, outerScheme }: Props & { outerSche
           })}
         </View>
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 

@@ -3,14 +3,15 @@ import { useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { LineChart } from '@/components/charts/LineChart';
-import { AppText, Button, Card, Chip, EmptyState, Icon, useToast } from '@/components/ui';
+import { AppText, Button, Card, Chip, EmptyState, ErrorState, Icon, NotFoundState, ScreenState, Skeleton, useToast } from '@/components/ui';
+import { useExercises, useSessions } from '@/data/hooks';
 import { formatMonthDay, formatShortDate, plural } from '@/lib/format';
 import { Change, RangeChips } from '@/features/progress/ProgressParts';
 import { addGraph, graphsStore, pinnedStore, removeGraph, togglePinned } from '@/features/progress/progressPrefs';
 import { changeOverTime, exerciseSeries, METRICS, metricLabel, metricShort, toDisplay, type Metric, type Point } from '@/features/progress/series';
 import { formatMetric, formatMetricDelta, useProgressData } from '@/features/progress/useProgressData';
 import { useAppTheme } from '@/theme/ThemeProvider';
-import { spacing } from '@/theme/tokens';
+import { radius, spacing } from '@/theme/tokens';
 import { readable } from '@/theme/layout';
 
 /**
@@ -26,7 +27,9 @@ export default function GraphScreen() {
   const startIndex = Math.max(0, graphs.findIndex((g) => g.id === params.graph));
   const [page, setPage] = useState(startIndex);
   const [scrubbing, setScrubbing] = useState(false);
-  const paging = Boolean(params.graph) && graphs.length > 0;
+  // Checked once on open, so removing the graph doesn't flash "not found" while the screen closes.
+  const [missing] = useState(() => Boolean(params.graph) && !graphs.some((g) => g.id === params.graph));
+  const paging = Boolean(params.graph) && !missing;
 
   const currentExercise = paging ? graphs[page]?.exerciseId : params.exercise;
   const isPinned = currentExercise ? pinned.includes(currentExercise) : false;
@@ -45,6 +48,8 @@ export default function GraphScreen() {
       }}
     />
   );
+
+  if (missing) return <NotFoundState thing="Graph" icon="chart.xyaxis.line" />;
 
   if (paging) {
     return (
@@ -71,7 +76,11 @@ export default function GraphScreen() {
   }
 
   if (!params.exercise) {
-    return <EmptyState icon="chart.xyaxis.line" title="No graph selected" message="Go back and pick an exercise." actionLabel="Back" onAction={() => router.back()} />;
+    return (
+      <ScreenState>
+        <EmptyState icon="chart.xyaxis.line" title="No graph selected" message="Go back and pick an exercise." actionLabel="Back" onAction={() => router.back()} />
+      </ScreenState>
+    );
   }
   return (
     <>
@@ -97,6 +106,8 @@ function GraphPage({
   const { colors } = useAppTheme();
   const toast = useToast();
   const data = useProgressData();
+  const sessions = useSessions();
+  const exercises = useExercises();
   const graphs = graphsStore.use();
   const [metric, setMetric] = useState<Metric>(initialMetric);
   const [selected, setSelected] = useState<Point | undefined>();
@@ -109,6 +120,24 @@ function GraphPage({
   const change = changeOverTime(points);
   const saved = graphs.some((g) => g.exerciseId === exerciseId && g.metric === metric);
   const sessionName = (id?: string) => data.sessions.find((s) => s.id === id)?.name;
+
+  const failed = [sessions, exercises].filter((q) => q.error);
+  if (failed.length) return <ErrorState fill title="Couldn't load this graph" onRetry={() => failed.forEach((q) => q.refetch())} />;
+  if (sessions.isLoading || exercises.isLoading) {
+    return (
+      <View style={[styles.content, readable]}>
+        <View style={[styles.readout, styles.readoutSkeleton]}>
+          <Skeleton width="55%" height={26} />
+          <Skeleton width="35%" height={16} />
+          <Skeleton width="40%" height={40} />
+        </View>
+        <RangeChips />
+        <Skeleton height={272} radius={radius.card} />
+      </View>
+    );
+  }
+  // A saved graph still opens so it can be removed; a direct link to an unknown exercise can't.
+  if (!exercise && !savedId) return <NotFoundState thing="Exercise" icon="dumbbell" />;
 
   return (
     <ScrollView contentContainerStyle={[styles.content, readable]} scrollEnabled={!scrubbing}>
@@ -227,6 +256,9 @@ const styles = StyleSheet.create({
   readout: {
     gap: 2,
     minHeight: 132,
+  },
+  readoutSkeleton: {
+    gap: spacing.sm,
   },
   hint: {
     textAlign: 'center',

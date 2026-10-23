@@ -2,7 +2,7 @@ import { router, useNavigation } from 'expo-router';
 import { useLayoutEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
-import { Card, EmptyState, SectionHeader, Skeleton } from '@/components/ui';
+import { EmptyState, SectionHeader, Skeleton } from '@/components/ui';
 import type { ISODate } from '@/data/types';
 import { ComingUp } from '@/features/today/ComingUp';
 import { MissedBanner } from '@/features/today/MissedBanner';
@@ -15,7 +15,7 @@ import { latestMissed, summarizeSession, type Agenda, type DayItem } from '@/fea
 import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
 import { formatMonthDay, formatShortDate, formatWeekday } from '@/lib/format';
 import { Columns, dashboard } from '@/theme/layout';
-import { spacing } from '@/theme/tokens';
+import { radius, spacing } from '@/theme/tokens';
 
 function headerTitle(date: ISODate, items: DayItem[]): string {
   const day = formatWeekday(date).toUpperCase();
@@ -85,7 +85,7 @@ export default function TodayScreen() {
         <EmptyState
           icon="exclamationmark.triangle"
           title="Couldn't load your schedule"
-          message="Your workouts are still saved on this phone. Try again."
+          message="Your workouts are still saved on this phone."
           actionLabel="Try again"
           onAction={retry}
         />
@@ -98,15 +98,10 @@ export default function TodayScreen() {
       <WeekStrip agenda={agenda} today={today} selected={selected} onSelect={setSelected} range={range} />
 
       {isLoading ? (
-        <View style={styles.gutter}>
-          <Card>
-            <View style={styles.skeleton}>
-              <Skeleton width="40%" />
-              <Skeleton width="70%" height={28} />
-              <Skeleton height={12} />
-              <Skeleton width="85%" height={12} />
-            </View>
-          </Card>
+        // Shaped like the day header and the workout card it stands in for.
+        <View style={[styles.gutter, styles.skeleton]} accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }}>
+          <Skeleton width="45%" height={18} />
+          <Skeleton height={280} radius={radius.card + 4} />
         </View>
       ) : (
         // iPad: the day's workouts on the left, Coming up beside them. Each section keeps its own gutter.

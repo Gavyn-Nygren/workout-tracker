@@ -20,3 +20,14 @@ export function formatClock(totalSeconds: number): string {
   const sec = String(s % 60).padStart(2, '0');
   return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
+
+/** "1 minute 30 seconds" for VoiceOver, which can read "1:30" as a time of day. */
+export function spokenDuration(totalSeconds: number): string {
+  const s = Math.max(0, Math.round(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const part = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`;
+  const parts = [h && part(h, 'hour'), m && part(m, 'minute'), (sec || s === 0) && part(sec, 'second')].filter(Boolean);
+  return parts.join(' ');
+}

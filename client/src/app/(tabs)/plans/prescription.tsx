@@ -2,8 +2,8 @@ import { router, Stack, useLocalSearchParams, useNavigation, usePreventRemove } 
 import { useEffect, useRef, useState } from 'react';
 import { ActionSheetIOS, Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-import { AppText, Button, Card, EmptyState, NumberField, SectionHeader, SegmentedControl, SetTag, Stepper, TextField, useToast } from '@/components/ui';
-import { useExercises, usePlans, usePreferences, useSavePlan } from '@/data/hooks';
+import { AppText, Button, Card, ErrorState, NotFoundState, NumberField, ScreenSkeleton, SectionHeader, SegmentedControl, SetTag, Stepper, TextField, useToast } from '@/components/ui';
+import { succeeded, useExercises, usePlan, usePreferences, useSavePlan } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import type { MissBehavior, PlannedExercise, ProgressionRule, RepTarget, SetKind, SetPrescription } from '@/data/types';
 import { kgToLb, lbToKg } from '@/data/units';
@@ -37,13 +37,13 @@ export default function PrescriptionScreen() {
   const navigation = useNavigation();
   const toast = useToast();
   const preferences = usePreferences().data ?? defaultPreferences;
-  const { data: plans } = usePlans();
-  const { data: exercises } = useExercises();
+  const planQuery = usePlan(planId);
+  const exercisesQuery = useExercises();
   const savePlan = useSavePlan();
 
-  const plan = plans?.find((p) => p.id === planId);
+  const plan = planQuery.data;
   const planned = plan?.workouts.find((w) => w.id === workoutId)?.blocks.flatMap((b) => b.exercises).find((e) => e.id === pe);
-  const exercise = exercises?.find((e) => e.id === planned?.exerciseId);
+  const exercise = exercisesQuery.data?.find((e) => e.id === planned?.exerciseId);
 
   const [draft, setDraft] = useState<PlannedExercise | undefined>(planned);
   const [dirty, setDirty] = useState(false);
@@ -60,13 +60,11 @@ export default function PrescriptionScreen() {
     ]);
   });
 
-  if (!plan || !planned || !draft) {
-    return (
-      <View style={styles.center}>
-        <EmptyState icon="dumbbell" title="Exercise not found" message="It may have been removed from the workout." actionLabel="Back" onAction={() => router.back()} />
-      </View>
-    );
-  }
+  const failed = [planQuery, exercisesQuery].filter((q) => q.error);
+  if (failed.length) return <ErrorState fill title="Couldn't load this exercise" onRetry={() => failed.forEach((q) => q.refetch())} />;
+  // The draft starts from the saved prescription one render after it loads.
+  if (planQuery.isPending || exercisesQuery.isPending || (planned && !draft)) return <ScreenSkeleton />;
+  if (!plan || !planned || !draft) return <NotFoundState thing="Exercise" icon="dumbbell" />;
 
   const units = preferences.units;
   const increment = (exercise?.equipment && preferences.roundingIncrements[exercise.equipment]) || 5;
@@ -103,7 +101,8 @@ export default function PrescriptionScreen() {
   };
 
   const save = async () => {
-    await savePlan.mutateAsync(updatePlanned(plan, workoutId, planned.id, () => draft));
+    if (savePlan.isPending) return;
+    if (!(await succeeded(savePlan.mutateAsync(updatePlanned(plan, workoutId, planned.id, () => draft))))) return;
     leaving.current = true;
     setDirty(false);
     router.back();
@@ -384,10 +383,5 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
   },
 });

@@ -52,9 +52,9 @@ export default function ProfileScreen() {
                 </View>
               </View>
               <View style={[styles.stats, { borderTopColor: colors.border }]}>
-                <Stat value={String(workouts)} label="workouts" />
-                <Stat value={`${streak?.currentWeeks ?? 0} wk`} label="streak" />
-                <Stat value={String(new Set((records ?? []).map((r) => r.setId)).size)} label="PRs set" />
+                <Stat value={sessions ? String(workouts) : '—'} label="workouts" />
+                <Stat value={streak ? `${streak.currentWeeks} wk` : '—'} label="streak" />
+                <Stat value={records ? String(new Set(records.map((r) => r.setId)).size) : '—'} label="PRs set" />
               </View>
             </Card>
 

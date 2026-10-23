@@ -99,7 +99,8 @@ export default function ActiveWorkoutScreen() {
   const finish = () => {
     const remaining = counts.total - counts.done;
     const close = async () => {
-      const saved = await saveWorkout();
+      // On failure the error toast shows (SaveErrorToasts) and the workout stays open, so nothing is lost.
+      const saved = await saveWorkout().catch(() => null);
       if (saved) router.replace({ pathname: '/summary', params: { session: saved.id, fresh: '1' } });
     };
     if (counts.done === 0) {

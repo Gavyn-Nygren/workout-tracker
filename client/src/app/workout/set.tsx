@@ -1,10 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppText, Button, Chip, SectionHeader, Stepper, TextField, setTagLabel } from '@/components/ui';
+import { AppText, Button, Chip, NotFoundState, SectionHeader, Stepper, TextField, setTagLabel } from '@/components/ui';
 import { usePreferences } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
-import type { LoggedSet, SetKind, SetModifier } from '@/data/types';
+import type { LoggedSet, SessionExercise, SetKind, SetModifier } from '@/data/types';
 import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -20,18 +21,20 @@ export default function SetDetailSheet() {
   const { colors } = useAppTheme();
   const { entry: entryId, set: setId } = useLocalSearchParams<{ entry: string; set: string }>();
   const { workout, exercisesById, dispatch } = useActiveWorkout();
-  const effortScale = (usePreferences().data ?? defaultPreferences).effortScale;
+  const preferences = usePreferences();
+  // If preferences fail to load, the default scale is fine for editing a set.
+  const effortScale = (preferences.data ?? defaultPreferences).effortScale;
+  // Holds a deleted set on screen while the sheet closes, so "not found" doesn't flash.
+  const [closing, setClosing] = useState<{ entry: SessionExercise; set: LoggedSet } | null>(null);
 
-  const entry = workout?.session.blocks.flatMap((b) => b.exercises).find((e) => e.id === entryId);
-  const set = entry?.sets.find((s) => s.id === setId);
-  if (!entry || !set) {
-    return (
-      <View style={[styles.missing, { backgroundColor: colors.cardElevated }]}>
-        <AppText tone="secondary">This set no longer exists.</AppText>
-        <Button title="Close" variant="secondary" onPress={() => router.back()} />
-      </View>
-    );
-  }
+  // Wait for the user's effort scale so the RPE chips don't flash before RIR.
+  if (preferences.isLoading) return <View style={[styles.blank, { backgroundColor: colors.cardElevated }]} />;
+
+  const liveEntry = workout?.session.blocks.flatMap((b) => b.exercises).find((e) => e.id === entryId);
+  const liveSet = liveEntry?.sets.find((s) => s.id === setId);
+  const found = liveEntry && liveSet ? { entry: liveEntry, set: liveSet } : closing;
+  if (!found) return <NotFoundState thing="Set" icon="checkmark.circle" backLabel="Close" />;
+  const { entry, set } = found;
 
   const exercise = exercisesById.get(entry.exerciseId);
   const setNumber = entry.sets.indexOf(set) + 1;
@@ -103,6 +106,7 @@ export default function SetDetailSheet() {
                 text: 'Delete',
                 style: 'destructive',
                 onPress: () => {
+                  setClosing({ entry, set });
                   router.back();
                   dispatch({ type: 'removeSet', entryId: entry.id, setId: set.id });
                 },
@@ -141,10 +145,7 @@ const styles = StyleSheet.create({
   center: {
     alignSelf: 'center',
   },
-  missing: {
+  blank: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
   },
 });

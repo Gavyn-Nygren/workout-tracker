@@ -1,11 +1,11 @@
 import type { SFSymbol } from 'expo-symbols';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppText, Button, Card, Chip, Icon, SectionHeader, SegmentedControl, Stepper, TextField } from '@/components/ui';
+import { AppText, Button, Card, Chip, Icon, PressableScale, SectionHeader, SegmentedControl, Stepper, TextField } from '@/components/ui';
 import { useRepository } from '@/data/DataProvider';
-import { useSavePlan } from '@/data/hooks';
+import { succeeded, useSavePlan } from '@/data/hooks';
 import type { PlanSchedule, Weekday } from '@/data/types';
 import { formatShortDate } from '@/lib/format';
 import { ALL_WEEKDAYS, WEEKDAY_SHORT } from '@/features/plans/describe';
@@ -39,8 +39,9 @@ export default function NewPlanScreen() {
   const canContinue = step === 1 || (step === 2 ? name.trim().length > 0 : type === 'rotating' ? cycle.includes('workout') : weekdays.length > 0);
 
   const create = async () => {
+    if (savePlan.isPending) return;
     const plan = newPlan({ name, startDate, type, weekdays, weeks, cycle });
-    await savePlan.mutateAsync(plan);
+    if (!(await succeeded(savePlan.mutateAsync(plan)))) return;
     router.replace({ pathname: '/plans/plan', params: { id: plan.id } });
   };
 
@@ -58,7 +59,7 @@ export default function NewPlanScreen() {
           {TYPES.map((t) => {
             const selected = type === t.type;
             return (
-              <Pressable key={t.type} onPress={() => setType(t.type)} accessibilityRole="radio" accessibilityState={{ checked: selected }} accessibilityLabel={`${t.title}. ${t.body}`}>
+              <PressableScale key={t.type} onPress={() => setType(t.type)} accessibilityRole="radio" accessibilityState={{ checked: selected }} accessibilityLabel={`${t.title}. ${t.body}`}>
                 <Card style={selected ? { borderColor: colors.accentText, borderWidth: 2 } : undefined}>
                   <View style={styles.typeRow}>
                     <View style={[styles.iconWell, { backgroundColor: selected ? colors.accent : colors.accentSubtle }]}>
@@ -73,7 +74,7 @@ export default function NewPlanScreen() {
                     {selected && <Icon name="checkmark.circle.fill" color={colors.accentText} size={22} />}
                   </View>
                 </Card>
-              </Pressable>
+              </PressableScale>
             );
           })}
           <Button title="Or start from a template" variant="ghost" icon="square.stack.3d.up" style={styles.centerSelf} onPress={() => router.replace({ pathname: '/plans', params: { segment: 'templates' } })} />

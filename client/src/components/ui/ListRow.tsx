@@ -2,6 +2,7 @@ import type { SFSymbol } from 'expo-symbols';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { useTextScale } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { AppText } from './AppText';
@@ -19,12 +20,20 @@ type Props = {
   destructive?: boolean;
   /** Draws a separator under the row; turn off for the last row in a group. */
   separator?: boolean;
+  /** Overrides the spoken label (title, subtitle, and value by default). */
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 };
 
-/** One row in a settings-style list inside a Card with padding="none". */
-export function ListRow({ title, subtitle, icon, value, trailing, onPress, destructive, separator = true }: Props) {
+/**
+ * One row in a settings-style list inside a Card with padding="none". At accessibility text
+ * sizes the value moves under the title, like iOS's own value rows, so neither gets squeezed.
+ */
+export function ListRow({ title, subtitle, icon, value, trailing, onPress, destructive, separator = true, accessibilityLabel, accessibilityHint }: Props) {
   const { colors } = useAppTheme();
+  const { large } = useTextScale();
   const tint = destructive ? colors.errorText : colors.accentText;
+  const spoken = accessibilityLabel ?? [title, subtitle, value].filter(Boolean).join(', ');
 
   const content = (
     <View style={styles.row}>
@@ -43,9 +52,14 @@ export function ListRow({ title, subtitle, icon, value, trailing, onPress, destr
               {subtitle}
             </AppText>
           )}
+          {value && large && (
+            <AppText variant="body" tone="secondary" numeric>
+              {value}
+            </AppText>
+          )}
         </View>
-        {value && (
-          <AppText variant="body" tone="secondary" numeric>
+        {value && !large && (
+          <AppText variant="body" tone="secondary" numeric style={styles.value}>
             {value}
           </AppText>
         )}
@@ -54,12 +68,22 @@ export function ListRow({ title, subtitle, icon, value, trailing, onPress, destr
     </View>
   );
 
-  if (!onPress) return content;
+  if (!onPress) {
+    // A row with its own control (e.g. a Toggle) keeps the control reachable; plain rows read as one item.
+    return trailing ? (
+      content
+    ) : (
+      <View accessible accessibilityLabel={spoken}>
+        {content}
+      </View>
+    );
+  }
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={value ? `${title}, ${value}` : title}
+      accessibilityLabel={spoken}
+      accessibilityHint={accessibilityHint}
       style={({ pressed }) => pressed && { backgroundColor: colors.input }}
     >
       {content}
@@ -93,5 +117,10 @@ const styles = StyleSheet.create({
   text: {
     flex: 1,
     gap: 2,
+  },
+  value: {
+    flexShrink: 1,
+    maxWidth: '50%',
+    textAlign: 'right',
   },
 });

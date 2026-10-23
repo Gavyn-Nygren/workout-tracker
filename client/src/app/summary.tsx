@@ -3,7 +3,7 @@ import { useEffect, useMemo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Confetti, EmptyState, Skeleton, ToastViewport } from '@/components/ui';
+import { Button, Confetti, ErrorState, NotFoundState, ScreenSkeleton, ToastViewport } from '@/components/ui';
 import { useExercises, usePlans, usePreferences, useSessions, useUpdatePlanWorkout } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import { diffAgainstPlan } from '@/features/summary/planDiff';
@@ -53,22 +53,10 @@ export default function SummaryScreen() {
     if (celebrate) haptics.success();
   }, [celebrate, haptics]);
 
-  if (sessions.isLoading || exercises.isLoading) {
-    return (
-      <View style={[styles.screen, styles.padded, { backgroundColor: colors.background }]}>
-        <Skeleton height={200} radius={20} />
-        <Skeleton height={120} radius={16} />
-      </View>
-    );
-  }
-
-  if (!session || !summary) {
-    return (
-      <View style={[styles.screen, styles.center, { backgroundColor: colors.background }]}>
-        <EmptyState icon="questionmark.circle" title="Workout not found" message="It may have been deleted." actionLabel="Close" onAction={() => router.back()} />
-      </View>
-    );
-  }
+  const failed = [sessions, exercises].filter((q) => q.error);
+  if (failed.length) return <ErrorState fill title="Couldn't load this workout" onRetry={() => failed.forEach((q) => q.refetch())} />;
+  if (sessions.isLoading || exercises.isLoading) return <ScreenSkeleton hero />;
+  if (!session || !summary) return <NotFoundState thing="Workout" icon="dumbbell" backLabel="Close" />;
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -101,9 +89,5 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingTop: spacing.xl,
     gap: spacing.lg,
-  },
-  center: {
-    justifyContent: 'center',
-    padding: spacing.lg,
   },
 });

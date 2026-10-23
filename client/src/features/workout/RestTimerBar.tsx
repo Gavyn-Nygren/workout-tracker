@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppText, Button, Icon } from '@/components/ui';
+import { Appear, AppText, Button, Icon } from '@/components/ui';
 import { formatClock, useNow } from '@/hooks/useNow';
 import { SchemeOverride, useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
@@ -32,14 +32,14 @@ function Bar({ onExpand }: Props) {
 
   if (!rest) {
     return (
-      <View pointerEvents="none" style={position}>
+      <Appear key="ended" pointerEvents="none" style={position}>
         <View style={[styles.bar, styles.ended, { backgroundColor: colors.accent }]} accessibilityLiveRegion="polite">
           <Icon name="bell.fill" color={colors.onAccent} size={18} />
           <AppText variant="headline" weight="800" tone="onAccent">
             Rest over. Next set!
           </AppText>
         </View>
-      </View>
+      </Appear>
     );
   }
 
@@ -48,7 +48,8 @@ function Bar({ onExpand }: Props) {
   const progress = Math.min(1, remainingMs / (rest.durationSec * 1000));
 
   return (
-    <View style={position}>
+    // Keys make the bar animate in again when it switches between counting and "Rest over".
+    <Appear key="rest" style={position}>
       <View style={[styles.bar, { backgroundColor: colors.chrome, borderColor: colors.border }]}>
         <Pressable
           onPress={onExpand}
@@ -72,7 +73,7 @@ function Bar({ onExpand }: Props) {
           <View style={[styles.fill, { width: `${progress * 100}%`, backgroundColor: colors.accent }]} />
         </View>
       </View>
-    </View>
+    </Appear>
   );
 }
 

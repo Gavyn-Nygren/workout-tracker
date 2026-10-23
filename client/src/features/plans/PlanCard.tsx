@@ -1,6 +1,6 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { AppText, Card, Icon } from '@/components/ui';
+import { AppText, Card, Icon, PressableScale } from '@/components/ui';
 import { addDays } from '@/data/dates';
 import { programWeek, workoutsOn } from '@/data/schedule';
 import type { ISODate, Plan } from '@/data/types';
@@ -42,35 +42,33 @@ export function PlanCard({ plan, today, onPress }: { plan: Plan; today: ISODate;
   const week = programWeek(plan, today);
 
   return (
-    <Pressable onPress={onPress} style={styles.fill} accessibilityRole="button" accessibilityLabel={`${plan.name}, ${plan.status}, ${describeSchedule(plan.schedule)}`}>
-      {({ pressed }) => (
-        <Card style={[styles.fill, { opacity: pressed ? 0.85 : 1 }]}>
-          <View style={styles.stack}>
-            <View style={styles.row}>
-              <View style={styles.flex}>
-                <AppText variant="title3" weight="700" numberOfLines={1}>
-                  {plan.name}
-                </AppText>
-                <AppText variant="footnote" tone="secondary">
-                  {`${PLAN_TYPE_LABEL[plan.schedule.type]}  ·  ${describeSchedule(plan.schedule)}${week ? `  ·  week ${week}` : ''}`}
-                </AppText>
-              </View>
-              <StatusPill status={plan.status} />
+    <PressableScale onPress={onPress} style={styles.fill} accessibilityRole="button" accessibilityLabel={`${plan.name}, ${plan.status}, ${describeSchedule(plan.schedule)}`}>
+      <Card style={styles.fill}>
+        <View style={styles.stack}>
+          <View style={styles.row}>
+            <View style={styles.flex}>
+              <AppText variant="title3" weight="700" numberOfLines={1}>
+                {plan.name}
+              </AppText>
+              <AppText variant="footnote" tone="secondary">
+                {`${PLAN_TYPE_LABEL[plan.schedule.type]}  ·  ${describeSchedule(plan.schedule)}${week ? `  ·  week ${week}` : ''}`}
+              </AppText>
             </View>
-            <ScheduleGrid schedule={plan.schedule} workouts={plan.workouts} today={plan.status === 'active' ? today : undefined} startDate={plan.startDate} />
-            {next && (
-              <View style={styles.next}>
-                <Icon name="calendar" color={colors.accentText} size={14} />
-                <AppText variant="footnote" tone="secondary" style={styles.flex}>
-                  {`Next: ${next.name} · ${next.date === today ? 'today' : formatShortDate(next.date)}`}
-                </AppText>
-                <Icon name="chevron.right" color={colors.textTertiary} size={13} />
-              </View>
-            )}
+            <StatusPill status={plan.status} />
           </View>
-        </Card>
-      )}
-    </Pressable>
+          <ScheduleGrid schedule={plan.schedule} workouts={plan.workouts} today={plan.status === 'active' ? today : undefined} startDate={plan.startDate} />
+          {next && (
+            <View style={styles.next}>
+              <Icon name="calendar" color={colors.accentText} size={14} />
+              <AppText variant="footnote" tone="secondary" style={styles.flex}>
+                {`Next: ${next.name} · ${next.date === today ? 'today' : formatShortDate(next.date)}`}
+              </AppText>
+              <Icon name="chevron.right" color={colors.textTertiary} size={13} />
+            </View>
+          )}
+        </View>
+      </Card>
+    </PressableScale>
   );
 }
 

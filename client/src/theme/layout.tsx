@@ -102,3 +102,16 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
 });
+
+/**
+ * Large text (user's pick: scale fully, reflow rows). Text grows with the iOS text size setting.
+ * Dense, fixed-geometry spots cap at DENSE_TEXT_MAX; rows switch to stacked layouts once the
+ * user is in iOS's accessibility sizes (AX1 body text is about 1.65× the default).
+ */
+export const DENSE_TEXT_MAX = 1.5;
+const ACCESSIBILITY_SIZES = 1.5;
+
+export function useTextScale() {
+  const { fontScale } = useWindowDimensions();
+  return { fontScale, large: fontScale >= ACCESSIBILITY_SIZES };
+}

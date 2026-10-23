@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppText, Button } from '@/components/ui';
+import { AppText, Button, EmptyState } from '@/components/ui';
 import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
 import { ReorderList, type ReorderItem } from '@/features/workout/ReorderList';
 import { plural } from '@/lib/format';
@@ -36,7 +36,11 @@ export default function ReorderSheet() {
           Drag the handle. Supersets move together.
         </AppText>
       </View>
-      <ReorderList items={items} onMove={onMove} onDraggingChange={setDragging} />
+      {items.length ? (
+        <ReorderList items={items} onMove={onMove} onDraggingChange={setDragging} />
+      ) : (
+        <EmptyState icon="arrow.up.arrow.down" title="Nothing to reorder yet" message="Exercises you add to this workout show up here to drag into order." />
+      )}
       <Button title="Done" fullWidth onPress={() => router.back()} />
     </ScrollView>
   );

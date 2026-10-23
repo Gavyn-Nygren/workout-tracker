@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppText, Card, Icon, ProgressBar, ProgressRing } from '@/components/ui';
+import { AppText, Card, Icon, PressableScale, ProgressBar, ProgressRing } from '@/components/ui';
 import type { EarnedBadge, Goal, UnitSystem } from '@/data/types';
 import { formatLoad, formatMonthDay, plural } from '@/lib/format';
 import { useAppTheme } from '@/theme/ThemeProvider';
@@ -143,12 +143,12 @@ export function EarnedRow({ badges, onPress }: { badges: EarnedBadge[]; onPress:
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.earned}>
       {badges.map((b) => (
-        <Pressable key={b.id} onPress={() => onPress(b)} accessibilityRole="button" accessibilityLabel={`${b.title} badge, earned ${formatMonthDay(b.earnedDate)}`} style={styles.earnedItem}>
+        <PressableScale key={b.id} onPress={() => onPress(b)} accessibilityRole="button" accessibilityLabel={`${b.title} badge, earned ${formatMonthDay(b.earnedDate)}`} contentStyle={styles.earnedItem}>
           <BadgeMedallion category={b.category} earned />
           <AppText variant="caption" weight="600" numberOfLines={2} style={styles.center}>
             {b.title}
           </AppText>
-        </Pressable>
+        </PressableScale>
       ))}
     </ScrollView>
   );

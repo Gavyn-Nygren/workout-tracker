@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Card, Icon, PRBadge, SectionHeader } from '@/components/ui';
+import { succeeded } from '@/data/hooks';
 import type { PersonalRecord, PRType, UnitSystem } from '@/data/types';
 import { formatDuration, formatLoad, formatShortDate, formatSigned, formatSignedLoad, plural } from '@/lib/format';
 import { useAppTheme } from '@/theme/ThemeProvider';
@@ -195,8 +196,8 @@ export function SavePlanCard({ workoutName, planName, changes, onSave }: { worko
               loading={state === 'saving'}
               onPress={async () => {
                 setState('saving');
-                await onSave();
-                setState('saved');
+                // On failure the error toast is already shown; ask again so they can retry.
+                setState((await succeeded(onSave())) ? 'saved' : 'asking');
               }}
             />
             <Button title="Just this time" variant="ghost" size="sm" onPress={() => setState('dismissed')} />

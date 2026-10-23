@@ -1,11 +1,13 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText, Icon, NumberField, PRBadge, SetTag } from '@/components/ui';
 import type { Exercise, LoggedSet, UnitSystem } from '@/data/types';
 import { kgToLb, lbToKg } from '@/data/units';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { formatLoadValue } from '@/lib/format';
 import { useAppTheme } from '@/theme/ThemeProvider';
-import { radius, spacing } from '@/theme/tokens';
+import { motion, radius, spacing } from '@/theme/tokens';
 
 /** Column widths shared by the table header and rows. */
 export const SET_COLUMNS = { set: 34, load: 74, reps: 58, check: 40 } as const;
@@ -52,8 +54,30 @@ export function SetRow({ set, number, previous, exercise, units, effortScale, is
   const modifiers = set.modifiers;
   const showMeta = meta.length > 0 || modifiers.length > 0 || isPR;
 
+  // Completing a set: the check pops and the green tint fades in (user's pick). Un-completing is instant.
+  const reducedMotion = useReducedMotion();
+  const tint = useRef(new Animated.Value(done ? 1 : 0)).current;
+  const pop = useRef(new Animated.Value(1)).current;
+  const wasDone = useRef(done);
+  useEffect(() => {
+    if (done === wasDone.current) return;
+    wasDone.current = done;
+    if (!done) {
+      tint.setValue(0);
+      return;
+    }
+    Animated.timing(tint, { toValue: 1, duration: motion.normal, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+    if (reducedMotion) return;
+    pop.setValue(1);
+    Animated.sequence([
+      Animated.timing(pop, { toValue: 1.15, duration: 110, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.spring(pop, { toValue: 1, speed: 20, bounciness: 10, useNativeDriver: true }),
+    ]).start();
+  }, [done, reducedMotion, tint, pop]);
+
   return (
-    <View style={[styles.wrap, done && { backgroundColor: colors.successSubtle }]}>
+    <View style={styles.wrap}>
+      <Animated.View pointerEvents="none" style={[styles.tint, { backgroundColor: colors.successSubtle, opacity: tint }]} />
       <View style={styles.row}>
         <Pressable
           onPress={onOpenDetail}
@@ -111,16 +135,18 @@ export function SetRow({ set, number, previous, exercise, units, effortScale, is
           placeholder="—"
         />
 
-        <Pressable
-          onPress={onToggle}
-          accessibilityRole="checkbox"
-          accessibilityLabel={`Complete set ${number}`}
-          accessibilityState={{ checked: done }}
-          hitSlop={6}
-          style={[styles.check, { backgroundColor: done ? colors.successFill : colors.input }]}
-        >
-          <Icon name="checkmark" color={done ? '#FFFFFF' : colors.textTertiary} size={16} weight="bold" />
-        </Pressable>
+        <Animated.View style={{ transform: [{ scale: pop }] }}>
+          <Pressable
+            onPress={onToggle}
+            accessibilityRole="checkbox"
+            accessibilityLabel={`Complete set ${number}`}
+            accessibilityState={{ checked: done }}
+            hitSlop={6}
+            style={[styles.check, { backgroundColor: done ? colors.successFill : colors.input }]}
+          >
+            <Icon name="checkmark" color={done ? '#FFFFFF' : colors.textTertiary} size={16} weight="bold" />
+          </Pressable>
+        </Animated.View>
       </View>
 
       {showMeta && (
@@ -141,6 +167,10 @@ export function SetRow({ set, number, previous, exercise, units, effortScale, is
 }
 
 const styles = StyleSheet.create({
+  tint: {
+    position: 'absolute',
+    inset: 0,
+  },
   wrap: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs + 2,

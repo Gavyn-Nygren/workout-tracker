@@ -34,6 +34,8 @@ export function SetTag({ tag, compact }: Props) {
 
   return (
     <View
+      accessible
+      accessibilityRole="text"
       accessibilityLabel={label.full}
       style={[styles.tag, compact && styles.compact, { backgroundColor: isKind ? colors.input : colors.accentSubtle }]}
     >

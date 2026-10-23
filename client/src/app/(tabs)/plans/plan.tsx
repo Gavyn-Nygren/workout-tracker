@@ -1,10 +1,12 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { ActionSheetIOS, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppText, Button, Card, EmptyState, Icon, ListRow, SectionHeader, useToast } from '@/components/ui';
+import { AppText, Button, Card, EmptyState, ErrorState, Icon, ListRow, NotFoundState, ScreenSkeleton, SectionHeader, useToast } from '@/components/ui';
 import { useRepository } from '@/data/DataProvider';
-import { useDeletePlan, usePlans, useSavePlan, useTemplates } from '@/data/hooks';
+import { succeeded, useDeletePlan, usePlan, useSavePlan, useTemplates } from '@/data/hooks';
 import { programWeek } from '@/data/schedule';
+import type { Plan } from '@/data/types';
 import { formatShortDate } from '@/lib/format';
 import { describeSchedule, PLAN_TYPE_LABEL, workoutDays, workoutStats } from '@/features/plans/describe';
 import { StatusPill } from '@/features/plans/PlanCard';
@@ -20,21 +22,20 @@ export default function PlanDetailScreen() {
   const { colors, scheme } = useAppTheme();
   const toast = useToast();
   const today = useRepository().today();
-  const { data: plans } = usePlans();
-  const { data: templates } = useTemplates();
+  const planQuery = usePlan(id);
+  const templatesQuery = useTemplates();
   const savePlan = useSavePlan();
   const deletePlan = useDeletePlan();
+  // Set while a delete finishes: its refetch finds nothing, and the screen shouldn't flash "Plan not found" on the way out.
+  const [deleted, setDeleted] = useState<Plan>();
 
-  const plan = plans?.find((p) => p.id === id);
-  if (!plan) {
-    return (
-      <View style={styles.center}>
-        <EmptyState icon="calendar.badge.exclamationmark" title="Plan not found" message="It may have been deleted." actionLabel="Back to plans" onAction={() => router.back()} />
-      </View>
-    );
-  }
+  const failed = [planQuery, templatesQuery].filter((q) => q.error);
+  if (failed.length) return <ErrorState fill title="Couldn't load this plan" onRetry={() => failed.forEach((q) => q.refetch())} />;
+  if (planQuery.isPending || templatesQuery.isPending) return <ScreenSkeleton />;
+  const plan = planQuery.data ?? deleted;
+  if (!plan) return <NotFoundState thing="Plan" icon="calendar" />;
 
-  const template = templates?.find((t) => t.id === plan.templateId);
+  const template = templatesQuery.data?.find((t) => t.id === plan.templateId);
   const week = programWeek(plan, today);
 
   const openMenu = () => {
@@ -47,8 +48,7 @@ export default function PlanDetailScreen() {
         }
         if (index === 1) {
           const status = plan.status === 'active' ? 'paused' : 'active';
-          savePlan.mutate({ ...plan, status });
-          toast.show({ message: status === 'paused' ? 'Plan paused. Its upcoming workouts are off the calendar.' : 'Plan resumed.' });
+          savePlan.mutate({ ...plan, status }, { onSuccess: () => toast.show({ message: status === 'paused' ? 'Plan paused. Its upcoming workouts are off the calendar.' : 'Plan resumed.' }) });
         }
         if (index === 2) {
           Alert.alert(`Delete ${plan.name}?`, 'Upcoming workouts from this plan are removed. Workouts you already logged stay in your history.', [
@@ -57,7 +57,11 @@ export default function PlanDetailScreen() {
               text: 'Delete',
               style: 'destructive',
               onPress: async () => {
-                await deletePlan.mutateAsync(plan.id);
+                setDeleted(plan);
+                if (!(await succeeded(deletePlan.mutateAsync(plan.id)))) {
+                  setDeleted(undefined);
+                  return;
+                }
                 router.back();
                 toast.show({ message: `${plan.name} deleted.` });
               },
@@ -68,13 +72,16 @@ export default function PlanDetailScreen() {
     );
   };
 
-  const newWorkout = () =>
+  const newWorkout = () => {
+    // A second add while one saves would overwrite it.
+    if (savePlan.isPending) return;
     Alert.prompt('New workout', 'Name it, then add exercises.', async (name) => {
       if (!name.trim()) return;
       const result = addWorkout(plan, name.trim());
-      await savePlan.mutateAsync(result.plan);
+      if (!(await succeeded(savePlan.mutateAsync(result.plan)))) return;
       router.push({ pathname: '/plans/workout', params: { plan: plan.id, workout: result.workoutId } });
     });
+  };
 
   return (
     <>
@@ -170,10 +177,5 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: spacing.sm + 2,
     marginTop: spacing.xs,
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
   },
 });

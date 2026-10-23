@@ -2,10 +2,14 @@ import { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useAppTheme } from '@/theme/ThemeProvider';
 import { colors as palette } from '@/theme/tokens';
 
-/** Brand confetti: baby blue, gold, white, and sky blue (user's pick for G2.3). */
-const COLORS = [palette.light.accent, palette.light.pr, '#FFFFFF', palette.light.chartPrimary];
+/** Brand confetti: baby blue, gold, white, and sky blue (user's pick for G2.3). Light pages swap the pale pieces for deeper shades. */
+const COLORS = {
+  dark: [palette.light.accent, palette.light.pr, '#FFFFFF', palette.light.chartPrimary],
+  light: [palette.light.accentText, palette.light.pr, palette.light.successFill, palette.light.chartPrimary],
+};
 const PIECES = 42;
 const DURATION = 2200;
 
@@ -17,6 +21,7 @@ type Piece = { x: number; drift: number; delay: number; spin: number; color: str
  */
 export function Confetti() {
   const { width, height } = useWindowDimensions();
+  const { scheme } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const progress = useRef(new Animated.Value(0)).current;
 
@@ -27,11 +32,11 @@ export function Confetti() {
         drift: (Math.random() - 0.5) * 120,
         delay: Math.random() * 0.25,
         spin: (Math.random() - 0.5) * 4,
-        color: COLORS[i % COLORS.length],
+        color: COLORS[scheme][i % COLORS[scheme].length],
         width: 6 + Math.random() * 4,
         height: 10 + Math.random() * 6,
       })),
-    [width],
+    [width, scheme],
   );
 
   useEffect(() => {

@@ -1,10 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppText, Button, Card, Chip, ListRow, NumberField, SectionHeader, SegmentedControl, Skeleton, Stepper, TextField, useToast } from '@/components/ui';
+import { AppText, Button, Card, Chip, ErrorState, ListRow, NotFoundState, NumberField, SectionHeader, SegmentedControl, Skeleton, Stepper, TextField, ToastViewport, useToast } from '@/components/ui';
 import { addDays } from '@/data/dates';
-import { useSaveGoal } from '@/data/hooks';
+import { succeeded, useBodyweight, useExercises, useFormReports, useGoals, useSaveGoal } from '@/data/hooks';
 import type { Exercise, FormMovementFamily, Goal, Joint, UnitSystem } from '@/data/types';
 import { kgToLb, lbToKg } from '@/data/units';
 import { formatShortDate, unitLabel } from '@/lib/format';
@@ -12,7 +12,7 @@ import { newId } from '@/lib/id';
 import { reportAngle } from '@/features/home/goals';
 import { useHomeData } from '@/features/home/useHomeData';
 import { useAppTheme } from '@/theme/ThemeProvider';
-import { spacing } from '@/theme/tokens';
+import { radius, spacing } from '@/theme/tokens';
 import { readable } from '@/theme/layout';
 
 type GoalType = Goal['type'];
@@ -23,10 +23,51 @@ type DeadlineChoice = 'none' | 'keep' | '28' | '56' | '84';
 /** Create or edit a goal (spec 2.9): lift, frequency, bodyweight, or form, with an optional deadline. */
 export default function GoalScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
+  const { colors } = useAppTheme();
   const home = useHomeData();
-  if (home.isLoading) return <Skeleton height={300} radius={16} style={{ margin: spacing.lg }} />;
+  // The reads the form uses (same cache as useHomeData), checked for errors. Goals only matter when editing.
+  const goals = useGoals();
+  const queries = [useExercises(), useFormReports(), useBodyweight(), ...(id ? [goals] : [])];
+
+  const shell = (body: ReactNode) => (
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <Bar title={id ? 'Edit goal' : 'New goal'} canSave={false} />
+      {body}
+    </View>
+  );
+
+  const failed = queries.filter((q) => q.error);
+  if (failed.length) return shell(<ErrorState fill title={id ? "Couldn't load this goal" : "Couldn't load goal setup"} onRetry={() => failed.forEach((q) => q.refetch())} />);
+  if (home.isLoading) {
+    return shell(
+      <View style={[styles.content, readable]}>
+        <Skeleton height={300} radius={radius.card} />
+      </View>,
+    );
+  }
   const existing = home.goals.find((g) => g.goal.id === id)?.goal;
+  if (id && !existing) return <NotFoundState thing="Goal" icon="target" backLabel="Close" />;
   return <GoalForm existing={existing} home={home} />;
+}
+
+/** Cancel / title / Save. Shown while loading too, so the sheet can always be closed. */
+function Bar({ title, canSave, onSave }: { title: string; canSave: boolean; onSave?: () => void }) {
+  const { colors } = useAppTheme();
+  return (
+    <View style={[styles.bar, { borderBottomColor: colors.border }]}>
+      <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={10}>
+        <AppText variant="body" tone="accent">
+          Cancel
+        </AppText>
+      </Pressable>
+      <AppText variant="headline">{title}</AppText>
+      <Pressable onPress={onSave} disabled={!canSave} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={10}>
+        <AppText variant="body" weight="700" tone={canSave ? 'accent' : 'tertiary'}>
+          Save
+        </AppText>
+      </Pressable>
+    </View>
+  );
 }
 
 function GoalForm({ existing, home }: { existing?: Goal; home: ReturnType<typeof useHomeData> }) {
@@ -104,26 +145,14 @@ function GoalForm({ existing, home }: { existing?: Goal; home: ReturnType<typeof
       const startDeg = existing?.type === 'form' ? existing.startDeg : Math.round(currentAngle ?? targetDeg + 10);
       goal = { ...base, type, exerciseId: formExerciseId, joint, targetDeg, startDeg };
     }
-    await saveGoal.mutateAsync(goal);
+    if (!(await succeeded(saveGoal.mutateAsync(goal)))) return;
     router.back();
     toast.show({ message: existing ? 'Goal updated.' : 'Goal added to Home.', tone: 'success' });
   };
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={[styles.bar, { borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={10}>
-          <AppText variant="body" tone="accent">
-            Cancel
-          </AppText>
-        </Pressable>
-        <AppText variant="headline">{existing ? 'Edit goal' : 'New goal'}</AppText>
-        <Pressable onPress={save} disabled={!valid} accessibilityRole="button" accessibilityState={{ disabled: !valid }} hitSlop={10}>
-          <AppText variant="body" weight="700" tone={valid ? 'accent' : 'tertiary'}>
-            Save
-          </AppText>
-        </Pressable>
-      </View>
+      <Bar title={existing ? 'Edit goal' : 'New goal'} canSave={valid} onSave={save} />
 
       <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <SegmentedControl
@@ -270,6 +299,7 @@ function GoalForm({ existing, home }: { existing?: Goal; home: ReturnType<typeof
 
         <Button title={existing ? 'Save goal' : 'Add goal'} fullWidth disabled={!valid} loading={saveGoal.isPending} onPress={save} />
       </ScrollView>
+      <ToastViewport bottomOffset={spacing.lg} />
     </View>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing, tabularNums, typography } from '@/theme/tokens';
@@ -31,9 +31,13 @@ function formatNumber(value: number | undefined): string {
   return String(Math.round(value * 100) / 100);
 }
 
+/** Text in the field grows up to 2x with Dynamic Type, and the field widens to match. */
+const MAX_SCALE = 2;
+
 /** Compact numeric input for weights, reps, and times. Uses the number or decimal keypad. */
 export function NumberField({ label, value, onChange, unit, decimal = false, placeholder, width = 88 }: Props) {
-  const { colors } = useAppTheme();
+  const { colors, scheme } = useAppTheme();
+  const { fontScale } = useWindowDimensions();
   const [text, setText] = useState(formatNumber(value));
   const [focused, setFocused] = useState(false);
 
@@ -46,7 +50,7 @@ export function NumberField({ label, value, onChange, unit, decimal = false, pla
     <View
       style={[
         styles.field,
-        { width, backgroundColor: colors.input, borderColor: focused ? colors.accentText : 'transparent' },
+        { width: width * Math.min(Math.max(fontScale, 1), MAX_SCALE), backgroundColor: colors.input, borderColor: focused ? colors.accentText : 'transparent' },
       ]}
     >
       <TextInput
@@ -63,11 +67,13 @@ export function NumberField({ label, value, onChange, unit, decimal = false, pla
         placeholder={placeholder}
         placeholderTextColor={colors.textTertiary}
         selectionColor={colors.accentText}
+        keyboardAppearance={scheme}
+        maxFontSizeMultiplier={MAX_SCALE}
         accessibilityLabel={unit ? `${label}, ${unit}` : label}
         style={[typography.headline, tabularNums, styles.input, { color: colors.text }]}
       />
       {unit && (
-        <AppText variant="footnote" tone="secondary">
+        <AppText variant="footnote" tone="secondary" maxFontSizeMultiplier={MAX_SCALE} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           {unit}
         </AppText>
       )}

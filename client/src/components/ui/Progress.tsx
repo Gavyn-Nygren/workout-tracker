@@ -24,6 +24,7 @@ export function ProgressBar({ value, label, height = 8 }: BarProps) {
   const pct = clamp01(value);
   return (
     <View
+      accessible
       accessibilityRole="progressbar"
       accessibilityLabel={label}
       accessibilityValue={{ min: 0, max: 100, now: Math.round(pct * 100) }}
@@ -50,6 +51,7 @@ export function ProgressRing({ value, label, size = 72, strokeWidth = 8, childre
 
   return (
     <View
+      accessible
       accessibilityRole="progressbar"
       accessibilityLabel={label}
       accessibilityValue={{ min: 0, max: 100, now: Math.round(pct * 100) }}

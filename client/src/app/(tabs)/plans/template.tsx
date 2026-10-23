@@ -1,9 +1,9 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { ActionSheetIOS, ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppText, Button, Card, EmptyState, Icon, SectionHeader, useToast } from '@/components/ui';
+import { AppText, Button, Card, EmptyState, ErrorState, Icon, NotFoundState, ScreenSkeleton, SectionHeader, useToast } from '@/components/ui';
 import { useRepository } from '@/data/DataProvider';
-import { useExercises, useSavePlan, useTemplates } from '@/data/hooks';
+import { succeeded, useExercises, useSavePlan, useTemplates } from '@/data/hooks';
 import { formatShortDate } from '@/lib/format';
 import { CATEGORY_LABEL, describeSchedule, exerciseName, PLAN_TYPE_LABEL, prescriptionSummary, workoutDays } from '@/features/plans/describe';
 import { nextMonday, planFromTemplate } from '@/features/plans/planEdits';
@@ -20,25 +20,23 @@ export default function TemplateScreen() {
   const { colors, scheme } = useAppTheme();
   const toast = useToast();
   const today = useRepository().today();
-  const { data: templates } = useTemplates();
-  const { data: exercises } = useExercises();
+  const templatesQuery = useTemplates();
+  const exercisesQuery = useExercises();
   const savePlan = useSavePlan();
 
-  const template = templates?.find((t) => t.id === id);
-  const exercisesById = new Map((exercises ?? []).map((e) => [e.id, e]));
+  const failed = [templatesQuery, exercisesQuery].filter((q) => q.error);
+  if (failed.length) return <ErrorState fill title="Couldn't load this template" onRetry={() => failed.forEach((q) => q.refetch())} />;
+  if (templatesQuery.isPending || exercisesQuery.isPending) return <ScreenSkeleton />;
+  const template = templatesQuery.data?.find((t) => t.id === id);
+  if (!template) return <NotFoundState thing="Template" icon="square.stack.3d.up" />;
 
-  if (!template) {
-    return (
-      <View style={styles.center}>
-        <EmptyState icon="square.stack.3d.up" title="Template not found" message="Go back and pick another." actionLabel="Back" onAction={() => router.back()} />
-      </View>
-    );
-  }
+  const exercisesById = new Map((exercisesQuery.data ?? []).map((e) => [e.id, e]));
 
   const ready = template.workouts.length > 0;
   const monday = nextMonday(today);
 
-  const use = () =>
+  const use = () => {
+    if (savePlan.isPending) return;
     ActionSheetIOS.showActionSheetWithOptions(
       {
         title: `Start ${template.name}`,
@@ -50,11 +48,12 @@ export default function TemplateScreen() {
       async (i) => {
         if (i > 1) return;
         const plan = planFromTemplate(template, i === 0 ? today : monday);
-        await savePlan.mutateAsync(plan);
+        if (!(await succeeded(savePlan.mutateAsync(plan)))) return;
         router.replace({ pathname: '/plans/plan', params: { id: plan.id } });
         toast.show({ message: `${template.name} added to your plans.`, tone: 'success' });
       },
     );
+  };
 
   return (
     <>
@@ -154,10 +153,5 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
   },
 });

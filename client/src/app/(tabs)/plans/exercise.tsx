@@ -2,7 +2,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppText, Card, EmptyState, Icon, ListRow, SectionHeader } from '@/components/ui';
+import { AppText, Card, ErrorState, Icon, ListRow, NotFoundState, ScreenSkeleton, SectionHeader } from '@/components/ui';
 import { useExercises, usePlans, usePreferences, useSessions } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import { formatShortDate } from '@/lib/format';
@@ -17,9 +17,12 @@ import { readable } from '@/theme/layout';
 export default function ExerciseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useAppTheme();
-  const { data: exercises } = useExercises();
-  const { data: plans } = usePlans();
-  const { data: sessions } = useSessions();
+  const exercisesQuery = useExercises();
+  const plansQuery = usePlans();
+  const sessionsQuery = useSessions();
+  const { data: exercises } = exercisesQuery;
+  const { data: plans } = plansQuery;
+  const { data: sessions } = sessionsQuery;
   const units = (usePreferences().data ?? defaultPreferences).units;
 
   const exercise = exercises?.find((e) => e.id === id);
@@ -44,13 +47,12 @@ export default function ExerciseScreen() {
     return undefined;
   }, [sessions, id]);
 
-  if (!exercise) {
-    return (
-      <View style={styles.center}>
-        <EmptyState icon="dumbbell" title="Exercise not found" message="It may have been deleted." actionLabel="Back" onAction={() => router.back()} />
-      </View>
-    );
-  }
+  // "Last done" and "In your plans" wait for sessions and plans too, so they never flash "Not yet".
+  const queries = [exercisesQuery, plansQuery, sessionsQuery];
+  const failed = queries.filter((q) => q.error);
+  if (failed.length) return <ErrorState fill title="Couldn't load this exercise" onRetry={() => failed.forEach((q) => q.refetch())} />;
+  if (queries.some((q) => q.isPending)) return <ScreenSkeleton />;
+  if (!exercise) return <NotFoundState thing="Exercise" icon="dumbbell" />;
 
   const tags = [
     exercise.equipment && EQUIPMENT_LABEL[exercise.equipment],
@@ -189,11 +191,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   none: {
-    padding: spacing.lg,
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
     padding: spacing.lg,
   },
 });

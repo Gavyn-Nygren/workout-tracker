@@ -15,9 +15,11 @@ export function useProgressData() {
   const exercises = useExercises();
   const bodyweight = useBodyweight();
   const records = usePersonalRecords();
-  const units = (usePreferences().data ?? defaultPreferences).units;
+  const preferences = usePreferences();
+  const units = (preferences.data ?? defaultPreferences).units;
   const range = rangeStore.use();
   const exercisesById = useMemo(() => new Map((exercises.data ?? []).map((e) => [e.id, e])), [exercises.data]);
+  const queries = [sessions, exercises, bodyweight, records, preferences];
 
   return {
     today,
@@ -28,7 +30,9 @@ export function useProgressData() {
     exercisesById,
     bodyweight: bodyweight.data ?? [],
     records: records.data ?? [],
-    isLoading: sessions.isLoading || exercises.isLoading || bodyweight.isLoading,
+    isLoading: queries.some((q) => q.isLoading),
+    error: queries.find((q) => q.error)?.error ?? null,
+    retry: () => queries.forEach((q) => q.error && q.refetch()),
   };
 }
 

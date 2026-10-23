@@ -81,7 +81,7 @@ export function ReorderList({ items, onMove, onDraggingChange }: Props) {
   );
 
   return (
-    <View style={{ height: items.length * STEP - GAP }}>
+    <View style={{ height: Math.max(0, items.length * STEP - GAP) }}>
       {order.map((item, position) => {
         const index = items.indexOf(item);
         const dragging = drag?.from === index;

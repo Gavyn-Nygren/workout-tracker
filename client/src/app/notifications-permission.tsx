@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 
-import { AppText, Button, Icon } from '@/components/ui';
+import { AppText, Button, Icon, ToastViewport, useToast } from '@/components/ui';
 import type { Preferences } from '@/data/types';
 import { useSettings } from '@/features/settings/useSettings';
 import { useAppTheme } from '@/theme/ThemeProvider';
@@ -25,6 +25,7 @@ const BENEFITS: { icon: 'timer' | 'calendar' | 'chart.bar' | 'moon'; text: strin
 export default function NotificationPermissionScreen() {
   const { colors } = useAppTheme();
   const { key } = useLocalSearchParams<{ key?: Key }>();
+  const toast = useToast();
   const { update } = useSettings();
   const [blocked, setBlocked] = useState(false);
 
@@ -39,8 +40,13 @@ export default function NotificationPermissionScreen() {
   };
 
   const allow = async () => {
-    const result = await Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowSound: true, allowBadge: false } });
-    if (result.granted) enable();
+    try {
+      const result = await Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowSound: true, allowBadge: false } });
+      if (result.granted) enable();
+    } catch {
+      // Carry on as if denied.
+      toast.show({ message: "Couldn't ask for notification permission. You can turn it on in Settings." });
+    }
     router.back();
   };
 
@@ -73,6 +79,7 @@ export default function NotificationPermissionScreen() {
         <Button title="Turn on notifications" fullWidth onPress={allow} />
       )}
       <Button title="Not now" variant="ghost" onPress={() => router.back()} style={styles.centerSelf} />
+      <ToastViewport bottomOffset={spacing.lg} />
     </View>
   );
 }

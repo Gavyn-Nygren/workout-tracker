@@ -2,9 +2,9 @@ import type { SFSymbol } from 'expo-symbols';
 import { useMemo, useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { Card, Chip, EmptyState, ListRow, SectionHeader, TextField } from '@/components/ui';
+import { Card, Chip, EmptyState, ErrorState, ListRow, SectionHeader, Skeleton, TextField } from '@/components/ui';
 import type { Equipment, Exercise, MuscleGroup } from '@/data/types';
-import { spacing } from '@/theme/tokens';
+import { radius, spacing } from '@/theme/tokens';
 
 export const MUSCLE_LABEL: Record<MuscleGroup, string> = {
   quads: 'Quads',
@@ -82,10 +82,15 @@ type Props = {
   groupCustom?: boolean;
   /** Shown under the search field, e.g. a "New exercise" button. */
   accessory?: ReactNode;
+  /** The exercises are still loading: placeholder rows show under the search and filters. */
+  loading?: boolean;
+  /** The exercises failed to load: an inline error with `onRetry` shows under the search and filters. */
+  error?: boolean;
+  onRetry?: () => void;
 };
 
 /** Search, muscle filters, and a tappable list. Shared by the workout picker, plan editor, and library. */
-export function ExerciseList({ exercises, onPick, similarTo, groupCustom, accessory }: Props) {
+export function ExerciseList({ exercises, onPick, similarTo, groupCustom, accessory, loading, error, onRetry }: Props) {
   const [query, setQuery] = useState('');
   const [muscle, setMuscle] = useState<MuscleGroup | null>(null);
 
@@ -111,26 +116,68 @@ export function ExerciseList({ exercises, onPick, similarTo, groupCustom, access
         ))}
       </ScrollView>
       {accessory}
-      {groups
-        .filter(([, list]) => list.length > 0)
-        .map(([title, list]) => (
-          <View key={title} style={styles.group}>
-            <SectionHeader title={`${title} · ${list.length}`} />
-            <Card padding="none">
-              {list.map((exercise, i) => (
-                <ListRow
-                  key={exercise.id}
-                  title={exercise.name}
-                  subtitle={exerciseSubtitle(exercise)}
-                  icon={EQUIPMENT_ICON[exercise.equipment ?? 'other']}
-                  onPress={() => onPick(exercise)}
-                  separator={i < list.length - 1}
-                />
-              ))}
-            </Card>
+      {error ? (
+        <ErrorState title="Couldn't load exercises" onRetry={() => onRetry?.()} />
+      ) : loading ? (
+        <SkeletonRows />
+      ) : !exercises.length ? (
+        <EmptyState
+          icon="dumbbell"
+          title="No exercises yet"
+          message={accessory ? 'Your exercises appear here. Create a custom exercise to add the first one.' : 'Your exercises appear here. Add custom ones from Plans → Exercises.'}
+        />
+      ) : !filtered.length ? (
+        <EmptyState
+          icon="magnifyingglass"
+          title="No matches"
+          message={accessory ? 'Try another search or clear the filters, or create a custom exercise.' : 'Try another search or clear the filters.'}
+          actionLabel={query.trim() || muscle ? 'Clear filters' : undefined}
+          onAction={() => {
+            setQuery('');
+            setMuscle(null);
+          }}
+        />
+      ) : (
+        groups
+          .filter(([, list]) => list.length > 0)
+          .map(([title, list]) => (
+            <View key={title} style={styles.group}>
+              <SectionHeader title={`${title} · ${list.length}`} />
+              <Card padding="none">
+                {list.map((exercise, i) => (
+                  <ListRow
+                    key={exercise.id}
+                    title={exercise.name}
+                    subtitle={exerciseSubtitle(exercise)}
+                    icon={EQUIPMENT_ICON[exercise.equipment ?? 'other']}
+                    onPress={() => onPick(exercise)}
+                    separator={i < list.length - 1}
+                  />
+                ))}
+              </Card>
+            </View>
+          ))
+      )}
+    </View>
+  );
+}
+
+/** Placeholder for the list while it loads, shaped like a section of rows. */
+function SkeletonRows() {
+  return (
+    <View style={styles.group}>
+      <Skeleton width={120} height={13} />
+      <Card padding="none">
+        {Array.from({ length: 6 }, (_, i) => (
+          <View key={i} style={styles.skeletonRow}>
+            <Skeleton width={30} height={30} radius={radius.sm} />
+            <View style={styles.skeletonText}>
+              <Skeleton width="55%" height={15} />
+              <Skeleton width="35%" height={12} />
+            </View>
           </View>
         ))}
-      {!filtered.length && <EmptyState icon="magnifyingglass" title="No matches" message="Try another name or muscle, or create a custom exercise." />}
+      </Card>
     </View>
   );
 }
@@ -144,5 +191,16 @@ const styles = StyleSheet.create({
   },
   group: {
     gap: spacing.sm,
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  skeletonText: {
+    flex: 1,
+    gap: spacing.xs + 2,
   },
 });

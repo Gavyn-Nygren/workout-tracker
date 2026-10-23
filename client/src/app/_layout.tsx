@@ -2,10 +2,13 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type Theme } from 'expo-
 import { StatusBar } from 'expo-status-bar';
 import { useMemo } from 'react';
 
-import { ToastProvider, ToastViewport } from '@/components/ui';
+import { TAB_BAR_CLEARANCE, ToastProvider, ToastViewport } from '@/components/ui';
 import { DataProvider } from '@/data/DataProvider';
+import { SaveErrorToasts } from '@/data/SaveErrorToasts';
 import { authStore } from '@/features/auth/authStore';
-import { ActiveWorkoutProvider } from '@/features/workout/ActiveWorkoutProvider';
+import { ActiveWorkoutProvider, useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
+import { MINI_BAR_HEIGHT } from '@/features/workout/MiniBar';
+import { useTextScale } from '@/theme/layout';
 import { AppThemeProvider, useAppTheme } from '@/theme/ThemeProvider';
 import { radius } from '@/theme/tokens';
 
@@ -24,6 +27,8 @@ export default function RootLayout() {
 function NavigationRoot() {
   const { scheme, colors } = useAppTheme();
   const auth = authStore.use();
+  const { workout } = useActiveWorkout();
+  const { large } = useTextScale();
 
   const navigationTheme = useMemo<Theme>(() => {
     const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
@@ -34,18 +39,21 @@ function NavigationRoot() {
         primary: colors.accent,
         background: colors.background,
         card: colors.chrome,
-        text: colors.onChrome,
+        text: colors.text,
         border: colors.chromeBorder,
       },
     };
   }, [scheme, colors]);
 
-  /** Native iOS sheet with a grabber, at the given heights (fractions of the screen). */
+  /**
+   * Native iOS sheet with a grabber, at the given heights (fractions of the screen). At
+   * accessibility text sizes sheets open full height so their buttons stay on screen.
+   */
   const sheet = (detents: number[]) =>
     ({
       presentation: 'formSheet',
       headerShown: false,
-      sheetAllowedDetents: detents,
+      sheetAllowedDetents: large ? [1] : detents,
       sheetGrabberVisible: true,
       sheetCornerRadius: radius.card,
       contentStyle: { backgroundColor: colors.cardElevated },
@@ -100,7 +108,9 @@ function NavigationRoot() {
             <Stack.Screen name="tutorial" options={{ presentation: 'fullScreenModal', headerShown: false }} />
           </Stack.Protected>
         </Stack>
-        <ToastViewport />
+        {/* Clear the in-progress workout bar too, when it's showing above the tab bar. */}
+        <ToastViewport bottomOffset={TAB_BAR_CLEARANCE + (workout ? MINI_BAR_HEIGHT : 0)} />
+        <SaveErrorToasts />
       </ToastProvider>
     </ThemeProvider>
   );

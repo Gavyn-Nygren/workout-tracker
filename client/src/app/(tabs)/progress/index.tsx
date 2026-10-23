@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { ActionSheetIOS, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Sparkline } from '@/components/charts/Sparkline';
-import { AppText, Button, Card, EmptyState, Icon, ListRow, SectionHeader, Skeleton } from '@/components/ui';
+import { AppText, Button, Card, EmptyState, ErrorState, Icon, ListRow, PressableScale, ScreenState, SectionHeader, Skeleton } from '@/components/ui';
 import { addDays } from '@/data/dates';
 import { formatMonthDay, formatShortDate, plural } from '@/lib/format';
 import { Change, RangeChips } from '@/features/progress/ProgressParts';
@@ -12,7 +12,7 @@ import { bodyweightSeries, changeOverTime, exerciseSeries, metricShort, mostFreq
 import { formatMetric, formatMetricDelta, useProgressData } from '@/features/progress/useProgressData';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { Columns, dashboard } from '@/theme/layout';
-import { spacing } from '@/theme/tokens';
+import { radius, spacing } from '@/theme/tokens';
 
 const KEY_LIMIT = 6;
 
@@ -43,12 +43,20 @@ export default function ProgressScreen() {
     return [...last].sort((a, b) => b[1].date.localeCompare(a[1].date));
   }, [data.sessions]);
 
+  if (data.error) {
+    return (
+      <ScreenState>
+        <ErrorState title="Couldn't load your progress" onRetry={data.retry} />
+      </ScreenState>
+    );
+  }
+
   if (data.isLoading) {
     return (
       <View style={[styles.content, dashboard]}>
-        <Skeleton height={36} radius={18} />
-        <Skeleton height={96} radius={16} />
-        <Skeleton height={96} radius={16} />
+        <Skeleton height={36} radius={radius.pill} />
+        <Skeleton height={96} radius={radius.card} />
+        <Skeleton height={96} radius={radius.card} />
       </View>
     );
   }
@@ -83,41 +91,39 @@ export default function ProgressScreen() {
               const latest = points[points.length - 1];
               const change = changeOverTime(points);
               return (
-                <Pressable
+                <PressableScale
                   key={id}
                   onPress={() => router.push({ pathname: '/progress/graph', params: { exercise: id, metric: 'e1rm' } })}
                   onLongPress={() => keyMenu(id)}
                   accessibilityRole="button"
                   accessibilityHint="Opens the full graph. Long press to pin or unpin."
                 >
-                  {({ pressed }) => (
-                    <Card style={{ opacity: pressed ? 0.85 : 1 }}>
-                      <View style={styles.keyRow}>
-                        <View style={styles.keyText}>
-                          <View style={styles.inline}>
-                            {pinned.includes(id) && <Icon name="pin.fill" color={colors.accentText} size={11} />}
-                            <AppText variant="subhead" weight="700" numberOfLines={1} style={styles.flex}>
-                              {name(id)}
-                            </AppText>
-                          </View>
-                          <AppText variant="title2" numeric>
-                            {latest ? formatMetric(latest.value, 'e1rm', data.units) : '—'}
+                  <Card>
+                    <View style={styles.keyRow}>
+                      <View style={styles.keyText}>
+                        <View style={styles.inline}>
+                          {pinned.includes(id) && <Icon name="pin.fill" color={colors.accentText} size={11} />}
+                          <AppText variant="subhead" weight="700" numberOfLines={1} style={styles.flex}>
+                            {name(id)}
                           </AppText>
-                          {change ? (
-                            <Change text={`${formatMetricDelta(change.delta, 'e1rm', data.units)} since ${formatMonthDay(change.since)}`} delta={change.delta} />
-                          ) : (
-                            <AppText variant="footnote" tone="secondary">
-                              {points.length ? 'Not enough sessions in range' : 'No sets in this range'}
-                            </AppText>
-                          )}
                         </View>
-                        <View style={styles.spark}>
-                          {points.length > 0 && <Sparkline points={points} height={64} label={`${name(id)} e1RM over ${plural(points.length, 'session')}`} />}
-                        </View>
+                        <AppText variant="title2" numeric>
+                          {latest ? formatMetric(latest.value, 'e1rm', data.units) : '—'}
+                        </AppText>
+                        {change ? (
+                          <Change text={`${formatMetricDelta(change.delta, 'e1rm', data.units)} since ${formatMonthDay(change.since)}`} delta={change.delta} />
+                        ) : (
+                          <AppText variant="footnote" tone="secondary">
+                            {points.length ? 'Not enough sessions in range' : 'No sets in this range'}
+                          </AppText>
+                        )}
                       </View>
-                    </Card>
-                  )}
-                </Pressable>
+                      <View style={styles.spark}>
+                        {points.length > 0 && <Sparkline points={points} height={64} label={`${name(id)} e1RM over ${plural(points.length, 'session')}`} />}
+                      </View>
+                    </View>
+                  </Card>
+                </PressableScale>
               );
             })}
             {!keyIds.length && (
@@ -166,40 +172,41 @@ export default function ProgressScreen() {
 
             <View style={styles.section}>
               <SectionHeader title="Bodyweight" actionLabel="Log" onAction={() => router.push('/log-weight')} />
-              <Pressable onPress={() => router.push('/progress/bodyweight')} accessibilityRole="button" accessibilityHint="Opens your bodyweight log">
-                {({ pressed }) => (
-                  <Card style={{ opacity: pressed ? 0.85 : 1 }}>
-                    <View style={styles.keyRow}>
-                      <View style={styles.keyText}>
-                        <AppText variant="subhead" weight="700">
-                          7-day trend
-                        </AppText>
-                        <AppText variant="title2" numeric>
-                          {bwTrend.length ? formatMetric(bwTrend[bwTrend.length - 1].value, 'bodyweight', data.units) : '—'}
-                        </AppText>
-                        {bwChange !== undefined && <Change text={`${formatMetricDelta(bwChange, 'bodyweight', data.units)} in range`} delta={bwChange} neutral />}
-                      </View>
-                      <View style={styles.spark}>{bwTrend.length > 0 && <Sparkline points={bwTrend} height={64} label="Bodyweight trend" />}</View>
+              <PressableScale onPress={() => router.push('/progress/bodyweight')} accessibilityRole="button" accessibilityHint="Opens your bodyweight log">
+                <Card>
+                  <View style={styles.keyRow}>
+                    <View style={styles.keyText}>
+                      <AppText variant="subhead" weight="700">
+                        7-day trend
+                      </AppText>
+                      <AppText variant="title2" numeric>
+                        {bwTrend.length ? formatMetric(bwTrend[bwTrend.length - 1].value, 'bodyweight', data.units) : '—'}
+                      </AppText>
+                      {bwChange !== undefined && <Change text={`${formatMetricDelta(bwChange, 'bodyweight', data.units)} in range`} delta={bwChange} neutral />}
                     </View>
-                  </Card>
-                )}
-              </Pressable>
+                    <View style={styles.spark}>{bwTrend.length > 0 && <Sparkline points={bwTrend} height={64} label="Bodyweight trend" />}</View>
+                  </View>
+                </Card>
+              </PressableScale>
             </View>
 
-            <View style={styles.section}>
-              <SectionHeader title={`All exercises · ${logged.length}`} />
-              <Card padding="none">
-                {logged.map(([id, info], i) => (
-                  <ListRow
-                    key={id}
-                    title={name(id)}
-                    subtitle={`${plural(info.count, 'session')} · last ${formatShortDate(info.date)}`}
-                    onPress={() => router.push({ pathname: '/progress/history', params: { id } })}
-                    separator={i < logged.length - 1}
-                  />
-                ))}
-              </Card>
-            </View>
+            {/* Hidden until something is logged; Key exercises already explains the empty state. */}
+            {logged.length > 0 && (
+              <View style={styles.section}>
+                <SectionHeader title={`All exercises · ${logged.length}`} />
+                <Card padding="none">
+                  {logged.map(([id, info], i) => (
+                    <ListRow
+                      key={id}
+                      title={name(id)}
+                      subtitle={`${plural(info.count, 'session')} · last ${formatShortDate(info.date)}`}
+                      onPress={() => router.push({ pathname: '/progress/history', params: { id } })}
+                      separator={i < logged.length - 1}
+                    />
+                  ))}
+                </Card>
+              </View>
+            )}
 
             <Button title="Log bodyweight" variant="secondary" icon="scalemass" fullWidth onPress={() => router.push('/log-weight')} />
           </>

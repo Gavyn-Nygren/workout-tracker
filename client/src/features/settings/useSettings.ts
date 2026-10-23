@@ -2,13 +2,19 @@ import { usePreferences, useSavePreferences } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import type { Preferences } from '@/data/types';
 
-/** Current preferences plus an `update` that merges and saves (optimistically). */
+/**
+ * Current preferences plus an `update` that merges and saves (optimistically). Until the saved
+ * preferences load, the defaults show and `update` does nothing, so a tap can't overwrite them.
+ */
 export function useSettings() {
-  const preferences = usePreferences().data ?? defaultPreferences;
+  const query = usePreferences();
+  const preferences = query.data ?? defaultPreferences;
   const save = useSavePreferences();
-  const update = (patch: Partial<Preferences> | ((p: Preferences) => Preferences)) =>
-    save.mutate(typeof patch === 'function' ? patch(preferences) : { ...preferences, ...patch });
-  return { preferences, update };
+  const update = (patch: Partial<Preferences> | ((p: Preferences) => Preferences)) => {
+    if (!query.data) return;
+    save.mutate(typeof patch === 'function' ? patch(query.data) : { ...query.data, ...patch });
+  };
+  return { preferences, update, isLoading: query.isLoading, error: query.error, retry: query.refetch };
 }
 
 /** "17:00" ↔ Date (today at that time), for the time pickers. */

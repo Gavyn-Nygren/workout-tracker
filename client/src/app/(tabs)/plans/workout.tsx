@@ -1,11 +1,11 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { ActionSheetIOS, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppText, Button, Card, EmptyState, Icon } from '@/components/ui';
-import { useExercises, usePlans, usePreferences, useSavePlan } from '@/data/hooks';
+import { AppText, Button, Card, EmptyState, ErrorState, Icon, NotFoundState, ScreenSkeleton } from '@/components/ui';
+import { succeeded, useExercises, usePlan, usePreferences, useSavePlan } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
-import type { Plan, PlannedBlock, PlannedExercise } from '@/data/types';
+import type { Plan, PlannedBlock, PlannedExercise, PlanWorkout } from '@/data/types';
 import { formatClock } from '@/hooks/useNow';
 import { describeProgression, exerciseName, prescriptionSummary, workoutDays } from '@/features/plans/describe';
 import { moveBlock, removeExercise, removeWorkout, supersetWithNext, ungroup, updateWorkout } from '@/features/plans/planEdits';
@@ -17,22 +17,21 @@ import { readable } from '@/theme/layout';
 export default function PlanWorkoutScreen() {
   const { plan: planId, workout: workoutId } = useLocalSearchParams<{ plan: string; workout: string }>();
   const { colors, scheme } = useAppTheme();
-  const { data: plans } = usePlans();
-  const { data: exercises } = useExercises();
+  const planQuery = usePlan(planId);
+  const exercisesQuery = useExercises();
   const units = (usePreferences().data ?? defaultPreferences).units;
   const savePlan = useSavePlan();
+  // Set while a delete saves: the refetched plan no longer has this workout, and the screen shouldn't flash "Workout not found" on the way out.
+  const [deleted, setDeleted] = useState<PlanWorkout>();
 
-  const plan = plans?.find((p) => p.id === planId);
-  const workout = plan?.workouts.find((w) => w.id === workoutId);
-  const exercisesById = new Map((exercises ?? []).map((e) => [e.id, e]));
+  const failed = [planQuery, exercisesQuery].filter((q) => q.error);
+  if (failed.length) return <ErrorState fill title="Couldn't load this workout" onRetry={() => failed.forEach((q) => q.refetch())} />;
+  if (planQuery.isPending || exercisesQuery.isPending) return <ScreenSkeleton />;
+  const plan = planQuery.data;
+  const workout = plan?.workouts.find((w) => w.id === workoutId) ?? deleted;
+  if (!plan || !workout) return <NotFoundState thing="Workout" icon="dumbbell" />;
 
-  if (!plan || !workout) {
-    return (
-      <View style={styles.center}>
-        <EmptyState icon="dumbbell" title="Workout not found" message="It may have been removed from the plan." actionLabel="Back" onAction={() => router.back()} />
-      </View>
-    );
-  }
+  const exercisesById = new Map((exercisesQuery.data ?? []).map((e) => [e.id, e]));
 
   const save = (next: Plan) => savePlan.mutate(next);
 
@@ -165,9 +164,13 @@ export default function PlanWorkoutScreen() {
               {
                 text: 'Delete',
                 style: 'destructive',
-                onPress: () => {
+                onPress: async () => {
+                  setDeleted(workout);
+                  if (!(await succeeded(savePlan.mutateAsync(removeWorkout(plan, workout.id))))) {
+                    setDeleted(undefined);
+                    return;
+                  }
                   router.back();
-                  save(removeWorkout(plan, workout.id));
                 },
               },
             ])
@@ -219,10 +222,5 @@ const styles = StyleSheet.create({
   },
   centerSelf: {
     alignSelf: 'center',
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
   },
 });

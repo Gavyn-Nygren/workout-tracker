@@ -5,8 +5,8 @@ import { ActionSheetIOS, Alert, Pressable, ScrollView, StyleSheet, View } from '
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LineChart } from '@/components/charts/LineChart';
-import { AppText, Button, Card, Chip, EmptyState, Icon, SectionHeader, ToastViewport, useToast } from '@/components/ui';
-import { useDeleteFormReport, useDeleteRecordingVideo, useExercises, useFormReports, usePreferences, useSessions } from '@/data/hooks';
+import { AppText, Button, Card, Chip, EmptyState, ErrorState, Icon, NotFoundState, ScreenSkeleton, ScreenState, SectionHeader, ToastViewport, useToast } from '@/components/ui';
+import { succeeded, useDeleteFormReport, useDeleteRecordingVideo, useExercises, useFormReport, useFormReports, usePreferences, useSessions } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import type { FormReport, Joint, Observation } from '@/data/types';
 import { formatLoad, formatShortDate } from '@/lib/format';
@@ -32,27 +32,64 @@ export default function FormReportScreen() {
   const insets = useSafeAreaInsets();
   const toast = useToast();
   const units = (usePreferences().data ?? defaultPreferences).units;
-  const { data: reports } = useFormReports();
-  const { data: sessions } = useSessions();
-  const { data: exercises } = useExercises();
+  const reportQuery = useFormReport(id);
+  const reportsQuery = useFormReports();
+  const sessionsQuery = useSessions();
+  const exercisesQuery = useExercises();
   const deleteVideo = useDeleteRecordingVideo();
   const deleteReport = useDeleteFormReport();
+  // Holds the report on screen while the modal closes after a delete, so "not found" doesn't flash.
+  const [closing, setClosing] = useState<FormReport | null>(null);
 
-  const report = reports?.find((r) => r.id === id);
+  const report = reportQuery.data ?? closing ?? undefined;
+  const reports = reportsQuery.data;
+  const sessions = sessionsQuery.data;
+  const exercises = exercisesQuery.data;
+  // Only finished analyses have angles to compare.
   const earlier = useMemo(
-    () => (report ? (reports ?? []).filter((r) => r.exerciseId === report.exerciseId && r.createdAt < report.createdAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt)) : []),
+    () => (report ? (reports ?? []).filter((r) => r.status === 'ready' && r.exerciseId === report.exerciseId && r.createdAt < report.createdAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt)) : []),
     [reports, report],
   );
   const [compareId, setCompareId] = useState<string | null | undefined>(undefined);
   const comparison = compareId === null ? undefined : (earlier.find((r) => r.id === compareId) ?? earlier[0]);
 
-  if (!report) {
+  const bar = (onMenu?: () => void) => (
+    <View style={[styles.bar, { borderBottomColor: colors.border }]}>
+      <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={10}>
+        <AppText variant="body" tone="accent">
+          Close
+        </AppText>
+      </Pressable>
+      <AppText variant="headline">Form report</AppText>
+      {onMenu ? (
+        <Pressable onPress={onMenu} accessibilityRole="button" accessibilityLabel="Recording options" hitSlop={10}>
+          <Icon name="ellipsis.circle" color={colors.accentText} size={22} />
+        </Pressable>
+      ) : (
+        <View style={styles.barSpacer} />
+      )}
+    </View>
+  );
+
+  const queries = [reportQuery, reportsQuery, sessionsQuery, exercisesQuery];
+  const failed = queries.filter((q) => q.error);
+  if (failed.length && !closing) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <EmptyState icon="video.slash" title="Report not found" message="It may have been deleted." actionLabel="Close" onAction={() => router.back()} />
+      <View style={[styles.screen, { backgroundColor: colors.background }]}>
+        {bar()}
+        <ErrorState fill title="Couldn't load this report" onRetry={() => failed.forEach((q) => q.refetch())} />
       </View>
     );
   }
+  if (queries.some((q) => q.isLoading)) {
+    return (
+      <View style={[styles.screen, { backgroundColor: colors.background }]}>
+        {bar()}
+        <ScreenSkeleton />
+      </View>
+    );
+  }
+  if (!report) return <NotFoundState thing="Report" icon="video" backLabel="Close" />;
 
   const exercise = exercises?.find((e) => e.id === report.exerciseId);
   const session = sessions?.find((s) => s.id === report.sessionId);
@@ -75,7 +112,7 @@ export default function FormReportScreen() {
   const lowCount = report.reps.length - trusted.length;
 
   const trend = [...(reports ?? [])]
-    .filter((r) => r.exerciseId === report.exerciseId)
+    .filter((r) => r.status === 'ready' && r.exerciseId === report.exerciseId)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     .map((r) => ({ date: r.createdAt.slice(0, 10), value: reportAngle(r, joint) ?? 0 }));
 
@@ -87,7 +124,7 @@ export default function FormReportScreen() {
         style: 'destructive',
         onPress: async () => {
           const recordingId = report.recordingId;
-          await deleteVideo.mutateAsync(recordingId);
+          if (!(await succeeded(deleteVideo.mutateAsync(recordingId)))) return;
           toast.show({ message: 'Video deleted. Metrics kept.' });
         },
       },
@@ -99,7 +136,11 @@ export default function FormReportScreen() {
         text: 'Delete report',
         style: 'destructive',
         onPress: async () => {
-          await deleteReport.mutateAsync(report.id);
+          setClosing(report);
+          if (!(await succeeded(deleteReport.mutateAsync(report.id)))) {
+            setClosing(null);
+            return;
+          }
           router.back();
           toast.show({ message: 'Report deleted.' });
         },
@@ -121,19 +162,32 @@ export default function FormReportScreen() {
       },
     );
 
+  if (report.status !== 'ready') {
+    const processing = report.status === 'processing';
+    return (
+      <View style={[styles.screen, { backgroundColor: colors.background }]}>
+        {bar()}
+        <ScreenState>
+          {processing ? (
+            <EmptyState icon="hourglass" title="Analyzing your set…" message="The report shows up here when it's ready. You can close this and keep training." />
+          ) : (
+            <EmptyState
+              icon="exclamationmark.triangle"
+              title="Couldn't analyze this recording"
+              message={report.quality.warnings.length ? report.quality.warnings.join(' ') : 'Something went wrong while measuring this set. The set itself is still logged.'}
+              actionLabel="Delete report"
+              onAction={confirmDeleteReport}
+            />
+          )}
+        </ScreenState>
+        <ToastViewport bottomOffset={spacing.lg} />
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={[styles.bar, { borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={10}>
-          <AppText variant="body" tone="accent">
-            Close
-          </AppText>
-        </Pressable>
-        <AppText variant="headline">Form report</AppText>
-        <Pressable onPress={openMenu} accessibilityRole="button" accessibilityLabel="Recording options" hitSlop={10}>
-          <Icon name="ellipsis.circle" color={colors.accentText} size={22} />
-        </Pressable>
-      </View>
+      {bar(openMenu)}
 
       <ScrollView contentContainerStyle={[styles.content, readable, { paddingBottom: insets.bottom + spacing.huge }]}>
         {sample === '1' && (
@@ -542,9 +596,7 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
+  barSpacer: {
+    width: 22,
   },
 });

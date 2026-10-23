@@ -15,7 +15,7 @@ import { spacing } from '@/theme/tokens';
 export default function GraphBuilderSheet() {
   const { colors } = useAppTheme();
   const toast = useToast();
-  const { data: exercises } = useExercises();
+  const exercises = useExercises();
   const [exercise, setExercise] = useState<Exercise | undefined>();
   const [metric, setMetric] = useState<Metric>('e1rm');
 
@@ -50,7 +50,7 @@ export default function GraphBuilderSheet() {
           <AppText variant="subhead" tone="secondary">
             Pick an exercise first.
           </AppText>
-          <ExerciseList exercises={exercises ?? []} onPick={setExercise} />
+          <ExerciseList exercises={exercises.data ?? []} onPick={setExercise} loading={exercises.isPending} error={!!exercises.error} onRetry={() => exercises.refetch()} />
         </>
       )}
     </ScrollView>

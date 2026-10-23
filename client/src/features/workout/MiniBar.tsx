@@ -1,11 +1,14 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { AppText, Icon } from '@/components/ui';
+import { Appear, AppText, Icon } from '@/components/ui';
 import { formatClock, useNow } from '@/hooks/useNow';
 import { SchemeOverride, useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { restRemainingMs, useActiveWorkout } from './ActiveWorkoutProvider';
+
+/** Height of the bar, so toasts can sit above it. */
+export const MINI_BAR_HEIGHT = 56;
 
 /** Sits above the tab bar while a workout is minimized; tap to slide the workout back up. */
 export function MiniBar() {
@@ -13,7 +16,9 @@ export function MiniBar() {
   if (!workout) return null;
   return (
     <SchemeOverride scheme="dark">
-      <Body />
+      <Appear offset={8}>
+        <Body />
+      </Appear>
     </SchemeOverride>
   );
 }

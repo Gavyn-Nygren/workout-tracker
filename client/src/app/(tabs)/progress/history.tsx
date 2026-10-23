@@ -2,8 +2,8 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppText, Button, Card, EmptyState, Icon, ListRow, PRBadge, SectionHeader } from '@/components/ui';
-import { useFormReports } from '@/data/hooks';
+import { AppText, Button, Card, EmptyState, ErrorState, Icon, ListRow, NotFoundState, PRBadge, ScreenSkeleton, SectionHeader } from '@/components/ui';
+import { useExercises, useFormReports, usePersonalRecords, useSessions } from '@/data/hooks';
 import { countsForPRs } from '@/data/calculations';
 import type { LoggedSet, PRType } from '@/data/types';
 import { formatLoad, formatLoadValue, formatShortDate } from '@/lib/format';
@@ -25,6 +25,10 @@ export default function ExerciseHistoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useAppTheme();
   const data = useProgressData();
+  // Same queries as useProgressData (shared cache), read here for their loading and error state.
+  const sessionsQuery = useSessions();
+  const exercisesQuery = useExercises();
+  const recordsQuery = usePersonalRecords();
   const exercise = data.exercisesById.get(id);
 
   const sessions = useMemo(
@@ -37,16 +41,18 @@ export default function ExerciseHistoryScreen() {
     [data.sessions, id],
   );
 
-  const { data: allReports } = useFormReports({ exerciseId: id });
-  const reports = [...(allReports ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const reportsQuery = useFormReports({ exerciseId: id });
+  const reports = [...(reportsQuery.data ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   const records = data.records.filter((r) => r.exerciseId === id);
   const best = (type: PRType) => records.filter((r) => r.type === type).sort((a, b) => b.value - a.value)[0];
   const prSessions = new Set(records.map((r) => r.sessionId));
 
-  if (!exercise) {
-    return <EmptyState icon="dumbbell" title="Exercise not found" message="Go back and pick another." actionLabel="Back" onAction={() => router.back()} />;
-  }
+  const queries = [sessionsQuery, exercisesQuery, recordsQuery, reportsQuery];
+  const failed = queries.filter((q) => q.error);
+  if (failed.length) return <ErrorState fill title="Couldn't load this exercise" onRetry={() => failed.forEach((q) => q.refetch())} />;
+  if (queries.some((q) => q.isLoading)) return <ScreenSkeleton />;
+  if (!exercise) return <NotFoundState thing="Exercise" icon="dumbbell" />;
 
   const setText = (s: LoggedSet) => {
     if (s.kind === 'timed_hold') return `${s.durationSec ?? 0} s`;
@@ -138,7 +144,7 @@ export default function ExerciseHistoryScreen() {
                 </Pressable>
               );
             })}
-            {!sessions.length && <EmptyState icon="clock" title="Not logged yet" message="Sessions with this exercise appear here." />}
+            {!sessions.length && <EmptyState icon="clock" title="Not logged yet" message="Log a set of it in a workout and it shows up here." />}
           </Card>
         </View>
       </ScrollView>

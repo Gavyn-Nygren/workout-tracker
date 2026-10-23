@@ -22,7 +22,10 @@ export type ThemeColors = {
   card: string;
   /** Sheets, modals, and popovers that sit above cards. */
   cardElevated: string;
-  /** Text fields and steppers placed on a card. */
+  /**
+   * Fill for text fields, chips, segmented tracks, steppers, switches, progress tracks,
+   * skeletons, and pressed rows. Visible on the page background, cards, and sheets (G2.11).
+   */
   input: string;
   border: string;
   /** Dims content behind sheets and modals. */
@@ -58,6 +61,13 @@ export type ThemeColors = {
   // Personal records
   pr: string;
   onPr: string;
+  /** Gold for star icons and large text on the theme's surfaces (raw gold is 1.8:1 on white). */
+  prOnSurface: string;
+
+  /** Edge around the dark hero cards so they stand off the near-black page in dark mode (user's pick). */
+  heroBorder: string;
+  /** Outline on selected chips and segments; light mode needs it because baby blue is pale on white (user's pick). */
+  selectedOutline: string;
 
   // Charts (validated with the dataviz palette checks against `card`)
   chartPrimary: string;
@@ -88,7 +98,7 @@ export const colors: Record<ColorScheme, ThemeColors> = {
     background: '#F2F4F7',
     card: '#FFFFFF',
     cardElevated: '#FFFFFF',
-    input: '#F2F4F7',
+    input: '#E4E7EC', // 1.24:1 on card, 1.13:1 on background; secondary text 4.8:1 on it
     border: '#E4E7EC',
     scrim: 'rgba(11, 15, 20, 0.45)',
     text: '#0B0F14', // 19.2:1 on card
@@ -102,6 +112,9 @@ export const colors: Record<ColorScheme, ThemeColors> = {
     warningText: '#8A5A00', // 5.9:1 on card
     errorFill: '#D03B3B',
     errorText: '#B02A2A', // 6.5:1 on card
+    prOnSurface: '#A77A00', // 3.9:1 on card
+    heroBorder: '#0B0F14', // light heroes use a shadow instead
+    selectedOutline: '#1A6FA3', // 5.5:1 on card, 3.2:1 on the accent fill
     chartPrimary: '#1E86C1', // 4.0:1 on card
     chartGrid: '#E4E7EC',
     chartCompare: ['#155E8C', '#1E86C1', '#72B3DC'],
@@ -114,7 +127,7 @@ export const colors: Record<ColorScheme, ThemeColors> = {
     background: '#0B0D10',
     card: '#171A1F',
     cardElevated: '#1E2228',
-    input: '#22262D',
+    input: '#2C313A', // 1.34:1 on card, 1.22:1 on sheets; secondary text 5.2:1 on it
     border: '#262B33',
     scrim: 'rgba(0, 0, 0, 0.6)',
     text: '#F5F7FA', // 16.3:1 on card
@@ -122,12 +135,15 @@ export const colors: Record<ColorScheme, ThemeColors> = {
     textTertiary: '#6B7480', // 3.7:1 on card
     chromeBorder: '#262B33',
     successFill: '#0CA30C',
-    successText: '#0CA30C', // 5.2:1 on card
+    successText: '#2DBE2D', // 7.1:1 on card, 5.6:1 on successSubtle
     successSubtle: '#15331C', // text 12.9:1, secondary text 5.5:1
     warningFill: '#FAB219',
     warningText: '#FAB219', // 9.5:1 on card
     errorFill: '#E66767',
     errorText: '#E66767', // 5.4:1 on card
+    prOnSurface: '#F5B400',
+    heroBorder: '#2E4A5C', // 2.1:1 on background
+    selectedOutline: '#89CFF0', // same as the fill: dark mode needs no outline
     chartPrimary: '#3A9AD6', // 5.6:1 on card
     chartGrid: '#262B33',
     chartCompare: ['#89CFF0', '#3A9AD6', '#1A6FA3'],
@@ -182,6 +198,26 @@ export const typography = {
 
 export type TypographyVariant = keyof typeof typography;
 
+/**
+ * Largest Dynamic Type scale per variant, matching how far iOS's own text styles grow at the
+ * biggest accessibility size. React Native would otherwise grow every style 3.6×, so a 34pt
+ * title would reach 121pt. Body text still grows the full amount (user's pick: scale fully).
+ */
+export const textCeiling: Record<TypographyVariant, number | undefined> = {
+  display: 1.5,
+  largeTitle: 1.76,
+  title1: 2.07,
+  title2: 2.55,
+  title3: 2.75,
+  headline: 3.12,
+  body: 3.12,
+  callout: 3.19,
+  subhead: 3.27,
+  footnote: 3.38,
+  caption: undefined,
+  label: 3.38,
+};
+
 /** Add to any style showing numbers that line up in columns (set tables, timers). */
 export const tabularNums: TextStyle = { fontVariant: ['tabular-nums'] };
 
@@ -200,6 +236,8 @@ export const elevation: Record<ColorScheme, { card: string | undefined; sheet: s
 export const opacity = {
   disabled: 0.4,
   pressed: 0.7,
+  /** Cards dim this much when pressed with Reduce Motion on (otherwise they shrink). */
+  cardPressed: 0.85,
 } as const;
 
 /** Durations in ms. Skip non-essential motion when the user has Reduce Motion on. */

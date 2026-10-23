@@ -16,16 +16,27 @@ export default function DataAccountScreen() {
   const toast = useToast();
   const { preferences } = useSettings();
   const auth = authStore.use();
-  const { data: sessions } = useSessions();
-  const { data: exercises } = useExercises();
-  const { data: plans } = usePlans();
-  const { data: bodyweight } = useBodyweight();
-  const { data: goals } = useGoals();
-  const { data: formReports } = useFormReports();
+  const queries = { sessions: useSessions(), exercises: useExercises(), plans: usePlans(), bodyweight: useBodyweight(), goals: useGoals(), formReports: useFormReports() };
+  const sessions = queries.sessions.data;
+  const { data: exercises } = queries.exercises;
+  const { data: plans } = queries.plans;
+  const { data: bodyweight } = queries.bodyweight;
+  const { data: goals } = queries.goals;
+  const { data: formReports } = queries.formReports;
+  // Export only once everything has loaded, so the file is never missing data.
+  const all = Object.values(queries);
+  const ready = all.every((q) => q.data !== undefined);
   const [busy, setBusy] = useState<'csv' | 'json' | null>(null);
 
   const stamp = new Date().toISOString().slice(0, 10);
   const run = async (kind: 'csv' | 'json') => {
+    if (!ready) {
+      if (all.some((q) => q.error)) {
+        all.forEach((q) => q.error && q.refetch());
+        toast.show({ message: "Couldn't load your data to export. Try again.", tone: 'error' });
+      }
+      return;
+    }
     setBusy(kind);
     try {
       if (kind === 'csv') {
@@ -38,8 +49,8 @@ export default function DataAccountScreen() {
           'application/json',
         );
       }
-    } catch (e) {
-      toast.show({ message: `Export failed: ${(e as Error).message}`, tone: 'error' });
+    } catch {
+      toast.show({ message: "Couldn't export your data. Try again.", tone: 'error' });
     } finally {
       setBusy(null);
     }
@@ -54,7 +65,7 @@ export default function DataAccountScreen() {
         <Card padding="none">
           <ListRow
             title={busy === 'csv' ? 'Preparing…' : 'Workouts as CSV'}
-            subtitle={`Every logged set from ${completed} workouts, for spreadsheets`}
+            subtitle={ready ? `Every logged set from ${completed} workouts, for spreadsheets` : 'Loading your workouts…'}
             icon="tablecells"
             onPress={() => !busy && run('csv')}
           />

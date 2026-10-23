@@ -18,6 +18,8 @@ type Props = {
   loading?: boolean;
   fullWidth?: boolean;
   style?: StyleProp<ViewStyle>;
+  /** Spoken label when the title alone is ambiguous, e.g. "Start Push Day" for three "Start this plan" buttons. */
+  accessibilityLabel?: string;
   accessibilityHint?: string;
 };
 
@@ -45,6 +47,7 @@ export function Button({
   loading,
   fullWidth,
   style,
+  accessibilityLabel,
   accessibilityHint,
 }: Props) {
   const { colors } = useAppTheme();
@@ -56,7 +59,7 @@ export function Button({
       onPress={onPress}
       disabled={inactive}
       accessibilityRole="button"
-      accessibilityLabel={title}
+      accessibilityLabel={accessibilityLabel ?? title}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: !!disabled, busy: !!loading }}
       hitSlop={size === 'sm' ? 6 : 0}
@@ -76,9 +79,10 @@ export function Button({
         <AppText
           variant={size === 'sm' ? 'subhead' : 'headline'}
           weight="700"
-          style={{ color: palette.foreground }}
-          numberOfLines={1}
-          maxFontSizeMultiplier={1.6}
+          style={[styles.label, { color: palette.foreground }]}
+          // Wraps to two lines rather than truncating at large text sizes.
+          numberOfLines={2}
+          maxFontSizeMultiplier={2}
         >
           {title}
         </AppText>
@@ -109,7 +113,13 @@ const styles = StyleSheet.create({
   content: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.sm,
+    maxWidth: '100%',
+  },
+  label: {
+    flexShrink: 1,
+    textAlign: 'center',
   },
   hidden: {
     opacity: 0,

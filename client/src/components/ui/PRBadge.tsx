@@ -43,6 +43,8 @@ export function PRBadge({ label = 'PR', celebrate = false }: Props) {
 
   return (
     <Animated.View
+      accessible
+      accessibilityRole="text"
       accessibilityLabel={label === 'PR' ? 'Personal record' : `Personal record: ${label}`}
       style={[styles.badge, { backgroundColor: colors.pr, opacity: fade, transform: [{ scale }] }]}
     >

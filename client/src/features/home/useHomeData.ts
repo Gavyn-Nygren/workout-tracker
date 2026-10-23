@@ -9,7 +9,7 @@ import { buildWins } from './wins';
 
 /** Everything Home shows, computed once and shared with the badge sheet. */
 export function useHomeData() {
-  const { today, agenda, exercisesById, units, isLoading: agendaLoading } = useAgenda();
+  const { today, agenda, exercisesById, units, isLoading: agendaLoading, error: agendaError, retry: agendaRetry } = useAgenda();
   const streak = useStreak();
   const goals = useGoals();
   const badges = useBadges();
@@ -18,7 +18,13 @@ export function useHomeData() {
   const bodyweight = useBodyweight();
   const sessions = useSessions();
 
-  const isLoading = agendaLoading || [streak, goals, badges, records, formReports, bodyweight, sessions].some((q) => q.isLoading);
+  const queries = [streak, goals, badges, records, formReports, bodyweight, sessions];
+  const isLoading = agendaLoading || queries.some((q) => q.isLoading);
+  const error = agendaError ?? queries.find((q) => q.error)?.error ?? null;
+  const retry = () => {
+    agendaRetry();
+    queries.forEach((q) => q.error && q.refetch());
+  };
 
   const week = useMemo(() => {
     const monday = startOfWeek(today);
@@ -57,6 +63,8 @@ export function useHomeData() {
 
   return {
     isLoading,
+    error,
+    retry,
     today,
     units,
     exercisesById,

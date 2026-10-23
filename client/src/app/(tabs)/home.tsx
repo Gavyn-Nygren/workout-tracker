@@ -1,15 +1,15 @@
 import { router } from 'expo-router';
 import { ActionSheetIOS, Alert, ScrollView, StyleSheet, View } from 'react-native';
 
-import { Button, Card, EmptyState, SectionHeader, Skeleton, useToast } from '@/components/ui';
-import { useDeleteGoal } from '@/data/hooks';
+import { Button, Card, EmptyState, ErrorState, ScreenState, SectionHeader, Skeleton, useToast } from '@/components/ui';
+import { succeeded, useDeleteGoal } from '@/data/hooks';
 import type { Goal } from '@/data/types';
 import { EarnedRow, GoalRow, NextUpList, WinsFeed } from '@/features/home/HomeParts';
 import { useHomeData } from '@/features/home/useHomeData';
 import { WeeklySnapshot } from '@/features/home/WeeklySnapshot';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { Columns, dashboard } from '@/theme/layout';
-import { spacing } from '@/theme/tokens';
+import { radius, spacing } from '@/theme/tokens';
 
 /**
  * Home (roadmap G2.5): a personal dashboard, not another analytics screen. Weekly snapshot,
@@ -19,14 +19,22 @@ export default function HomeScreen() {
   const { scheme } = useAppTheme();
   const toast = useToast();
   const deleteGoal = useDeleteGoal();
-  const { isLoading, today, units, streak, week, goals, wins, earned, upcoming } = useHomeData();
+  const { isLoading, error, retry, today, units, streak, week, goals, wins, earned, upcoming } = useHomeData();
+
+  if (error) {
+    return (
+      <ScreenState>
+        <ErrorState title="Couldn't load your dashboard" onRetry={retry} />
+      </ScreenState>
+    );
+  }
 
   if (isLoading || !streak) {
     return (
       <View style={[styles.content, dashboard]}>
-        <Skeleton height={190} radius={20} />
-        <Skeleton height={140} radius={16} />
-        <Skeleton height={140} radius={16} />
+        <Skeleton height={190} radius={radius.card + 4} />
+        <Skeleton height={140} radius={radius.card} />
+        <Skeleton height={140} radius={radius.card} />
       </View>
     );
   }
@@ -43,7 +51,7 @@ export default function HomeScreen() {
               text: 'Delete',
               style: 'destructive',
               onPress: async () => {
-                await deleteGoal.mutateAsync(goal.id);
+                if (!(await succeeded(deleteGoal.mutateAsync(goal.id)))) return;
                 toast.show({ message: 'Goal deleted.' });
               },
             },
@@ -84,7 +92,7 @@ export default function HomeScreen() {
                 <WinsFeed wins={wins} />
               ) : (
                 <Card>
-                  <EmptyState icon="star" title="Wins show up here" message="New PRs, form improvements, and badges from the last three weeks." />
+                  <EmptyState icon="star" title="Wins show up here" message="New PRs, form improvements, and badges from the last three weeks. Finish a workout to get your first." />
                 </Card>
               )}
             </View>

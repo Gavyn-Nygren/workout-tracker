@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
@@ -23,6 +24,7 @@ import {
   useToast,
   type SetTagValue,
 } from '@/components/ui';
+import { devFaults } from '@/data/devFaults';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useAppTheme, type ThemePreference } from '@/theme/ThemeProvider';
 import { radius, spacing, typography, type ThemeColors, type TypographyVariant } from '@/theme/tokens';
@@ -57,10 +59,48 @@ export default function ComponentGallery() {
   const [reminders, setReminders] = useState(true);
   const [selectedMuscles, setSelectedMuscles] = useState(['Quads', 'Glutes']);
   const [celebration, setCelebration] = useState(0);
+  const faults = devFaults.use();
+  const queryClient = useQueryClient();
 
   return (
     <ScrollView contentContainerStyle={[styles.content, readable]} contentInsetAdjustmentBehavior="automatic">
       <SegmentedControl label="Theme" options={THEME_OPTIONS} value={preference} onChange={setPreference} />
+
+      <Section title="Loading & error states">
+        <Card padding="none">
+          <ListRow
+            title="Slow loading"
+            subtitle="Every load and save waits 1.5 seconds"
+            icon="tortoise"
+            trailing={<Toggle label="Slow loading" value={faults.delayMs > 0} onChange={(on) => devFaults.set({ delayMs: on ? 1500 : 0 })} />}
+          />
+          <ListRow
+            title="Fail loads"
+            subtitle="Screens that load data show their error state"
+            icon="exclamationmark.triangle"
+            trailing={<Toggle label="Fail loads" value={faults.failReads} onChange={(failReads) => devFaults.set({ failReads })} />}
+          />
+          <ListRow
+            title="Fail saves"
+            subtitle="Saves and deletes show an error toast"
+            icon="xmark.octagon"
+            trailing={<Toggle label="Fail saves" value={faults.failWrites} onChange={(failWrites) => devFaults.set({ failWrites })} />}
+          />
+          <ListRow
+            title="Reload all data"
+            subtitle="Forget what's loaded so every screen loads again"
+            icon="arrow.clockwise"
+            onPress={() => {
+              queryClient.resetQueries();
+              toast.show({ message: 'Reloading. Open any tab to see it load.' });
+            }}
+            separator={false}
+          />
+        </Card>
+        <AppText variant="footnote" tone="secondary" style={styles.hint}>
+          Turn on a switch, tap Reload all data, then visit the tabs. Switches turn off when the app restarts.
+        </AppText>
+      </Section>
 
       <Section title="Typography">
         <Card>
@@ -260,6 +300,9 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: spacing.sm,
+  },
+  hint: {
+    paddingHorizontal: spacing.xs,
   },
   stack: {
     gap: spacing.md,

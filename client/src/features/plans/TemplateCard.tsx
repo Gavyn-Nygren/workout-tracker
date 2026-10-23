@@ -1,6 +1,6 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { AppText, Card, Icon } from '@/components/ui';
+import { AppText, Card, Icon, PressableScale } from '@/components/ui';
 import type { StarterTemplate } from '@/data/types';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
@@ -15,42 +15,40 @@ export function templateMeta(template: StarterTemplate): string {
 export function TemplateCard({ template, onPress }: { template: StarterTemplate; onPress: () => void }) {
   const { colors } = useAppTheme();
   return (
-    <Pressable onPress={onPress} style={styles.fill} accessibilityRole="button" accessibilityLabel={`${template.name}. ${CATEGORY_LABEL[template.category]}. ${templateMeta(template)}`}>
-      {({ pressed }) => (
-        <Card style={[styles.fill, { opacity: pressed ? 0.85 : 1 }]}>
-          <View style={styles.stack}>
-            <View style={styles.row}>
-              <View style={[styles.category, { backgroundColor: colors.accentSubtle }]}>
-                <AppText variant="caption" weight="800" tone="accent">
-                  {CATEGORY_LABEL[template.category].toUpperCase()}
-                </AppText>
-              </View>
-              {!template.workouts.length && (
-                <AppText variant="caption" tone="tertiary">
-                  Preview soon
-                </AppText>
-              )}
-            </View>
-            <AppText variant="title3" weight="700">
-              {template.name}
-            </AppText>
-            <AppText variant="subhead" tone="secondary" numberOfLines={2}>
-              {template.description}
-            </AppText>
-            <View style={styles.row}>
-              <AppText variant="footnote" weight="600" style={styles.flex} numeric>
-                {templateMeta(template)}
+    <PressableScale onPress={onPress} style={styles.fill} accessibilityRole="button" accessibilityLabel={`${template.name}. ${CATEGORY_LABEL[template.category]}. ${templateMeta(template)}`}>
+      <Card style={styles.fill}>
+        <View style={styles.stack}>
+          <View style={styles.row}>
+            <View style={[styles.category, { backgroundColor: colors.accentSubtle }]}>
+              <AppText variant="caption" weight="800" tone="accent">
+                {CATEGORY_LABEL[template.category].toUpperCase()}
               </AppText>
-              <View style={styles.icons} accessibilityLabel={`Equipment: ${template.equipment.map((e) => EQUIPMENT_LABEL[e]).join(', ')}`}>
-                {template.equipment.map((e) => (
-                  <Icon key={e} name={EQUIPMENT_ICON[e]} color={colors.textSecondary} size={15} />
-                ))}
-              </View>
+            </View>
+            {!template.workouts.length && (
+              <AppText variant="caption" tone="tertiary">
+                Preview soon
+              </AppText>
+            )}
+          </View>
+          <AppText variant="title3" weight="700">
+            {template.name}
+          </AppText>
+          <AppText variant="subhead" tone="secondary" numberOfLines={2}>
+            {template.description}
+          </AppText>
+          <View style={styles.row}>
+            <AppText variant="footnote" weight="600" style={styles.flex} numeric>
+              {templateMeta(template)}
+            </AppText>
+            <View style={styles.icons} accessibilityLabel={`Equipment: ${template.equipment.map((e) => EQUIPMENT_LABEL[e]).join(', ')}`}>
+              {template.equipment.map((e) => (
+                <Icon key={e} name={EQUIPMENT_ICON[e]} color={colors.textSecondary} size={15} />
+              ))}
             </View>
           </View>
-        </Card>
-      )}
-    </Pressable>
+        </View>
+      </Card>
+    </PressableScale>
   );
 }
 

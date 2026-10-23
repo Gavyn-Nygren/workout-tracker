@@ -1,7 +1,7 @@
 import { Text, type TextProps } from 'react-native';
 
 import { useAppTheme } from '@/theme/ThemeProvider';
-import { tabularNums, typography, type ThemeColors, type TypographyVariant } from '@/theme/tokens';
+import { tabularNums, textCeiling, typography, type ThemeColors, type TypographyVariant } from '@/theme/tokens';
 
 export type TextTone = 'primary' | 'secondary' | 'tertiary' | 'accent' | 'success' | 'warning' | 'error' | 'onAccent' | 'onChrome';
 
@@ -25,12 +25,16 @@ type Props = TextProps & {
   weight?: '400' | '600' | '700' | '800';
 };
 
-/** Text in the app's type scale and theme colors. Scales with the user's Dynamic Type setting. */
-export function AppText({ variant = 'body', tone = 'primary', numeric, weight, style, ...rest }: Props) {
+/**
+ * Text in the app's type scale and theme colors. Scales with the user's Dynamic Type setting, up
+ * to iOS's own ceiling for the variant; pass `maxFontSizeMultiplier` to cap dense spots lower.
+ */
+export function AppText({ variant = 'body', tone = 'primary', numeric, weight, style, maxFontSizeMultiplier, ...rest }: Props) {
   const { colors } = useAppTheme();
   return (
     <Text
       {...rest}
+      maxFontSizeMultiplier={maxFontSizeMultiplier ?? textCeiling[variant]}
       style={[
         typography[variant],
         { color: colors[toneToColor[tone]] as string },

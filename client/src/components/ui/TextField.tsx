@@ -14,20 +14,21 @@ type Props = Omit<TextInputProps, 'style'> & {
 
 /** Labeled single-line text input: a filled box that gains a border on focus or error. */
 export function TextField({ label, error, hint, onFocus, onBlur, ...input }: Props) {
-  const { colors } = useAppTheme();
+  const { colors, scheme } = useAppTheme();
   const [focused, setFocused] = useState(false);
 
   const borderColor = error ? colors.errorFill : focused ? colors.accentText : 'transparent';
 
   return (
     <View style={styles.wrap}>
-      <AppText variant="footnote" tone="secondary" weight="600">
+      <AppText variant="footnote" tone="secondary" weight="600" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         {label}
       </AppText>
       <TextInput
         {...input}
-        accessibilityLabel={label}
-        accessibilityHint={error ?? hint}
+        accessibilityLabel={error ? `${label}, error: ${error}` : label}
+        accessibilityHint={hint}
+        keyboardAppearance={scheme}
         placeholderTextColor={colors.textTertiary}
         selectionColor={colors.accentText}
         onFocus={(e) => {
@@ -45,7 +46,7 @@ export function TextField({ label, error, hint, onFocus, onBlur, ...input }: Pro
         ]}
       />
       {(error || hint) && (
-        <AppText variant="footnote" tone={error ? 'error' : 'secondary'}>
+        <AppText variant="footnote" tone={error ? 'error' : 'secondary'} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           {error ?? hint}
         </AppText>
       )}

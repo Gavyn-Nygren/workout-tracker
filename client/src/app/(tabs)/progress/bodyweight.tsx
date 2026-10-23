@@ -3,14 +3,14 @@ import { useState } from 'react';
 import { ActionSheetIOS, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { LineChart } from '@/components/charts/LineChart';
-import { AppText, Button, Card, EmptyState, useToast } from '@/components/ui';
-import { useDeleteBodyweight } from '@/data/hooks';
+import { AppText, Button, Card, EmptyState, ErrorState, Skeleton, useToast } from '@/components/ui';
+import { succeeded, useBodyweight, useDeleteBodyweight } from '@/data/hooks';
 import { formatShortDate, plural } from '@/lib/format';
 import { Change, Legend, RangeChips } from '@/features/progress/ProgressParts';
 import { bodyweightSeries, toDisplay, type Point } from '@/features/progress/series';
 import { formatMetric, formatMetricDelta, useProgressData } from '@/features/progress/useProgressData';
 import { useAppTheme } from '@/theme/ThemeProvider';
-import { spacing } from '@/theme/tokens';
+import { radius, spacing } from '@/theme/tokens';
 import { readable } from '@/theme/layout';
 
 /** Bodyweight (spec 2.10): weigh-ins as dots plus a 7-day trend line (user's pick), and the log. */
@@ -18,6 +18,7 @@ export default function BodyweightScreen() {
   const { colors, scheme } = useAppTheme();
   const toast = useToast();
   const data = useProgressData();
+  const bodyweight = useBodyweight();
   const deleteEntry = useDeleteBodyweight();
   const [selected, setSelected] = useState<Point | undefined>();
   const [scrubbing, setScrubbing] = useState(false);
@@ -34,11 +35,26 @@ export default function BodyweightScreen() {
 
   const entries = [...data.bodyweight].sort((a, b) => b.date.localeCompare(a.date));
 
+  if (bodyweight.error) return <ErrorState fill title="Couldn't load your weigh-ins" onRetry={() => bodyweight.refetch()} />;
+  if (bodyweight.isLoading) {
+    return (
+      <View style={[styles.content, readable]}>
+        <View style={[styles.readout, styles.readoutSkeleton]}>
+          <Skeleton width="40%" height={16} />
+          <Skeleton width="45%" height={40} />
+          <Skeleton width="35%" height={16} />
+        </View>
+        <RangeChips />
+        <Skeleton height={280} radius={radius.card} />
+      </View>
+    );
+  }
+
   return (
     <ScrollView contentContainerStyle={[styles.content, readable]} scrollEnabled={!scrubbing}>
       <View style={styles.readout} accessibilityLiveRegion="polite">
         <AppText variant="subhead" tone="secondary">
-          {selected ? `Weigh-in · ${formatShortDate(selected.date)}` : latest ? `Latest · ${formatShortDate(latest.date)}` : 'No weigh-ins yet'}
+          {selected ? `Weigh-in · ${formatShortDate(selected.date)}` : latest ? `Latest · ${formatShortDate(latest.date)}` : entries.length ? 'No weigh-ins in this range' : 'No weigh-ins yet'}
         </AppText>
         <AppText variant="largeTitle" numeric>
           {shown ? formatMetric(shown.value, 'bodyweight', data.units) : '—'}
@@ -72,8 +88,10 @@ export default function BodyweightScreen() {
               ]}
             />
           </View>
+        ) : entries.length ? (
+          <EmptyState icon="scalemass" title="No weigh-ins in this range" message="Try a longer range, or log today's weight." />
         ) : (
-          <EmptyState icon="scalemass" title="No weigh-ins in this range" message="Log your weight to start a trend." />
+          <EmptyState icon="scalemass" title="No weigh-ins yet" message="Your weigh-ins and a 7-day trend line show up here. Log your weight to add the first one." />
         )}
       </Card>
 
@@ -89,42 +107,44 @@ export default function BodyweightScreen() {
 
       <Button title="Log weight" icon="plus" fullWidth onPress={() => router.push('/log-weight')} />
 
-      <Card padding="none">
-        {entries.map((entry, i) => {
-          const previous = entries[i + 1];
-          const value = toDisplay(entry.weightKg, 'bodyweight', data.units);
-          const delta = previous ? value - toDisplay(previous.weightKg, 'bodyweight', data.units) : undefined;
-          return (
-            <Pressable
-              key={entry.id}
-              onLongPress={() =>
-                ActionSheetIOS.showActionSheetWithOptions(
-                  { title: formatShortDate(entry.date), options: ['Delete weigh-in', 'Cancel'], destructiveButtonIndex: 0, cancelButtonIndex: 1, userInterfaceStyle: scheme },
-                  async (idx) => {
-                    if (idx !== 0) return;
-                    await deleteEntry.mutateAsync(entry.id);
-                    toast.show({ message: 'Weigh-in deleted.' });
-                  },
-                )
-              }
-              accessibilityHint="Long press to delete"
-              style={[styles.entry, i < entries.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
-            >
-              <AppText variant="body" style={styles.flex}>
-                {formatShortDate(entry.date)}
-              </AppText>
-              {delta !== undefined && (
-                <AppText variant="footnote" tone="secondary" numeric>
-                  {formatMetricDelta(delta, 'bodyweight', data.units)}
+      {entries.length > 0 && (
+        <Card padding="none">
+          {entries.map((entry, i) => {
+            const previous = entries[i + 1];
+            const value = toDisplay(entry.weightKg, 'bodyweight', data.units);
+            const delta = previous ? value - toDisplay(previous.weightKg, 'bodyweight', data.units) : undefined;
+            return (
+              <Pressable
+                key={entry.id}
+                onLongPress={() =>
+                  ActionSheetIOS.showActionSheetWithOptions(
+                    { title: formatShortDate(entry.date), options: ['Delete weigh-in', 'Cancel'], destructiveButtonIndex: 0, cancelButtonIndex: 1, userInterfaceStyle: scheme },
+                    async (idx) => {
+                      if (idx !== 0) return;
+                      if (!(await succeeded(deleteEntry.mutateAsync(entry.id)))) return;
+                      toast.show({ message: 'Weigh-in deleted.' });
+                    },
+                  )
+                }
+                accessibilityHint="Long press to delete"
+                style={[styles.entry, i < entries.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
+              >
+                <AppText variant="body" style={styles.flex}>
+                  {formatShortDate(entry.date)}
                 </AppText>
-              )}
-              <AppText variant="body" weight="700" numeric style={styles.value}>
-                {formatMetric(value, 'bodyweight', data.units)}
-              </AppText>
-            </Pressable>
-          );
-        })}
-      </Card>
+                {delta !== undefined && (
+                  <AppText variant="footnote" tone="secondary" numeric>
+                    {formatMetricDelta(delta, 'bodyweight', data.units)}
+                  </AppText>
+                )}
+                <AppText variant="body" weight="700" numeric style={styles.value}>
+                  {formatMetric(value, 'bodyweight', data.units)}
+                </AppText>
+              </Pressable>
+            );
+          })}
+        </Card>
+      )}
     </ScrollView>
   );
 }
@@ -151,6 +171,9 @@ const styles = StyleSheet.create({
   readout: {
     gap: 2,
     minHeight: 112,
+  },
+  readoutSkeleton: {
+    gap: spacing.sm,
   },
   stack: {
     gap: spacing.sm,
