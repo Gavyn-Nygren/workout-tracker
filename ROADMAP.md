@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G1.2, waiting for the user to pick the four component styles in the gallery's "Choices" section and review it on their phone.
+**Current goal:** G2.1 (Today screen).
 
 ## How we work
 
@@ -92,7 +92,7 @@ The minimum setup needed to show anything on the phone.
   - toast
   - empty state and skeleton loader
 - [x] Add haptics (light tap, success, warning) and a brief PR celebration animation. *Haptics respect the Settings toggle; animations respect Reduce Motion. Sheets use the native iOS sheet.*
-- [ ] The user picks the four unsettled styles in the gallery's "Choices" section (secondary button, stepper, selected chip, text field).
+- [x] The user picks the four unsettled styles in the gallery's "Choices" section (secondary button, stepper, selected chip, text field). *Picked: tinted secondary buttons, split steppers, filled selected chips, filled text fields. Recorded in spec 2.13.*
 
 **Done when:** a dev-only **component gallery** screen shows every component in both themes, and the user has approved it on their phone.
 

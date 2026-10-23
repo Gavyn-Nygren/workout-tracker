@@ -409,6 +409,7 @@ Plan editing and full Progress graphs may need a connection.
 | Chart main color | **Sky blue**: #1E86C1 (light), #3A9AD6 (dark) |
 | Recording comparisons | **Shades of one blue**, newest strongest: #155E8C / #1E86C1 / #72B3DC (light), #89CFF0 / #3A9AD6 / #1A6FA3 (dark) |
 | Disabled controls | 40% opacity of the normal control |
+| Component styles | Secondary buttons: **pale baby-blue fill with blue text**. Steppers: **round − and + buttons either side of the value**. Selected chips: **solid baby blue**. Text fields: **light gray fill, border only on focus or error** |
 
 All token values live in `client/src/theme/tokens.ts`. Every text and background pair passes WCAG AA in both themes, and the chart palettes pass colorblind-separation checks against the app's card colors.
 

@@ -1,7 +1,6 @@
 import type { SFSymbol } from 'expo-symbols';
 import { ActivityIndicator, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { designChoices, type SecondaryButtonStyle } from '@/theme/choices';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { opacity, radius, spacing, type ThemeColors } from '@/theme/tokens';
 import { AppText } from './AppText';
@@ -18,28 +17,20 @@ type Props = {
   disabled?: boolean;
   loading?: boolean;
   fullWidth?: boolean;
-  /** Gallery only: compare secondary styles before one is chosen. */
-  secondaryStyle?: SecondaryButtonStyle;
   style?: StyleProp<ViewStyle>;
   accessibilityHint?: string;
 };
 
-function variantColors(
-  variant: ButtonVariant,
-  secondaryStyle: SecondaryButtonStyle,
-  colors: ThemeColors,
-): { background: string; foreground: string; border?: string } {
+function variantColors(variant: ButtonVariant, colors: ThemeColors): { background: string; foreground: string } {
   switch (variant) {
     case 'primary':
       return { background: colors.accent, foreground: colors.onAccent };
-    case 'destructive':
-      return { background: colors.destructive, foreground: colors.onDestructive };
+    case 'secondary':
+      return { background: colors.accentSubtle, foreground: colors.accentText };
     case 'ghost':
       return { background: 'transparent', foreground: colors.accentText };
-    case 'secondary':
-      if (secondaryStyle === 'outlined') return { background: 'transparent', foreground: colors.text, border: colors.border };
-      if (secondaryStyle === 'gray') return { background: colors.input, foreground: colors.text };
-      return { background: colors.accentSubtle, foreground: colors.accentText };
+    case 'destructive':
+      return { background: colors.destructive, foreground: colors.onDestructive };
   }
 }
 
@@ -53,12 +44,11 @@ export function Button({
   disabled,
   loading,
   fullWidth,
-  secondaryStyle = designChoices.secondaryButton,
   style,
   accessibilityHint,
 }: Props) {
   const { colors } = useAppTheme();
-  const palette = variantColors(variant, secondaryStyle, colors);
+  const palette = variantColors(variant, colors);
   const inactive = disabled || loading;
 
   return (
@@ -75,8 +65,6 @@ export function Button({
         size === 'sm' ? styles.sm : styles.md,
         {
           backgroundColor: palette.background,
-          borderColor: palette.border ?? 'transparent',
-          borderWidth: palette.border ? StyleSheet.hairlineWidth * 2 : 0,
           opacity: disabled ? opacity.disabled : pressed ? opacity.pressed : 1,
         },
         fullWidth && styles.fullWidth,

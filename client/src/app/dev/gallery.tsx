@@ -24,7 +24,6 @@ import {
   type SetTagValue,
 } from '@/components/ui';
 import { useHaptics } from '@/hooks/useHaptics';
-import type { ChipSelectedStyle, SecondaryButtonStyle, StepperStyle, TextFieldStyle } from '@/theme/choices';
 import { useAppTheme, type ThemePreference } from '@/theme/ThemeProvider';
 import { radius, spacing, typography, type ThemeColors, type TypographyVariant } from '@/theme/tokens';
 
@@ -239,78 +238,7 @@ export default function ComponentGallery() {
           </View>
         </Card>
       </Section>
-
-      <Choices />
     </ScrollView>
-  );
-}
-
-/** Side-by-side alternatives for styles the user hasn't picked yet (theme/choices.ts). */
-function Choices() {
-  const [stepA, setStepA] = useState(225);
-  const [stepB, setStepB] = useState(225);
-  const secondary: [SecondaryButtonStyle, string][] = [['tinted', 'A · Tinted'], ['outlined', 'B · Outlined'], ['gray', 'C · Gray']];
-  const steppers: [StepperStyle, string, number, (n: number) => void][] = [['split', 'A · Split', stepA, setStepA], ['joined', 'B · Joined', stepB, setStepB]];
-  const chips: [ChipSelectedStyle, string][] = [['filled', 'A · Filled'], ['tinted', 'B · Tinted']];
-  const fields: [TextFieldStyle, string][] = [['filled', 'A · Filled'], ['outlined', 'B · Outlined']];
-
-  return (
-    <>
-      <Section title="Choices · secondary button">
-        <Card>
-          <View style={styles.stack}>
-            {secondary.map(([style, label]) => (
-              <Choice key={style} label={label}>
-                <View style={styles.wrapRow}>
-                  <Button title="Add set" variant="secondary" icon="plus" secondaryStyle={style} />
-                  <Button title="Swap" size="sm" variant="secondary" secondaryStyle={style} />
-                </View>
-              </Choice>
-            ))}
-          </View>
-        </Card>
-      </Section>
-
-      <Section title="Choices · stepper">
-        <Card>
-          <View style={styles.stack}>
-            {steppers.map(([style, label, value, set]) => (
-              <Choice key={style} label={label}>
-                <Stepper label="Weight" value={value} onChange={set} step={5} unit="lb" stepperStyle={style} />
-              </Choice>
-            ))}
-          </View>
-        </Card>
-      </Section>
-
-      <Section title="Choices · selected chip">
-        <Card>
-          <View style={styles.stack}>
-            {chips.map(([style, label]) => (
-              <Choice key={style} label={label}>
-                <View style={styles.wrapRow}>
-                  <Chip label="Quads" selected selectedStyle={style} />
-                  <Chip label="Glutes" selected selectedStyle={style} />
-                  <Chip label="Chest" selectedStyle={style} />
-                </View>
-              </Choice>
-            ))}
-          </View>
-        </Card>
-      </Section>
-
-      <Section title="Choices · text field">
-        <Card>
-          <View style={styles.stack}>
-            {fields.map(([style, label]) => (
-              <Choice key={style} label={label}>
-                <TextField label="Exercise name" placeholder="e.g. Pause Squat" fieldStyle={style} />
-              </Choice>
-            ))}
-          </View>
-        </Card>
-      </Section>
-    </>
   );
 }
 
@@ -318,17 +246,6 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <View style={styles.section}>
       <SectionHeader title={title} />
-      {children}
-    </View>
-  );
-}
-
-function Choice({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <View style={styles.choice}>
-      <AppText variant="footnote" tone="accent" weight="700">
-        {label}
-      </AppText>
       {children}
     </View>
   );
@@ -375,8 +292,5 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
-  },
-  choice: {
-    gap: spacing.sm,
   },
 });

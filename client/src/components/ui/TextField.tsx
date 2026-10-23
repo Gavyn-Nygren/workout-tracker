@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
-import { designChoices, type TextFieldStyle } from '@/theme/choices';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing, typography } from '@/theme/tokens';
 import { AppText } from './AppText';
@@ -11,16 +10,14 @@ type Props = Omit<TextInputProps, 'style'> & {
   /** Shown under the field in the error color, and announced by VoiceOver. */
   error?: string;
   hint?: string;
-  /** Gallery only: compare field styles before one is chosen. */
-  fieldStyle?: TextFieldStyle;
 };
 
-/** Labeled single-line text input. */
-export function TextField({ label, error, hint, fieldStyle = designChoices.textField, onFocus, onBlur, ...input }: Props) {
+/** Labeled single-line text input: a filled box that gains a border on focus or error. */
+export function TextField({ label, error, hint, onFocus, onBlur, ...input }: Props) {
   const { colors } = useAppTheme();
   const [focused, setFocused] = useState(false);
 
-  const borderColor = error ? colors.errorFill : focused ? colors.accentText : fieldStyle === 'outlined' ? colors.border : 'transparent';
+  const borderColor = error ? colors.errorFill : focused ? colors.accentText : 'transparent';
 
   return (
     <View style={styles.wrap}>
@@ -44,11 +41,7 @@ export function TextField({ label, error, hint, fieldStyle = designChoices.textF
         style={[
           typography.body,
           styles.input,
-          {
-            color: colors.text,
-            backgroundColor: fieldStyle === 'filled' ? colors.input : colors.card,
-            borderColor,
-          },
+          { color: colors.text, backgroundColor: colors.input, borderColor },
         ]}
       />
       {(error || hint) && (
