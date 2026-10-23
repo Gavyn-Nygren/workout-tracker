@@ -152,17 +152,20 @@ The most important screen.
 - [x] Weekly snapshot at the top, then active goals, then recent PRs and form wins, then badges. *Dark hero snapshot, goal bars with pace, one mixed wins feed, earned + next-up badges (user's picks).*
 - [x] Goal creation for all four goal types, with an optional deadline. *Also edit and delete.*
 - [x] Badge detail.
-- [ ] The user has reviewed Home on their iPhone.
+- [x] The user has reviewed Home on their iPhone.
 
 ### G2.6 Progress 👁
 
 Load the `dataviz` skill before building any charts.
 
-- [ ] Auto-analytics cards: pinned exercises plus the most frequent, shown as sparklines.
-- [ ] Full graph view, with swipe between loaded graphs.
-- [ ] Custom graph builder: exercise × metric.
-- [ ] Exercise history and PR list.
-- [ ] Bodyweight log.
+- [x] Auto-analytics cards: pinned exercises plus the most frequent, shown as sparklines. *Full-width rows, e1RM by default (user's picks).*
+- [x] Full graph view, with swipe between loaded graphs. *Drag-to-read crosshair; session table under each chart.*
+- [x] Custom graph builder: exercise × metric.
+- [x] Exercise history and PR list.
+- [x] Bodyweight log. *Dots + 7-day trend (user's pick); log and delete weigh-ins.*
+- [ ] The user has reviewed Progress on their iPhone.
+
+*Charts use react-native-svg instead of Victory Native XL (Skia version mismatch with Expo Go on SDK 58); see spec 2.2.*
 
 ### G2.7 Form analysis (visual mock only) 👁
 

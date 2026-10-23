@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useRepository } from './DataProvider';
 import type { DateRange } from './repository';
-import type { Exercise, Goal, ID, Plan, PlannedBlock, WorkoutSession } from './types';
+import type { BodyweightEntry, Exercise, Goal, ID, Plan, PlannedBlock, WorkoutSession } from './types';
 
 // Writes. Each one refreshes the reads it affects.
 
@@ -67,6 +67,24 @@ export function useDeleteGoal() {
   return useMutation({
     mutationFn: (goalId: ID) => repo.deleteGoal(goalId),
     onSuccess: () => client.invalidateQueries({ queryKey: ['goals'] }),
+  });
+}
+
+export function useSaveBodyweight() {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (entry: BodyweightEntry) => repo.saveBodyweight(entry),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['bodyweight'] }),
+  });
+}
+
+export function useDeleteBodyweight() {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (entryId: ID) => repo.deleteBodyweight(entryId),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['bodyweight'] }),
   });
 }
 

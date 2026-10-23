@@ -40,7 +40,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="home" options={{ title: 'Home', tabBarIcon: tabIcon('house', 'house.fill') }} />
       <Tabs.Screen
         name="progress"
-        options={{ title: 'Progress', tabBarIcon: tabIcon('chart.line.uptrend.xyaxis', 'chart.line.uptrend.xyaxis') }}
+        options={{ title: 'Progress', headerShown: false, tabBarIcon: tabIcon('chart.line.uptrend.xyaxis', 'chart.line.uptrend.xyaxis') }}
       />
       <Tabs.Screen
         name="profile"

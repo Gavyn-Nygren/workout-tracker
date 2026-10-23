@@ -66,6 +66,9 @@ export interface DataRepository {
   saveExercise(exercise: Exercise): Promise<void>;
   saveGoal(goal: Goal): Promise<void>;
   deleteGoal(goalId: ID): Promise<void>;
+  /** One weigh-in per day: saving on a date that already has one replaces it. */
+  saveBodyweight(entry: BodyweightEntry): Promise<void>;
+  deleteBodyweight(entryId: ID): Promise<void>;
 }
 
 /** How far ahead the calendar is generated. */
@@ -157,6 +160,12 @@ export function createFakeRepository(data: FakeDataset): DataRepository {
     },
     deleteGoal: async (goalId) => {
       data.goals = data.goals.filter((g) => g.id !== goalId);
+    },
+    saveBodyweight: async (entry) => {
+      data.bodyweight = [...data.bodyweight.filter((e) => e.id !== entry.id && e.date !== entry.date), entry].sort((a, b) => a.date.localeCompare(b.date));
+    },
+    deleteBodyweight: async (entryId) => {
+      data.bodyweight = data.bodyweight.filter((e) => e.id !== entryId);
     },
   };
 }

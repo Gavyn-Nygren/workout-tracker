@@ -77,7 +77,7 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 - React Native with **Expo using custom development builds** (`expo-dev-client` with prebuild/Continuous Native Generation). **Expo Go is not supported**, because Vision Camera, MediaPipe, Skia, and the Live Activity extension all need native code.
 - Server state: TanStack Query.
 - **Local persistence uses an on-device SQLite database** (for example expo-sqlite, op-sqlite, or WatermelonDB; the library is still to be chosen). It holds workouts, plans, history, and the sync outbox. MMKV is kept only for small key-value data such as settings, UI state, and cached tokens.
-- Charts: Victory Native XL.
+- Charts: **custom react-native-svg charts** for now. Victory Native XL was the plan, but its current release needs Skia 2.15+ while Expo SDK 58 / Expo Go ships Skia 2.14. The charts follow the dataviz rules (one axis, hairline grid, 2px lines, ringed markers, labelled endpoints, drag-to-read crosshair). Revisit Victory once on development builds (roadmap Phase 4).
 - Form analysis: Vision Camera, MediaPipe Pose Landmarker, and Skia overlays, **all running on-device**.
 - Live Activity rest timer: a native iOS widget extension.
 - React Native Web stays possible but is not built or tested for V1.
@@ -437,6 +437,25 @@ Sumo deadlifts are excluded because they are hard to read from a side view.
 - **Automatic analytics** show user-pinned exercises plus the most-logged exercises from the last 8 weeks, up to about 6 in total.
 - **Custom graphs:** the user picks an exercise and plots volume, reps, top weight, sets, e1RM, and related history.
 - **Several loaded graphs** appear as a scrollable list of compact sparkline cards. Tapping a card opens the full interactive graph, and swiping left or right moves between loaded graphs.
+- **Progress layout:** **one scrolling page**. A row of range chips at the top (1M / 3M / 6M / 1Y / All, default 3M) scopes everything below it. Then, in order:
+  1. **Key exercises:** **full-width cards** showing **estimated 1RM**, the change over about 4 weeks, and a sparkline.
+     - Pinned exercises come first (Squat, Bench, and Deadlift by default), then compound lifts by how often they're logged.
+     - Long-press a card to pin or unpin it.
+  2. **Your graphs:** custom exercise × metric graphs. Metrics are e1RM, top set, volume, reps, and sets. "New" opens the builder.
+  3. **Bodyweight:** a card with the 7-day trend.
+  4. **All exercises:** every logged exercise, each opening its history.
+- **Graph screen:**
+  - A big readout of the latest value and its change. Dragging across the chart scrubs it, and the readout follows.
+  - A table of every session underneath, which also serves as the chart's accessible view.
+  - From Key exercises: chips to switch the metric, and **Add to Your graphs**.
+  - From Your graphs: swipe between graphs, or remove one.
+  - The header's pin button pins or unpins the exercise.
+- **Exercise history:** personal records (heaviest weight, e1RM, best session volume, longest hold) and every session's sets. Tapping a session opens its workout summary.
+- **Bodyweight screen:**
+  - **Weigh-ins as dots plus a 7-day trend line**, with a legend.
+  - Lowest, highest, and average for the range.
+  - The full log, where a long press deletes an entry.
+  - **Log weight** allows one entry per day; logging again that day replaces it.
 
 ### 2.11 Notifications
 
