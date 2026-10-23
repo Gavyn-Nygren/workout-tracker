@@ -164,6 +164,22 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 
 - Today shows the scheduled workout(s) for the selected date, with a calendar wheel at the top for browsing past and future dates.
 - When a date has several workouts, Today shows the position and count (for example `Start Workout 1/3`), provides controls to move between them, and allows them to be completed in any order.
+- **Layout:**
+  - **Calendar:** a **week strip**: seven days, swipe for other weeks, with a Today shortcut. Dots under each day show its workouts:
+    - filled green: done
+    - filled amber: partial
+    - blue ring: planned
+    - amber ring: missed
+    - gray ring: skipped
+  - **Workout cards:** **dark hero cards**, near-black in both themes, with white text and the baby-blue Start button.
+  - **Several workouts on one day:** swipe sideways between the cards; page dots and the button label show the position.
+  - **Header:** reads **"THURSDAY · UPPER B"**, with "+1" when more workouts are scheduled that day. On rest days it reads "THURSDAY · REST DAY".
+  - **Below the cards:** a "Coming up" list of the next few planned workouts.
+- **Each card shows** the plan name, a status pill, the workout name, and the estimated time and number of working sets. It lists the exercises with their planned sets × reps; for finished workouts, the top set instead.
+- **Buttons by state:**
+  - **Planned, missed, or in progress:** Start or Resume. Future workouts get "Start early" instead.
+  - **Skipped:** Start anyway.
+  - **Done or partial:** volume, time, and PR count, plus View summary, Reopen, and Repeat.
 
 **Missed workouts**
 

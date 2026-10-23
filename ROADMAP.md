@@ -104,10 +104,11 @@ Screens are listed in priority order. Each one includes its empty, loading, and 
 
 ### G2.1 Today 👁
 
-- [ ] Calendar wheel for browsing past and future dates.
-- [ ] Today's workout card(s).
-- [ ] `Start Workout 1/3` with a switcher between workouts.
-- [ ] States for a rest day, a missed workout (with the "push plan forward?" prompt), a completed workout (reopen/repeat), and a partial workout.
+- [x] Calendar wheel for browsing past and future dates. *Week strip with status dots (user's pick).*
+- [x] Today's workout card(s). *Dark hero cards (user's pick).*
+- [x] `Start Workout 1/3` with a switcher between workouts. *Swipeable cards with page dots (user's pick).*
+- [x] States for a rest day, a missed workout (with the "push plan forward?" prompt), a completed workout (reopen/repeat), and a partial workout. *Also skipped, late, and repeated workouts. Start, Reopen, Repeat, and the push-forward shift are visual only until G2.2/G3.7.*
+- [ ] The user has reviewed Today on their iPhone.
 
 ### G2.2 Active workout 👁
 

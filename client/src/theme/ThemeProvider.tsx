@@ -64,3 +64,16 @@ export function useAppTheme(): ThemeContextValue {
   if (!value) throw new Error('useAppTheme must be used inside AppThemeProvider');
   return value;
 }
+
+/**
+ * Renders children with one scheme's colors regardless of the app theme, e.g. the dark hero
+ * card on Today, so every component inside picks up the right on-dark colors.
+ */
+export function SchemeOverride({ scheme, children }: { scheme: ColorScheme; children: ReactNode }) {
+  const parent = useAppTheme();
+  const value = useMemo<ThemeContextValue>(
+    () => ({ ...parent, scheme, colors: colors[scheme], elevation: elevation[scheme] }),
+    [parent, scheme],
+  );
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}
