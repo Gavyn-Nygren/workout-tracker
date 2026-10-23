@@ -2,7 +2,7 @@ import Storage from 'expo-sqlite/kv-store';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Appearance, useColorScheme } from 'react-native';
 
-import { colors, type ColorScheme, type ThemeColors } from './tokens';
+import { colors, elevation, type ColorScheme, type ThemeColors } from './tokens';
 
 /** 'system' follows the device until the user explicitly picks light or dark. */
 export type ThemePreference = 'system' | ColorScheme;
@@ -14,6 +14,7 @@ type ThemeContextValue = {
   setPreference: (preference: ThemePreference) => void;
   scheme: ColorScheme;
   colors: ThemeColors;
+  elevation: (typeof elevation)[ColorScheme];
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -51,6 +52,7 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
       },
       scheme,
       colors: colors[scheme],
+      elevation: elevation[scheme],
     };
   }, [preference, deviceScheme]);
 

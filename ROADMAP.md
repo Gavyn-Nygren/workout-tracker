@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G0.2, waiting for the user to review it on their iPhone
+**Current goal:** G1.2. G0.2 and G1.1 still need the user's on-phone review.
 
 ## How we work
 
@@ -45,14 +45,16 @@ The minimum setup needed to show anything on the phone.
 
 ### G0.3 Fake data layer
 
-- [ ] Add TypeScript types matching spec Section 3: exercises, plans, sessions, blocks, sets (kind + modifiers), bodyweight, goals, PRs, badges, form reports.
-- [ ] Add realistic sample data:
+- [x] Add TypeScript types matching spec Section 3: exercises, plans, sessions, blocks, sets (kind + modifiers), bodyweight, goals, PRs, badges, form reports. *In `client/src/data/types.ts`; loads are stored in kg.*
+- [x] Add realistic sample data:
   - 2 active plans
   - about 30 exercises
   - 8 weeks of workout history with PRs
   - bodyweight entries
   - 3 form reports
-- [ ] Put the data behind a small repository interface so the SQLite version can replace it later without changing the screens.
+
+  *Generated relative to today, so the app always looks recently used. Includes a missed, a skipped, a partial, a late, and a repeated workout, plus days with two workouts.*
+- [x] Put the data behind a small repository interface so the SQLite version can replace it later without changing the screens. *Screens read through the hooks in `client/src/data/hooks.ts`.*
 
 **Done when:** every screen in Phase 2 can get its data from this layer.
 
@@ -62,17 +64,18 @@ The minimum setup needed to show anything on the phone.
 
 ### G1.1 Theme tokens 👁
 
-- [ ] Encode the spec 2.13 values as tokens:
+- [x] Encode the spec 2.13 values as tokens:
   - accent #89CFF0 with dark text #0B1520
   - light theme: #F2F4F7 background, white cards, #0B0F14 header and tab bar
   - dark theme: #0B0D10 background, #171A1F cards, #F5F7FA text, #9AA4AF secondary text
-- [ ] Add the shared scales:
+- [x] Add the shared scales:
   - SF Pro type scale with Dynamic Type
   - spacing scale
   - 12-16px radii
   - shadows/elevation
-- [ ] Propose options for the colors the spec hasn't set yet (success, warning, error, disabled, and chart series colors) and let the user pick.
-- [ ] Check WCAG AA contrast for every text and background pair in both themes.
+- [x] Propose options for the colors the spec hasn't set yet (success, warning, error, disabled, and chart series colors) and let the user pick. *Picked: Classic status colors, Gold PRs, Sky blue charts, one-blue comparison shades; disabled = 40% opacity. Recorded in spec 2.13.*
+- [x] Check WCAG AA contrast for every text and background pair in both themes. *54 pairs checked, all pass.*
+- [ ] The user has reviewed the tokens on their iPhone.
 
 **Done when:** the user has approved the full token set, and the light/dark toggle switches the whole app.
 

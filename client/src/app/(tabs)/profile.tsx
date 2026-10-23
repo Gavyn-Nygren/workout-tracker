@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PlaceholderScreen } from '@/components/PlaceholderScreen';
 import { useAppTheme, type ThemePreference } from '@/theme/ThemeProvider';
-import { radius } from '@/theme/tokens';
+import { radius, spacing, typography } from '@/theme/tokens';
 
 const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: 'system', label: 'System' },
@@ -11,7 +11,7 @@ const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
 ];
 
 export default function ProfileScreen() {
-  const { colors, preference, setPreference } = useAppTheme();
+  const { colors, elevation, preference, setPreference } = useAppTheme();
 
   return (
     <PlaceholderScreen
@@ -19,9 +19,9 @@ export default function ProfileScreen() {
       summary="Account, settings, data export, and account deletion."
       goal="G2.8"
     >
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.label, { color: colors.textSecondary }]}>APPEARANCE</Text>
-        <View style={[styles.segmented, { backgroundColor: colors.background }]} accessibilityRole="radiogroup">
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, boxShadow: elevation.card }]}>
+        <Text style={[typography.label, { color: colors.textSecondary }]}>Appearance</Text>
+        <View style={[styles.segmented, { backgroundColor: colors.input }]} accessibilityRole="radiogroup">
           {THEME_OPTIONS.map((option) => {
             const selected = option.value === preference;
             return (
@@ -29,10 +29,10 @@ export default function ProfileScreen() {
                 key={option.value}
                 onPress={() => setPreference(option.value)}
                 accessibilityRole="radio"
-                accessibilityState={{ selected }}
+                accessibilityState={{ checked: selected }}
                 style={[styles.segment, selected && { backgroundColor: colors.accent }]}
               >
-                <Text style={[styles.segmentText, { color: selected ? colors.onAccent : colors.text }]}>
+                <Text style={[typography.subhead, styles.segmentText, { color: selected ? colors.onAccent : colors.text }]}>
                   {option.label}
                 </Text>
               </Pressable>
@@ -48,27 +48,21 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: radius.card,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: 16,
-    gap: 12,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    padding: spacing.lg,
+    gap: spacing.md,
   },
   segmented: {
     flexDirection: 'row',
     borderRadius: radius.pill,
-    padding: 4,
+    padding: spacing.xs,
   },
   segment: {
     flex: 1,
     alignItems: 'center',
     borderRadius: radius.pill,
-    paddingVertical: 10,
+    paddingVertical: spacing.sm + 2,
   },
   segmentText: {
-    fontSize: 15,
     fontWeight: '700',
   },
 });

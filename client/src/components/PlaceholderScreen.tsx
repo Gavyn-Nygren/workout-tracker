@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/theme/ThemeProvider';
-import { radius } from '@/theme/tokens';
+import { radius, spacing, typography } from '@/theme/tokens';
 
 type Props = {
   title: string;
@@ -14,15 +14,15 @@ type Props = {
 
 /** Temporary stand-in for a tab until its Phase 2 goal builds the real screen. */
 export function PlaceholderScreen({ title, summary, goal, children }: Props) {
-  const { colors } = useAppTheme();
+  const { colors, elevation } = useAppTheme();
 
   return (
     <ScrollView contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic">
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
-        <Text style={[styles.summary, { color: colors.textSecondary }]}>{summary}</Text>
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, boxShadow: elevation.card }]}>
+        <Text style={[typography.title1, { color: colors.text }]}>{title}</Text>
+        <Text style={[typography.subhead, { color: colors.textSecondary }]}>{summary}</Text>
         <View style={[styles.goalPill, { backgroundColor: colors.accent }]}>
-          <Text style={[styles.goalText, { color: colors.onAccent }]}>Built in {goal}</Text>
+          <Text style={[typography.footnote, styles.goalText, { color: colors.onAccent }]}>Built in {goal}</Text>
         </View>
       </View>
       {children}
@@ -32,32 +32,23 @@ export function PlaceholderScreen({ title, summary, goal, children }: Props) {
 
 const styles = StyleSheet.create({
   content: {
-    padding: 16,
-    gap: 16,
+    padding: spacing.lg,
+    gap: spacing.lg,
   },
   card: {
     borderRadius: radius.card,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: 20,
-    gap: 8,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-  },
-  summary: {
-    fontSize: 15,
-    lineHeight: 21,
+    padding: spacing.xl,
+    gap: spacing.sm,
   },
   goalPill: {
     alignSelf: 'flex-start',
     borderRadius: radius.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginTop: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    marginTop: spacing.sm,
   },
   goalText: {
-    fontSize: 13,
     fontWeight: '700',
   },
 });

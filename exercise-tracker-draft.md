@@ -402,6 +402,15 @@ Plan editing and full Progress graphs may need a connection.
 | Typography | **SF Pro** (system font), with full Dynamic Type support |
 | Icons | **SF Symbols** (an Android/web fallback set is needed later) |
 | Shape | **Rounded, 12-16px** corners, pill buttons |
+| Accent text | Baby blue is too pale for text on light surfaces (1.7:1), so accent-colored text uses **#1A6FA3** in the light theme and #89CFF0 in the dark theme |
+| Status colors | **Classic set**. Fills: success **#0CA30C**, warning **#FAB219**, error **#D03B3B** (light) / #E66767 (dark). Light-theme text shades: #006300, #8A5A00, #B02A2A. Always shown with an icon and a label |
+| Destructive buttons | **#D03B3B** with white text |
+| Personal records | **Gold #F5B400** with dark text #0B1520 |
+| Chart main color | **Sky blue**: #1E86C1 (light), #3A9AD6 (dark) |
+| Recording comparisons | **Shades of one blue**, newest strongest: #155E8C / #1E86C1 / #72B3DC (light), #89CFF0 / #3A9AD6 / #1A6FA3 (dark) |
+| Disabled controls | 40% opacity of the normal control |
+
+All token values live in `client/src/theme/tokens.ts`. Every text and background pair passes WCAG AA in both themes, and the chart palettes pass colorblind-separation checks against the app's card colors.
 
 - **Active workout layout:** **dense table rows** in the Strong/Hevy style. Each set row shows set, previous, weight, reps, and a complete check. A camera button and a menu sit in the exercise header.
 - **Feedback:** a light haptic on set complete and a stronger one when the timer ends. A brief animated badge appears on a PR, and confetti only when a workout with PRs finishes. Both can be toggled off in Settings.
