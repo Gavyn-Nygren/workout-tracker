@@ -1,9 +1,9 @@
 import { router } from 'expo-router';
-import { useMemo } from 'react';
-import { ActionSheetIOS, Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { AccessibilityInfo, ActionSheetIOS, Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, EmptyState, ToastViewport, useToast } from '@/components/ui';
+import { Button, Card, EmptyState, ToastViewport, useToast } from '@/components/ui';
 import { usePreferences } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import type { LoggedSet, SessionExercise } from '@/data/types';
@@ -28,7 +28,9 @@ export default function ActiveWorkoutScreen() {
   const toast = useToast();
   const haptics = useHaptics();
   const preferences = usePreferences().data ?? defaultPreferences;
-  const { workout, counts, prSetIds, exercisesById, history, dispatch, completeSet, uncompleteSet, rest, end, finish: saveWorkout } = useActiveWorkout();
+  const { workout, counts, prSetIds, exercisesById, history, dispatch, completeSet, uncompleteSet, rest, skipRest, end, finish: saveWorkout } = useActiveWorkout();
+  // Space the floating rest bar covers; it grows with the text size, so it's measured.
+  const [restBarSpace, setRestBarSpace] = useState(0);
 
   // Last time's sets per exercise, for the PREVIOUS column.
   const lastByExercise = useMemo(() => {
@@ -128,11 +130,23 @@ export default function ActiveWorkoutScreen() {
   }
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+    <View
+      style={[styles.screen, { backgroundColor: colors.background }]}
+      // VoiceOver: the two-finger scrub minimizes; the two-finger double-tap skips rest or opens the timer.
+      onAccessibilityEscape={() => router.back()}
+      onMagicTap={() => {
+        if (rest) {
+          skipRest();
+          AccessibilityInfo.announceForAccessibility('Rest skipped');
+        } else {
+          router.push('/workout/timer');
+        }
+      }}
+    >
       <WorkoutHeader title={session.name} startedAt={session.startedAt} counts={counts} onMinimize={() => router.back()} onFinish={finish} />
 
       <ScrollView
-        contentContainerStyle={[styles.content, readable, { paddingBottom: insets.bottom + (rest ? 120 : spacing.huge) }]}
+        contentContainerStyle={[styles.content, readable, { paddingBottom: insets.bottom + (restBarSpace ? restBarSpace + spacing.lg : spacing.huge) }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         automaticallyAdjustKeyboardInsets
@@ -171,6 +185,12 @@ export default function ActiveWorkoutScreen() {
           );
         })}
 
+        {session.blocks.length === 0 && (
+          <Card>
+            <EmptyState icon="dumbbell" title="No exercises in this workout" message="Add an exercise to start logging sets." />
+          </Card>
+        )}
+
         <View style={styles.footer}>
           <Button title="Add exercise" variant="secondary" icon="plus" fullWidth onPress={() => router.push({ pathname: '/workout/picker', params: { mode: 'add' } })} />
           <View style={styles.footerRow}>
@@ -192,9 +212,9 @@ export default function ActiveWorkoutScreen() {
         </View>
       </ScrollView>
 
-      <RestTimerBar onExpand={() => router.push('/workout/timer')} />
+      <RestTimerBar onExpand={() => router.push('/workout/timer')} onHeightChange={setRestBarSpace} />
       {/* This sheet sits above the root view, so it needs its own toast host (clear of the rest bar). */}
-      <ToastViewport bottomOffset={rest ? 96 : spacing.lg} />
+      <ToastViewport bottomOffset={restBarSpace ? restBarSpace + spacing.sm : spacing.lg} />
     </View>
   );
 }

@@ -16,9 +16,10 @@ import { SkeletonFigure, useRepLoop } from '@/features/form/SkeletonFigure';
 import { Change, Legend } from '@/features/progress/ProgressParts';
 import { SchemeOverride, useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
-import { readable } from '@/theme/layout';
+import { DENSE_TEXT_MAX, readable, useTextScale } from '@/theme/layout';
 
 const JOINT_LABEL: Record<Joint, string> = { knee: 'knee', hip: 'hip', ankle: 'ankle' };
+const JOINTS: Joint[] = ['knee', 'hip', 'ankle'];
 const OBS_ICON: Record<Observation['kind'], SFSymbol> = { change: 'chart.line.downtrend.xyaxis', consistency: 'equal.circle', quality: 'exclamationmark.triangle' };
 const average = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : undefined);
 
@@ -30,6 +31,7 @@ export default function FormReportScreen() {
   const { id, sample } = useLocalSearchParams<{ id: string; sample?: string }>();
   const { colors, scheme } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const { large } = useTextScale();
   const toast = useToast();
   const units = (usePreferences().data ?? defaultPreferences).units;
   const reportQuery = useFormReport(id);
@@ -53,14 +55,17 @@ export default function FormReportScreen() {
   const [compareId, setCompareId] = useState<string | null | undefined>(undefined);
   const comparison = compareId === null ? undefined : (earlier.find((r) => r.id === compareId) ?? earlier[0]);
 
+  // A custom bar for the modal: like a native nav bar it grows only to the dense cap.
   const bar = (onMenu?: () => void) => (
     <View style={[styles.bar, { borderBottomColor: colors.border }]}>
       <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={10}>
-        <AppText variant="body" tone="accent">
+        <AppText variant="body" tone="accent" maxFontSizeMultiplier={DENSE_TEXT_MAX}>
           Close
         </AppText>
       </Pressable>
-      <AppText variant="headline">Form report</AppText>
+      <AppText variant="headline" accessibilityRole="header" maxFontSizeMultiplier={DENSE_TEXT_MAX} numberOfLines={1} style={styles.barTitle}>
+        Form report
+      </AppText>
       {onMenu ? (
         <Pressable onPress={onMenu} accessibilityRole="button" accessibilityLabel="Recording options" hitSlop={10}>
           <Icon name="ellipsis.circle" color={colors.accentText} size={22} />
@@ -75,7 +80,7 @@ export default function FormReportScreen() {
   const failed = queries.filter((q) => q.error);
   if (failed.length && !closing) {
     return (
-      <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <View style={[styles.screen, { backgroundColor: colors.background }]} onAccessibilityEscape={() => router.back()}>
         {bar()}
         <ErrorState fill title="Couldn't load this report" onRetry={() => failed.forEach((q) => q.refetch())} />
       </View>
@@ -83,7 +88,7 @@ export default function FormReportScreen() {
   }
   if (queries.some((q) => q.isLoading)) {
     return (
-      <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <View style={[styles.screen, { backgroundColor: colors.background }]} onAccessibilityEscape={() => router.back()}>
         {bar()}
         <ScreenSkeleton />
       </View>
@@ -165,7 +170,7 @@ export default function FormReportScreen() {
   if (report.status !== 'ready') {
     const processing = report.status === 'processing';
     return (
-      <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <View style={[styles.screen, { backgroundColor: colors.background }]} onAccessibilityEscape={() => router.back()}>
         {bar()}
         <ScreenState>
           {processing ? (
@@ -186,7 +191,7 @@ export default function FormReportScreen() {
   }
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+    <View style={[styles.screen, { backgroundColor: colors.background }]} onAccessibilityEscape={() => router.back()}>
       {bar(openMenu)}
 
       <ScrollView contentContainerStyle={[styles.content, readable, { paddingBottom: insets.bottom + spacing.huge }]}>
@@ -202,21 +207,24 @@ export default function FormReportScreen() {
         {/* Summary first (user's pick) */}
         <Card>
           <View style={styles.stack}>
-            <View style={styles.row}>
-              <View style={styles.flex}>
-                <AppText variant="title2">{exercise?.name ?? 'Exercise'}</AppText>
+            {/* At accessibility sizes the framing pill drops under the title instead of squeezing it. */}
+            <View style={large ? styles.stack : styles.row}>
+              <View style={!large && styles.flex}>
+                <AppText variant="title2" accessibilityRole="header">
+                  {exercise?.name ?? 'Exercise'}
+                </AppText>
                 <AppText variant="subhead" tone="secondary" numeric>
                   {[formatShortDate(date), setIndex >= 0 ? `Set ${setIndex + 1}` : undefined, set?.loadKg ? `${formatLoad(set.loadKg, units)} × ${set.reps}` : undefined].filter(Boolean).join('  ·  ')}
                 </AppText>
               </View>
               <View style={[styles.pill, { backgroundColor: report.quality.framing === 'good' ? colors.successSubtle : colors.input }]}>
-                <Icon name={report.quality.framing === 'good' ? 'checkmark.circle.fill' : 'exclamationmark.triangle.fill'} color={report.quality.framing === 'good' ? colors.successFill : colors.warningFill} size={12} />
-                <AppText variant="caption" weight="700" tone={report.quality.framing === 'good' ? 'success' : 'warning'}>
+                <Icon name={report.quality.framing === 'good' ? 'checkmark.circle.fill' : 'exclamationmark.triangle.fill'} color={report.quality.framing === 'good' ? colors.successFill : colors.warningText} size={12} />
+                <AppText variant="caption" weight="700" tone={report.quality.framing === 'good' ? 'success' : 'warning'} maxFontSizeMultiplier={DENSE_TEXT_MAX}>
                   {report.quality.framing === 'good' ? 'Good framing' : 'Framing warning'}
                 </AppText>
               </View>
             </View>
-            <View>
+            <View accessible accessibilityLabel={angle !== undefined ? `${angle} degrees, average ${JOINT_LABEL[joint]} angle at the bottom` : `No average ${JOINT_LABEL[joint]} angle`}>
               <AppText variant="display" numeric>{angle !== undefined ? `${Math.round(angle)}°` : '—'}</AppText>
               <AppText variant="subhead" tone="secondary">{`Average ${JOINT_LABEL[joint]} angle at the bottom`}</AppText>
             </View>
@@ -230,10 +238,11 @@ export default function FormReportScreen() {
                 delta={Math.abs(improvement) < 5 ? 0 : improvement}
               />
             )}
-            <View style={[styles.stats, { borderTopColor: colors.border }]}>
-              <Stat label="Range of motion" value={rom !== undefined ? `${Math.round(rom)}°` : '—'} />
-              <Stat label="Reps" value={`${report.detectedReps}${lowCount ? ` (${lowCount} unclear)` : ''}`} />
-              <Stat label="Time per rep" value={repTime !== undefined ? `${repTime.toFixed(1)} s` : '—'} />
+            {/* Three equal columns get too narrow at accessibility sizes, so the stats stack. */}
+            <View style={[large ? styles.statsStacked : styles.stats, { borderTopColor: colors.border }]}>
+              <Stat label="Range of motion" value={rom !== undefined ? `${Math.round(rom)}°` : '—'} spoken={rom !== undefined ? `${Math.round(rom)} degrees` : 'no reading'} stacked={large} />
+              <Stat label="Reps" value={`${report.detectedReps}${lowCount ? ` (${lowCount} unclear)` : ''}`} stacked={large} />
+              <Stat label="Time per rep" value={repTime !== undefined ? `${repTime.toFixed(1)} s` : '—'} spoken={repTime !== undefined ? `${repTime.toFixed(1)} seconds` : 'no reading'} stacked={large} />
             </View>
             {report.quality.warnings.map((w) => (
               <AppText key={w} variant="footnote" tone="warning">
@@ -248,11 +257,14 @@ export default function FormReportScreen() {
           {earlier.length ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
               {earlier.slice(0, 2).map((r) => (
-                <Chip key={r.id} label={formatShortDate(r.createdAt.slice(0, 10))} selected={comparison?.id === r.id} onPress={() => setCompareId(r.id)} />
+                <Chip key={r.id} label={formatShortDate(r.createdAt.slice(0, 10))} role="radio" selected={comparison?.id === r.id} onPress={() => setCompareId(r.id)} />
               ))}
               {earlier.length > 2 && (
                 <Chip
                   label="Older…"
+                  // Opens a menu rather than selecting, so it reads as a button that names the current pick.
+                  role="button"
+                  accessibilityLabel={`Compare with an older recording${comparison && earlier.indexOf(comparison) >= 2 ? `, now ${formatShortDate(comparison.createdAt.slice(0, 10))}` : ''}`}
                   selected={!!comparison && earlier.indexOf(comparison) >= 2}
                   onPress={() =>
                     ActionSheetIOS.showActionSheetWithOptions(
@@ -262,7 +274,7 @@ export default function FormReportScreen() {
                   }
                 />
               )}
-              <Chip label="None" selected={compareId === null} onPress={() => setCompareId(null)} />
+              <Chip label="None" role="radio" accessibilityLabel="No comparison" selected={compareId === null} onPress={() => setCompareId(null)} />
             </ScrollView>
           ) : (
             <AppText variant="footnote" tone="secondary">
@@ -288,7 +300,7 @@ export default function FormReportScreen() {
                   ...(comparison ? [{ label: formatShortDate(comparison.createdAt.slice(0, 10)), color: colors.chartCompare[1], kind: 'dot' as const }] : []),
                 ]}
               />
-              <AppText variant="caption" tone="tertiary">
+              <AppText variant="caption" tone="secondary">
                 Hollow dots are reps the camera wasn't sure about; they're left out of averages and trends.
               </AppText>
             </View>
@@ -314,26 +326,50 @@ export default function FormReportScreen() {
         <View style={styles.section}>
           <SectionHeader title="Rep by rep" />
           <Card padding="none">
-            <View style={[styles.tableRow, { borderBottomColor: colors.border }]}>
-              {['REP', 'KNEE', 'HIP', 'ANKLE', 'TIME'].map((h) => (
-                <AppText key={h} variant="caption" weight="700" tone="tertiary" style={styles.cell}>
-                  {h}
-                </AppText>
-              ))}
-            </View>
+            {/* Five columns get too narrow at accessibility sizes; then each rep is a labeled block instead. */}
+            {!large && (
+              <View style={[styles.tableRow, { borderBottomColor: colors.border }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                {['REP', 'KNEE', 'HIP', 'ANKLE', 'TIME'].map((h) => (
+                  <AppText key={h} variant="caption" weight="700" tone="secondary" style={styles.cell}>
+                    {h}
+                  </AppText>
+                ))}
+              </View>
+            )}
             {report.reps.map((r, i) => {
               const low = r.confidence === 'low';
+              const angleText = (j: Joint) => (r.angles[j] ? `${r.angles[j]!.minDeg}°` : '—');
+              // One VoiceOver stop per rep, with each column named.
+              const spoken = `Rep ${r.index}${low ? ', low confidence' : ''}: ${JOINTS.map((j) => `${JOINT_LABEL[j]} ${r.angles[j] ? `${r.angles[j]!.minDeg} degrees` : 'no reading'}`).join(', ')}, ${r.durationSec.toFixed(1)} seconds`;
+              const rowStyle = [large ? styles.repBlock : styles.tableRow, i < report.reps.length - 1 && { borderBottomColor: colors.border }];
+              if (large) {
+                return (
+                  <View key={r.index} style={rowStyle} accessible accessibilityLabel={spoken}>
+                    <AppText variant="subhead" weight="700" tone={low ? 'secondary' : 'primary'} numeric>
+                      {`Rep ${r.index}${low ? ' · low confidence' : ''}`}
+                    </AppText>
+                    <View style={styles.repValues}>
+                      {JOINTS.map((j) => (
+                        <AppText key={j} variant="subhead" tone={low || j !== joint ? 'secondary' : 'primary'} weight={j === joint ? '700' : '400'} numeric>
+                          {`${JOINT_LABEL[j][0].toUpperCase()}${JOINT_LABEL[j].slice(1)} ${angleText(j)}`}
+                        </AppText>
+                      ))}
+                      <AppText variant="subhead" tone="secondary" numeric>{`${r.durationSec.toFixed(1)} s`}</AppText>
+                    </View>
+                  </View>
+                );
+              }
               return (
-                <View key={r.index} style={[styles.tableRow, i < report.reps.length - 1 && { borderBottomColor: colors.border }]} accessibilityLabel={`Rep ${r.index}${low ? ', low confidence' : ''}`}>
-                  <AppText variant="subhead" weight="700" style={styles.cell} tone={low ? 'tertiary' : 'primary'} numeric>
+                <View key={r.index} style={rowStyle} accessible accessibilityLabel={spoken}>
+                  <AppText variant="subhead" weight="700" style={styles.cell} tone={low ? 'secondary' : 'primary'} numeric>
                     {low ? `${r.index}?` : String(r.index)}
                   </AppText>
-                  {(['knee', 'hip', 'ankle'] as Joint[]).map((j) => (
-                    <AppText key={j} variant="subhead" style={styles.cell} tone={low ? 'tertiary' : j === joint ? 'primary' : 'secondary'} weight={j === joint ? '700' : '400'} numeric>
-                      {r.angles[j] ? `${r.angles[j]!.minDeg}°` : '—'}
+                  {JOINTS.map((j) => (
+                    <AppText key={j} variant="subhead" style={styles.cell} tone={low || j !== joint ? 'secondary' : 'primary'} weight={j === joint ? '700' : '400'} numeric>
+                      {angleText(j)}
                     </AppText>
                   ))}
-                  <AppText variant="subhead" style={styles.cell} tone={low ? 'tertiary' : 'secondary'} numeric>
+                  <AppText variant="subhead" style={styles.cell} tone="secondary" numeric>
                     {`${r.durationSec.toFixed(1)}s`}
                   </AppText>
                 </View>
@@ -347,7 +383,7 @@ export default function FormReportScreen() {
           <Card padding="none">
             {report.observations.map((o, i) => (
               <View key={o.id} style={[styles.observation, i < report.observations.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-                <Icon name={OBS_ICON[o.kind]} color={o.kind === 'quality' ? colors.warningFill : colors.accentText} size={18} />
+                <Icon name={OBS_ICON[o.kind]} color={o.kind === 'quality' ? colors.warningText : colors.accentText} size={18} />
                 <View style={styles.flex}>
                   <AppText variant="subhead">{o.text}</AppText>
                   {o.cue && (
@@ -386,9 +422,10 @@ export default function FormReportScreen() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+/** One VoiceOver stop: "Range of motion: 95 degrees". */
+function Stat({ label, value, spoken = value, stacked }: { label: string; value: string; spoken?: string; stacked?: boolean }) {
   return (
-    <View style={styles.stat}>
+    <View style={!stacked && styles.stat} accessible accessibilityLabel={`${label}: ${spoken}`}>
       <AppText variant="caption" tone="secondary">
         {label}
       </AppText>
@@ -420,17 +457,18 @@ function ReplayBody({ report, family, withBar }: { report: FormReport; family: '
       {report.hasReplay ? (
         <>
           <View style={styles.replayHeader}>
-            <AppText variant="label" tone="secondary">
+            <AppText variant="label" tone="secondary" accessibilityRole="header" style={styles.shrink}>
               Annotated replay
             </AppText>
             <Pressable onPress={() => setPlaying((p) => !p)} accessibilityRole="button" accessibilityLabel={playing ? 'Pause replay' : 'Play replay'} hitSlop={8} style={[styles.play, { backgroundColor: colors.input }]}>
               <Icon name={playing ? 'pause.fill' : 'play.fill'} color={colors.text} size={14} />
             </Pressable>
           </View>
-          <View style={styles.replayFigure}>
+          <View style={styles.replayFigure} accessible accessibilityRole="image" accessibilityLabel="Animated replay of your reps with the joint angle drawn on">
             <SkeletonFigure family={family} depth={loop.depth} showAngle withBar={withBar} width={240} height={260} />
           </View>
-          <View style={styles.repMarks}>
+          {/* Visual only: the rep table below has the same reps for VoiceOver. */}
+          <View style={styles.repMarks} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
             {report.reps.map((r, i) => (
               <View
                 key={r.index}
@@ -440,7 +478,7 @@ function ReplayBody({ report, family, withBar }: { report: FormReport; family: '
                   r.confidence === 'low' && { borderColor: colors.warningFill, borderWidth: 1.5 },
                 ]}
               >
-                <AppText variant="caption" weight="700" tone={i === currentRep && playing ? 'onAccent' : 'secondary'}>
+                <AppText variant="caption" weight="700" tone={i === currentRep && playing ? 'onAccent' : 'secondary'} maxFontSizeMultiplier={DENSE_TEXT_MAX}>
                   {String(r.index)}
                 </AppText>
               </View>
@@ -450,7 +488,9 @@ function ReplayBody({ report, family, withBar }: { report: FormReport; family: '
       ) : (
         <View style={styles.noVideo}>
           <Icon name="video.slash.fill" color={colors.textSecondary} size={28} />
-          <AppText variant="headline">Video deleted</AppText>
+          <AppText variant="headline" accessibilityRole="header">
+            Video deleted
+          </AppText>
           <AppText variant="footnote" tone="secondary" style={{ textAlign: 'center' }}>
             The replay is gone, but every angle, rep, and trend from this recording is kept.
           </AppText>
@@ -492,6 +532,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   pill: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
@@ -505,9 +546,26 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: spacing.md,
   },
+  statsStacked: {
+    gap: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: spacing.md,
+  },
   stat: {
     flex: 1,
     gap: 2,
+  },
+  repBlock: {
+    gap: 2,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'transparent',
+  },
+  repValues: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: spacing.md,
   },
   section: {
     gap: spacing.sm,
@@ -544,7 +602,8 @@ const styles = StyleSheet.create({
   },
   repMark: {
     minWidth: 28,
-    height: 28,
+    minHeight: 28,
+    paddingHorizontal: spacing.xs,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
@@ -598,5 +657,12 @@ const styles = StyleSheet.create({
   },
   barSpacer: {
     width: 22,
+  },
+  barTitle: {
+    flexShrink: 1,
+    textAlign: 'center',
+  },
+  shrink: {
+    flexShrink: 1,
   },
 });

@@ -8,18 +8,19 @@ import { succeeded, useDeletePlan, usePlan, useSavePlan, useTemplates } from '@/
 import { programWeek } from '@/data/schedule';
 import type { Plan } from '@/data/types';
 import { formatShortDate } from '@/lib/format';
-import { describeSchedule, PLAN_TYPE_LABEL, workoutDays, workoutStats } from '@/features/plans/describe';
+import { describeSchedule, workoutDays, workoutStats } from '@/features/plans/describe';
 import { StatusPill } from '@/features/plans/PlanCard';
 import { addWorkout } from '@/features/plans/planEdits';
 import { ScheduleGrid } from '@/features/plans/ScheduleGrid';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
-import { readable } from '@/theme/layout';
+import { readable, useTextScale } from '@/theme/layout';
 
 /** One plan: status, schedule week grid, and its workouts. */
 export default function PlanDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors, scheme } = useAppTheme();
+  const { large } = useTextScale();
   const toast = useToast();
   const today = useRepository().today();
   const planQuery = usePlan(id);
@@ -98,14 +99,15 @@ export default function PlanDetailScreen() {
       <ScrollView contentContainerStyle={[styles.content, readable]}>
         <Card>
           <View style={styles.stack}>
-            <View style={styles.row}>
-              <AppText variant="title2" style={styles.flex}>
+            {/* Large text: the status pill drops under the name instead of squeezing it. */}
+            <View style={large ? styles.rowStacked : styles.row}>
+              <AppText variant="title2" accessibilityRole="header" style={large ? undefined : styles.flex}>
                 {plan.name}
               </AppText>
               <StatusPill status={plan.status} />
             </View>
             <AppText variant="subhead" tone="secondary">
-              {[PLAN_TYPE_LABEL[plan.schedule.type], describeSchedule(plan.schedule), week && plan.schedule.type === 'fixed' ? `Week ${week} of ${plan.schedule.weeks}` : undefined]
+              {[describeSchedule(plan.schedule), week && plan.schedule.type === 'fixed' ? `Week ${week} of ${plan.schedule.weeks}` : undefined]
                 .filter(Boolean)
                 .join('  ·  ')}
             </AppText>
@@ -122,20 +124,21 @@ export default function PlanDetailScreen() {
         </Card>
 
         <View style={styles.section}>
-          <SectionHeader title="Schedule" actionLabel="Edit" onAction={() => router.push({ pathname: '/plans/schedule', params: { plan: plan.id } })} />
+          <SectionHeader title="Schedule" actionLabel="Edit" actionAccessibilityLabel="Edit schedule" onAction={() => router.push({ pathname: '/plans/schedule', params: { plan: plan.id } })} />
           <Card>
             <ScheduleGrid schedule={plan.schedule} workouts={plan.workouts} today={plan.status === 'active' ? today : undefined} startDate={plan.startDate} />
           </Card>
         </View>
 
         <View style={styles.section}>
-          <SectionHeader title={`Workouts · ${plan.workouts.length}`} actionLabel="Add" onAction={newWorkout} />
+          <SectionHeader title={`Workouts · ${plan.workouts.length}`} actionLabel="Add" actionAccessibilityLabel="Add workout" onAction={newWorkout} />
           <Card padding="none">
             {plan.workouts.map((w, i) => (
               <ListRow
                 key={w.id}
                 title={w.name}
                 subtitle={[workoutDays(plan, w.id), workoutStats(w)].filter(Boolean).join('  ·  ')}
+                accessibilityLabel={[w.name, workoutDays(plan, w.id, true), workoutStats(w, true)].filter(Boolean).join(', ')}
                 icon={/core|abs/i.test(w.name) ? 'figure.core.training' : 'dumbbell'}
                 onPress={() => router.push({ pathname: '/plans/workout', params: { plan: plan.id, workout: w.id } })}
                 separator={i < plan.workouts.length - 1}
@@ -166,6 +169,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+  },
+  rowStacked: {
+    gap: spacing.sm,
+    alignItems: 'flex-start',
   },
   flex: {
     flex: 1,

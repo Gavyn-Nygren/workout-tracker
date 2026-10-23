@@ -7,11 +7,12 @@ import { usePlan, useSavePlan } from '@/data/hooks';
 import { weekPattern } from '@/data/schedule';
 import type { Plan, Weekday } from '@/data/types';
 import { ReorderList } from '@/features/workout/ReorderList';
-import { ALL_WEEKDAYS, WEEKDAY_SHORT } from '@/features/plans/describe';
+import { plural } from '@/lib/format';
+import { ALL_WEEKDAYS, WEEKDAY_LONG, WEEKDAY_SHORT } from '@/features/plans/describe';
 import { setProgramWeeks, setSequence, toggleWeekday } from '@/features/plans/planEdits';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
-import { readable } from '@/theme/layout';
+import { readable, useTextScale } from '@/theme/layout';
 
 /** Edit when a plan's workouts happen. Saves immediately; the calendar updates from today forward. */
 export default function ScheduleScreen() {
@@ -48,6 +49,7 @@ export default function ScheduleScreen() {
 
 function WeekEditor({ plan, save }: { plan: Plan; save: (p: Plan) => void }) {
   const { colors, scheme } = useAppTheme();
+  const { large } = useTextScale();
   const pattern = weekPattern(plan.schedule);
   const names = new Map(plan.workouts.map((w) => [w.id, w.name]));
 
@@ -55,7 +57,7 @@ function WeekEditor({ plan, save }: { plan: Plan; save: (p: Plan) => void }) {
     const options = plan.workouts.filter((w) => !pattern[weekday].includes(w.id));
     if (!options.length) return;
     ActionSheetIOS.showActionSheetWithOptions(
-      { title: `Add to ${WEEKDAY_SHORT[weekday]}`, options: [...options.map((w) => w.name), 'Cancel'], cancelButtonIndex: options.length, userInterfaceStyle: scheme },
+      { title: `Add to ${WEEKDAY_LONG[weekday]}`, options: [...options.map((w) => w.name), 'Cancel'], cancelButtonIndex: options.length, userInterfaceStyle: scheme },
       (i) => i < options.length && save(toggleWeekday(plan, weekday, options[i].id)),
     );
   };
@@ -64,50 +66,82 @@ function WeekEditor({ plan, save }: { plan: Plan; save: (p: Plan) => void }) {
     <View style={styles.section}>
       {plan.schedule.type === 'fixed' && (
         <Card>
-          <View style={styles.inline}>
-            <View style={styles.flex}>
+          {/* Large text: the label sits above the stepper so neither gets squeezed. */}
+          <View style={large ? styles.stacked : styles.inline}>
+            <View style={large ? undefined : styles.flex}>
               <AppText variant="body">Program length</AppText>
               <AppText variant="footnote" tone="secondary">
                 Every week follows the pattern below.
               </AppText>
             </View>
-            <Stepper label="Program length in weeks" value={plan.schedule.weeks} onChange={(w) => save(setProgramWeeks(plan, w))} min={1} max={52} unit="wk" />
+            <Stepper
+              label="Program length"
+              value={plan.schedule.weeks}
+              onChange={(w) => save(setProgramWeeks(plan, w))}
+              min={1}
+              max={52}
+              unit="wk"
+              spokenValue={(v) => plural(v, 'week')}
+            />
           </View>
         </Card>
       )}
       <SectionHeader title="Days" />
       <Card padding="none">
-        {ALL_WEEKDAYS.map((weekday, i) => (
-          <View key={weekday} style={[styles.dayRow, i > 0 && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
-            <AppText variant="headline" style={styles.dayLabel}>
+        {ALL_WEEKDAYS.map((weekday, i) => {
+          const border = i > 0 && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth };
+          const rest = !pattern[weekday].length;
+          const label = (
+            <AppText variant="headline" style={large ? styles.flex : styles.dayLabel} accessibilityLabel={`${WEEKDAY_LONG[weekday]}${rest ? ', rest' : ''}`}>
               {WEEKDAY_SHORT[weekday]}
             </AppText>
-            <View style={styles.chips}>
+          );
+          const chips = (
+            <View style={large ? styles.chipsWrap : styles.chips}>
               {pattern[weekday].map((id) => (
                 <Pressable
                   key={id}
                   onPress={() => save(toggleWeekday(plan, weekday, id))}
                   accessibilityRole="button"
-                  accessibilityLabel={`Remove ${names.get(id)} from ${WEEKDAY_SHORT[weekday]}`}
+                  accessibilityLabel={`Remove ${names.get(id)} from ${WEEKDAY_LONG[weekday]}`}
                   style={[styles.chip, { backgroundColor: colors.accent }]}
                 >
-                  <AppText variant="footnote" weight="700" tone="onAccent">
+                  <AppText variant="footnote" weight="700" tone="onAccent" style={styles.shrink}>
                     {names.get(id)}
                   </AppText>
                   <Icon name="xmark" color={colors.onAccent} size={10} weight="bold" />
                 </Pressable>
               ))}
-              {!pattern[weekday].length && (
-                <AppText variant="subhead" tone="tertiary">
+              {/* Already in the day's spoken label. */}
+              {rest && (
+                <AppText variant="subhead" tone="secondary" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                   Rest
                 </AppText>
               )}
             </View>
-            <Pressable onPress={() => addTo(weekday)} accessibilityRole="button" accessibilityLabel={`Add a workout to ${WEEKDAY_SHORT[weekday]}`} hitSlop={8} style={[styles.add, { backgroundColor: colors.accentSubtle }]}>
+          );
+          const add = (
+            <Pressable onPress={() => addTo(weekday)} accessibilityRole="button" accessibilityLabel={`Add a workout to ${WEEKDAY_LONG[weekday]}`} hitSlop={8} style={[styles.add, { backgroundColor: colors.accentSubtle }]}>
               <Icon name="plus" color={colors.accentText} size={14} weight="bold" />
             </Pressable>
-          </View>
-        ))}
+          );
+          // Large text: the day and its "+" on one line, that day's workouts wrapping under them.
+          return large ? (
+            <View key={weekday} style={[styles.dayRowStacked, border]}>
+              <View style={styles.inline}>
+                {label}
+                {add}
+              </View>
+              {chips}
+            </View>
+          ) : (
+            <View key={weekday} style={[styles.dayRow, border]}>
+              {label}
+              {chips}
+              {add}
+            </View>
+          );
+        })}
       </Card>
     </View>
   );
@@ -137,8 +171,9 @@ function CycleEditor({ plan, save, onDraggingChange }: { plan: Plan; save: (p: P
   return (
     <View style={styles.section}>
       <SectionHeader title={`Cycle · ${sequence.length} days, then repeats`} />
+      {/* The workout leads and the day number moves to the subtitle, so long names fit the fixed-height rows. */}
       <ReorderList
-        items={sequence.map((s, i) => ({ id: `${i}`, title: `Day ${i + 1} · ${s === 'rest' ? 'Rest' : (names.get(s) ?? 'Workout')}`, subtitle: s === 'rest' ? 'Recovery' : undefined }))}
+        items={sequence.map((s, i) => ({ id: `${i}`, title: s === 'rest' ? 'Rest' : (names.get(s) ?? 'Workout'), subtitle: `Day ${i + 1}${s === 'rest' ? ' · Recovery' : ''}` }))}
         onMove={onMove}
         onDraggingChange={onDraggingChange}
       />
@@ -179,14 +214,32 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     minHeight: 54,
   },
+  dayRowStacked: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+  },
+  // A minimum, not a fixed width, so "Wed" never breaks into "We / d" at bigger text sizes.
   dayLabel: {
-    width: 40,
+    minWidth: 40,
   },
   chips: {
     flex: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.xs + 2,
+  },
+  chipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs + 2,
+  },
+  stacked: {
+    gap: spacing.sm,
+    alignItems: 'flex-start',
+  },
+  shrink: {
+    flexShrink: 1,
   },
   chip: {
     flexDirection: 'row',

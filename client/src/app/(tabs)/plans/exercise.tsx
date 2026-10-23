@@ -81,7 +81,9 @@ export default function ExerciseScreen() {
           <View style={[styles.iconWell, { backgroundColor: colors.accentSubtle }]}>
             <Icon name={EQUIPMENT_ICON[exercise.equipment ?? 'other']} color={colors.accentText} size={26} />
           </View>
-          <AppText variant="title1">{exercise.name}</AppText>
+          <AppText variant="title1" accessibilityRole="header">
+            {exercise.name}
+          </AppText>
           <View style={styles.tags}>
             {tags.map((t) => (
               <View key={t} style={[styles.tag, { backgroundColor: colors.input }]}>

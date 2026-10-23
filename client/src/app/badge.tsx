@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, ErrorState, NotFoundState, ProgressBar, Skeleton } from '@/components/ui';
 import { useBadges, useExercises, useFormReports, useSessions, useStreak } from '@/data/hooks';
@@ -22,7 +22,7 @@ export default function BadgeSheet() {
   if (failed.length) return <ErrorState fill title="Couldn't load this badge" onRetry={() => failed.forEach((q) => q.refetch())} />;
   if (isLoading) {
     return (
-      <View style={[styles.screen, { backgroundColor: colors.cardElevated }]}>
+      <View style={[styles.screen, { backgroundColor: colors.cardElevated }]} accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }}>
         <Skeleton width={96} height={96} radius={radius.pill} />
         <Skeleton width={80} height={12} />
         <Skeleton width="60%" height={26} />
@@ -37,12 +37,16 @@ export default function BadgeSheet() {
   if (!badge) return <NotFoundState thing="Badge" icon="medal" backLabel="Close" />;
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.cardElevated }]}>
-      <BadgeMedallion category={badge.category} earned={Boolean(got)} progress={next ? next.current / next.target : undefined} size={96} />
+    // Scrolls, so Done stays reachable at large text sizes.
+    <ScrollView style={{ backgroundColor: colors.cardElevated }} contentContainerStyle={styles.screen} onAccessibilityEscape={() => router.back()}>
+      {/* Decorative here: the progress bar below reads the same progress. */}
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <BadgeMedallion category={badge.category} earned={Boolean(got)} progress={next ? next.current / next.target : undefined} size={96} />
+      </View>
       <AppText variant="caption" weight="800" tone="accent">
         {BADGE_CATEGORY_LABEL[badge.category].toUpperCase()}
       </AppText>
-      <AppText variant="title2" style={styles.center}>
+      <AppText variant="title2" accessibilityRole="header" style={styles.center}>
         {badge.title}
       </AppText>
       <AppText variant="body" tone="secondary" style={styles.center}>
@@ -62,13 +66,13 @@ export default function BadgeSheet() {
         </View>
       )}
       <Button title="Done" variant="secondary" onPress={() => router.back()} style={styles.done} />
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     padding: spacing.xl,
     paddingTop: spacing.xxxl,

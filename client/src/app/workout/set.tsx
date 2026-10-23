@@ -7,6 +7,8 @@ import { usePreferences } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import type { LoggedSet, SessionExercise, SetKind, SetModifier } from '@/data/types';
 import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
+import { setName, setNumber } from '@/features/workout/workoutReducer';
+import { plural } from '@/lib/format';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 
@@ -28,7 +30,7 @@ export default function SetDetailSheet() {
   const [closing, setClosing] = useState<{ entry: SessionExercise; set: LoggedSet } | null>(null);
 
   // Wait for the user's effort scale so the RPE chips don't flash before RIR.
-  if (preferences.isLoading) return <View style={[styles.blank, { backgroundColor: colors.cardElevated }]} />;
+  if (preferences.isLoading) return <View style={[styles.blank, { backgroundColor: colors.cardElevated }]} accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }} />;
 
   const liveEntry = workout?.session.blocks.flatMap((b) => b.exercises).find((e) => e.id === entryId);
   const liveSet = liveEntry?.sets.find((s) => s.id === setId);
@@ -37,13 +39,22 @@ export default function SetDetailSheet() {
   const { entry, set } = found;
 
   const exercise = exercisesById.get(entry.exerciseId);
-  const setNumber = entry.sets.indexOf(set) + 1;
+  // Numbered like the set table, where warm-ups count separately.
+  const title = setName(set.kind, setNumber(entry.sets, set));
   const update = (patch: Partial<LoggedSet>) => dispatch({ type: 'updateSet', entryId: entry.id, setId: set.id, patch });
 
   return (
-    <ScrollView style={{ backgroundColor: colors.cardElevated }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+    <ScrollView
+      style={{ backgroundColor: colors.cardElevated }}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+      onAccessibilityEscape={() => router.back()}
+    >
       <View style={styles.header}>
-        <AppText variant="title2">{`Set ${setNumber}`}</AppText>
+        <AppText variant="title2" accessibilityRole="header">
+          {title}
+        </AppText>
         <AppText variant="subhead" tone="secondary">
           {exercise?.name ?? 'Exercise'}
         </AppText>
@@ -52,7 +63,7 @@ export default function SetDetailSheet() {
       <SectionHeader title="Set type" />
       <View style={styles.wrapRow}>
         {KINDS.map((kind) => (
-          <Chip key={kind} label={kind === 'normal' ? 'Normal' : setTagLabel(kind)} selected={set.kind === kind} onPress={() => update({ kind })} />
+          <Chip key={kind} role="radio" label={kind === 'normal' ? 'Normal' : setTagLabel(kind)} selected={set.kind === kind} onPress={() => update({ kind })} />
         ))}
       </View>
 
@@ -70,10 +81,14 @@ export default function SetDetailSheet() {
 
       <SectionHeader title={effortScale === 'rpe' ? 'Effort (RPE)' : 'Reps in reserve (RIR)'} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollRow}>
-        <Chip label="None" selected={set.rir === undefined} onPress={() => update({ rir: undefined })} />
+        <Chip role="radio" label="None" accessibilityLabel={effortScale === 'rpe' ? 'No RPE' : 'No RIR'} selected={set.rir === undefined} onPress={() => update({ rir: undefined })} />
         {effortScale === 'rpe'
-          ? RPE_STEPS.map((rpe) => <Chip key={rpe} label={String(rpe)} selected={set.rir === 10 - rpe} onPress={() => update({ rir: 10 - rpe })} />)
-          : RIR_STEPS.map((rir) => <Chip key={rir} label={String(rir)} selected={set.rir === rir} onPress={() => update({ rir })} />)}
+          ? RPE_STEPS.map((rpe) => (
+              <Chip key={rpe} role="radio" label={String(rpe)} accessibilityLabel={`RPE ${rpe}`} selected={set.rir === 10 - rpe} onPress={() => update({ rir: 10 - rpe })} />
+            ))
+          : RIR_STEPS.map((rir) => (
+              <Chip key={rir} role="radio" label={String(rir)} accessibilityLabel={`${plural(rir, 'rep')} in reserve`} selected={set.rir === rir} onPress={() => update({ rir })} />
+            ))}
       </ScrollView>
 
       {set.modifiers.some((m) => m === 'shortened_partials' || m === 'lengthened_partials') && (
@@ -100,7 +115,7 @@ export default function SetDetailSheet() {
           variant="ghost"
           icon="trash"
           onPress={() =>
-            Alert.alert(`Delete set ${setNumber}?`, undefined, [
+            Alert.alert(`Delete ${title.toLowerCase()}?`, undefined, [
               { text: 'Cancel', style: 'cancel' },
               {
                 text: 'Delete',

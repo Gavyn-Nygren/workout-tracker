@@ -1,23 +1,46 @@
 import { router } from 'expo-router';
+import { useEffect, useSyncExternalStore } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Appear, AppText, Icon } from '@/components/ui';
-import { formatClock, useNow } from '@/hooks/useNow';
+import { formatClock, spokenDuration, useNow } from '@/hooks/useNow';
+import { DENSE_TEXT_MAX } from '@/theme/layout';
 import { SchemeOverride, useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { restRemainingMs, useActiveWorkout } from './ActiveWorkoutProvider';
 
-/** Height of the bar, so toasts can sit above it. */
-export const MINI_BAR_HEIGHT = 56;
+// The bar's measured height (0 when hidden), so toasts can sit above it at any text size.
+let height = 0;
+const heightListeners = new Set<() => void>();
+const setHeight = (next: number) => {
+  if (next === height) return;
+  height = next;
+  heightListeners.forEach((l) => l());
+};
+export function useMiniBarHeight(): number {
+  return useSyncExternalStore(
+    (listener) => {
+      heightListeners.add(listener);
+      return () => heightListeners.delete(listener);
+    },
+    () => height,
+  );
+}
 
 /** Sits above the tab bar while a workout is minimized; tap to slide the workout back up. */
 export function MiniBar() {
   const { workout } = useActiveWorkout();
+  const visible = Boolean(workout);
+  useEffect(() => {
+    if (!visible) setHeight(0);
+  }, [visible]);
   if (!workout) return null;
   return (
     <SchemeOverride scheme="dark">
       <Appear offset={8}>
-        <Body />
+        <View onLayout={(e) => setHeight(Math.round(e.nativeEvent.layout.height))}>
+          <Body />
+        </View>
       </Appear>
     </SchemeOverride>
   );
@@ -30,30 +53,33 @@ function Body() {
   if (!workout) return null;
 
   const startedAt = workout.session.startedAt ? Date.parse(workout.session.startedAt) : now;
-  const elapsed = formatClock((now - startedAt) / 1000);
-  const restLeft = rest ? formatClock(Math.ceil(restRemainingMs(rest, now) / 1000)) : undefined;
+  const elapsedSec = (now - startedAt) / 1000;
+  const elapsed = formatClock(elapsedSec);
+  const restSec = rest ? Math.ceil(restRemainingMs(rest, now) / 1000) : undefined;
+  const restLeft = restSec !== undefined ? formatClock(restSec) : undefined;
 
   return (
     <Pressable
       onPress={() => router.push('/workout')}
       accessibilityRole="button"
-      accessibilityLabel={`${workout.session.name} in progress, ${elapsed} elapsed, ${counts.done} of ${counts.total} sets${restLeft ? `, rest ${restLeft}` : ''}. Open workout`}
+      accessibilityLabel={`${workout.session.name} in progress, ${spokenDuration(elapsedSec)} elapsed, ${counts.done} of ${counts.total} sets${restSec !== undefined ? `, rest ${spokenDuration(restSec)} remaining` : ''}. Open workout`}
       style={({ pressed }) => [styles.bar, { backgroundColor: colors.chrome, borderTopColor: colors.border, opacity: pressed ? 0.85 : 1 }]}
     >
       <View style={[styles.icon, { backgroundColor: colors.accent }]}>
         <Icon name="dumbbell.fill" color={colors.onAccent} size={15} />
       </View>
       <View style={styles.text}>
-        <AppText variant="subhead" weight="700" numberOfLines={1}>
+        {/* Persistent chrome above a tab bar that doesn't scale, so it stops at 1.5×. */}
+        <AppText variant="subhead" weight="700" numberOfLines={1} maxFontSizeMultiplier={DENSE_TEXT_MAX}>
           {workout.session.name}
         </AppText>
-        <AppText variant="caption" tone="secondary" numeric>
+        <AppText variant="caption" tone="secondary" numeric numberOfLines={1} maxFontSizeMultiplier={DENSE_TEXT_MAX}>
           {`${elapsed} · ${counts.done}/${counts.total} sets`}
         </AppText>
       </View>
       {restLeft ? (
         <View style={[styles.rest, { backgroundColor: colors.accentSubtle }]}>
-          <AppText variant="footnote" weight="800" tone="accent" numeric>
+          <AppText variant="footnote" weight="800" tone="accent" numeric maxFontSizeMultiplier={DENSE_TEXT_MAX}>
             {`Rest ${restLeft}`}
           </AppText>
         </View>

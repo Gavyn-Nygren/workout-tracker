@@ -1,6 +1,6 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Card, Chip, ErrorState, ListRow, NotFoundState, SectionHeader, SegmentedControl, Skeleton, TextField, Toggle, useToast } from '@/components/ui';
 import { succeeded, useExercises, useSaveExercise } from '@/data/hooks';
@@ -8,7 +8,7 @@ import type { Equipment, Exercise, MuscleGroup } from '@/data/types';
 import { newId } from '@/lib/id';
 import { EQUIPMENT_LABEL, MUSCLE_LABEL } from '@/features/exercises/ExerciseList';
 import { radius, spacing } from '@/theme/tokens';
-import { readable } from '@/theme/layout';
+import { readable, useTextScale } from '@/theme/layout';
 
 const EQUIPMENT = Object.keys(EQUIPMENT_LABEL) as Equipment[];
 const MUSCLES = Object.keys(MUSCLE_LABEL) as MuscleGroup[];
@@ -22,7 +22,13 @@ export default function ExerciseFormScreen() {
   const exercises = useExercises();
   if (exercises.error) return <ErrorState fill title="Couldn't load your exercises" onRetry={() => exercises.refetch()} />;
   // Wait for the library so editing starts from the saved values, not blanks.
-  if (exercises.isPending) return <Skeleton height={240} radius={radius.card} style={styles.loading} />;
+  if (exercises.isPending) {
+    return (
+      <View accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }}>
+        <Skeleton height={240} radius={radius.card} style={styles.loading} />
+      </View>
+    );
+  }
   const existing = id ? exercises.data?.find((e) => e.id === id) : undefined;
   // An id that doesn't match must not quietly open a blank "New exercise" form.
   if (id && !existing) return <NotFoundState thing="Exercise" icon="dumbbell" />;
@@ -31,6 +37,7 @@ export default function ExerciseFormScreen() {
 
 function ExerciseForm({ exercises, existing }: { exercises: Exercise[]; existing?: Exercise }) {
   const id = existing?.id;
+  const { large } = useTextScale();
   const toast = useToast();
   const saveExercise = useSaveExercise();
 
@@ -55,6 +62,8 @@ function ExerciseForm({ exercises, existing }: { exercises: Exercise[]; existing
     if (saveExercise.isPending) return;
     if (nameError) {
       setShowErrors(true);
+      // The error appears up at the name field, possibly off screen, so say it too.
+      AccessibilityInfo.announceForAccessibility(nameError);
       return;
     }
     const now = new Date().toISOString();
@@ -88,15 +97,19 @@ function ExerciseForm({ exercises, existing }: { exercises: Exercise[]; existing
         <View style={styles.section}>
           <SectionHeader title="Variation of (optional)" />
           {base ? (
-            <Card padding="none">
-              <ListRow
-                title={base.name}
-                subtitle={base.formAnalysis ? 'Stats group together, and form analysis works for this exercise.' : 'Stats group together with this movement.'}
-                icon="link"
-                trailing={<Button title="Unlink" variant="ghost" size="sm" onPress={() => setBaseId(undefined)} />}
-                separator={false}
-              />
-            </Card>
+            <>
+              <Card padding="none">
+                <ListRow
+                  title={base.name}
+                  subtitle={base.formAnalysis ? 'Stats group together, and form analysis works for this exercise.' : 'Stats group together with this movement.'}
+                  icon="link"
+                  // Large text: the button moves under the card so the text keeps the row's width.
+                  trailing={large ? undefined : <Button title="Unlink" variant="ghost" size="sm" accessibilityLabel={`Unlink ${base.name}`} onPress={() => setBaseId(undefined)} />}
+                  separator={false}
+                />
+              </Card>
+              {large && <Button title={`Unlink ${base.name}`} variant="ghost" size="sm" onPress={() => setBaseId(undefined)} />}
+            </>
           ) : (
             <>
               <TextField label="Search built-in movements" value={baseQuery} onChangeText={setBaseQuery} placeholder="e.g. Squat" autoCorrect={false} />
@@ -128,7 +141,7 @@ function ExerciseForm({ exercises, existing }: { exercises: Exercise[]; existing
           <SectionHeader title="Equipment" />
           <View style={styles.wrap}>
             {EQUIPMENT.map((e) => (
-              <Chip key={e} label={EQUIPMENT_LABEL[e]} selected={equipment === e} onPress={() => setEquipment(equipment === e ? undefined : e)} />
+              <Chip key={e} label={EQUIPMENT_LABEL[e]} role="radio" selected={equipment === e} onPress={() => setEquipment(equipment === e ? undefined : e)} />
             ))}
           </View>
         </View>

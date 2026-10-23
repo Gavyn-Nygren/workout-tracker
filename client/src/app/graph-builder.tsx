@@ -8,29 +8,44 @@ import type { Exercise } from '@/data/types';
 import { ExerciseList } from '@/features/exercises/ExerciseList';
 import { addGraph } from '@/features/progress/progressPrefs';
 import { METRICS, type Metric } from '@/features/progress/series';
+import { useTextScale } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 
 /** Custom graph builder (spec 2.10): pick an exercise, then a metric. */
 export default function GraphBuilderSheet() {
   const { colors } = useAppTheme();
+  const { large } = useTextScale();
   const toast = useToast();
   const exercises = useExercises();
   const [exercise, setExercise] = useState<Exercise | undefined>();
   const [metric, setMetric] = useState<Metric>('e1rm');
 
   return (
-    <ScrollView style={{ backgroundColor: colors.cardElevated }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-      <AppText variant="title2">New graph</AppText>
+    // The page background, not the sheet color, so the cards stand out (iOS grouped style).
+    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+      <AppText variant="title2" accessibilityRole="header">
+        New graph
+      </AppText>
       {exercise ? (
         <View style={styles.stack}>
-          <Card padding="none">
-            <ListRow title={exercise.name} subtitle="Exercise" icon="dumbbell" trailing={<Button title="Change" variant="ghost" size="sm" onPress={() => setExercise(undefined)} />} separator={false} />
-          </Card>
+          <View style={styles.picked}>
+            <Card padding="none">
+              <ListRow
+                title={exercise.name}
+                subtitle="Exercise"
+                icon="dumbbell"
+                // Large text: the button moves under the card so the name keeps the row's width.
+                trailing={large ? undefined : <Button title="Change" variant="ghost" size="sm" accessibilityLabel="Change exercise" onPress={() => setExercise(undefined)} />}
+                separator={false}
+              />
+            </Card>
+            {large && <Button title="Change exercise" variant="ghost" size="sm" onPress={() => setExercise(undefined)} />}
+          </View>
           <AppText variant="headline">What should it show?</AppText>
           <View style={styles.wrap}>
             {METRICS.map((m) => (
-              <Chip key={m.value} label={m.label} selected={metric === m.value} onPress={() => setMetric(m.value)} />
+              <Chip key={m.value} label={m.label} role="radio" selected={metric === m.value} onPress={() => setMetric(m.value)} />
             ))}
           </View>
           <Button
@@ -65,6 +80,9 @@ const styles = StyleSheet.create({
   },
   stack: {
     gap: spacing.lg,
+  },
+  picked: {
+    gap: spacing.sm,
   },
   wrap: {
     flexDirection: 'row',

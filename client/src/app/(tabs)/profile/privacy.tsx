@@ -30,8 +30,10 @@ export default function PrivacyScreen() {
       update({ biometricLock: { ...lock, enabled: false } });
       return;
     }
-    const result = await LocalAuthentication.authenticateAsync({ promptMessage: 'Turn on Face ID lock', fallbackLabel: 'Use passcode' });
-    if (result.success) {
+    const result = await LocalAuthentication.authenticateAsync({ promptMessage: 'Turn on Face ID lock', fallbackLabel: 'Use passcode' }).catch(() => undefined);
+    if (!result) {
+      toast.show({ message: "Couldn't check Face ID. The lock stays off.", tone: 'error' });
+    } else if (result.success) {
       update({ biometricLock: { ...lock, enabled: true } });
       toast.show({ message: 'Face ID lock is on.', tone: 'success' });
     } else if (result.error !== 'user_cancel' && result.error !== 'system_cancel' && result.error !== 'app_cancel') {

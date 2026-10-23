@@ -30,12 +30,21 @@ export default function WorkoutExercisePicker() {
   };
 
   return (
-    <ScrollView style={{ backgroundColor: colors.cardElevated }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+    // The page background, not the sheet surface, so the list's cards stand up off it (iOS grouped style).
+    <ScrollView
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+      onAccessibilityEscape={() => router.back()}
+    >
       <View style={styles.header}>
         {swapping && exercises.isPending ? (
           <Skeleton width="60%" height={28} />
         ) : (
-          <AppText variant="title2">{swapping ? `Swap ${current?.name ?? 'exercise'}` : 'Add exercise'}</AppText>
+          <AppText variant="title2" accessibilityRole="header">
+            {swapping ? `Swap ${current?.name ?? 'exercise'}` : 'Add exercise'}
+          </AppText>
         )}
         {swapping && (
           <AppText variant="subhead" tone="secondary">

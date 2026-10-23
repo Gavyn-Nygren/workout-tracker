@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { useRef, useState } from 'react';
+import { ScrollView, StyleSheet, type TextInputInstance } from 'react-native';
 
-import { AppText, Button, TextField } from '@/components/ui';
+import { AppText, Button } from '@/components/ui';
 import { signIn } from '@/features/auth/authStore';
+import { reportFormErrors, TextFieldWithRef } from '@/features/auth/formErrors';
 import { EMAIL_PATTERN } from '@/features/auth/validation';
 import { spacing } from '@/theme/tokens';
 import { readable } from '@/theme/layout';
@@ -14,13 +15,15 @@ export default function SignInScreen() {
   const [password, setPassword] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const emailRef = useRef<TextInputInstance>(null);
+  const passwordRef = useRef<TextInputInstance>(null);
 
   const emailError = !EMAIL_PATTERN.test(email.trim()) ? 'Enter the email you signed up with.' : undefined;
   const passwordError = password.length < 8 ? 'Passwords are at least 8 characters.' : undefined;
 
   const submit = () => {
     setSubmitted(true);
-    if (emailError || passwordError) return;
+    if (reportFormErrors([{ error: emailError, ref: emailRef }, { error: passwordError, ref: passwordRef }])) return;
     setLoading(true);
     // Mock: any well-formed email and password signs in until Supabase Auth (G5.1).
     setTimeout(() => signIn('email', { email: email.trim() }), 500);
@@ -28,8 +31,11 @@ export default function SignInScreen() {
 
   return (
     <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-      <AppText variant="title1">Welcome back</AppText>
-      <TextField
+      <AppText variant="title1" accessibilityRole="header">
+        Welcome back
+      </AppText>
+      <TextFieldWithRef
+        ref={emailRef}
         label="Email"
         value={email}
         onChangeText={setEmail}
@@ -41,8 +47,11 @@ export default function SignInScreen() {
         textContentType="username"
         error={submitted ? emailError : undefined}
         returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => passwordRef.current?.focus()}
       />
-      <TextField
+      <TextFieldWithRef
+        ref={passwordRef}
         label="Password"
         value={password}
         onChangeText={setPassword}

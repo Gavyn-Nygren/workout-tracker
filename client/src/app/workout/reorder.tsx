@@ -29,9 +29,17 @@ export default function ReorderSheet() {
   const [dragging, setDragging] = useState(false);
 
   return (
-    <ScrollView style={{ backgroundColor: colors.cardElevated }} contentContainerStyle={styles.content} scrollEnabled={!dragging}>
+    // The page background, not the sheet surface, so the rows stand up off it (iOS grouped style).
+    <ScrollView
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={styles.content}
+      scrollEnabled={!dragging}
+      onAccessibilityEscape={() => router.back()}
+    >
       <View style={styles.header}>
-        <AppText variant="title2">Reorder exercises</AppText>
+        <AppText variant="title2" accessibilityRole="header">
+          Reorder exercises
+        </AppText>
         <AppText variant="subhead" tone="secondary">
           Drag the handle. Supersets move together.
         </AppText>

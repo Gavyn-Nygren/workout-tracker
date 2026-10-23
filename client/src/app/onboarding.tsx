@@ -1,7 +1,8 @@
 import type { SFSymbol } from 'expo-symbols';
 import { router } from 'expo-router';
-import { useMemo, useState, type ReactNode } from 'react';
-import { ActionSheetIOS, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { AccessibilityInfo, ActionSheetIOS, Pressable, ScrollView, StyleSheet, View, type ViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText, Button, Card, Chip, EmptyState, ErrorState, Icon, NumberField, PressableScale, Skeleton, Stepper, TextField, useToast } from '@/components/ui';
@@ -18,7 +19,7 @@ import { nextMonday, planFromTemplate } from '@/features/plans/planEdits';
 import { templateMeta } from '@/features/plans/TemplateCard';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
-import { readable } from '@/theme/layout';
+import { DENSE_TEXT_MAX, readable, useTextScale } from '@/theme/layout';
 
 const STEPS = ['experience', 'goal', 'equipment', 'days', 'body', 'limits'] as const;
 
@@ -52,6 +53,7 @@ const LIMITS = ['Lower back', 'Knees', 'Shoulders', 'Hips', 'Wrists', 'Ankles'];
 export default function OnboardingScreen() {
   const { colors, scheme } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const { large } = useTextScale();
   const toast = useToast();
   const today = useRepository().today();
   const templatesQuery = useTemplates();
@@ -63,6 +65,20 @@ export default function OnboardingScreen() {
   const [phase, setPhase] = useState<'questions' | 'recommend' | 'tour'>('questions');
   const [answers, setAnswers] = useState<Answers>(onboardingAnswers.get());
   const set = (patch: Partial<Answers>) => setAnswers((a) => ({ ...a, ...patch }));
+  // Each step's heading. Only one shows at a time, so one ref covers them all.
+  const titleRef = useRef<ViewInstance>(null);
+  const firstStep = useRef(true);
+
+  // The pressed Continue / Back button stays put while the content swaps, so VoiceOver would
+  // stay on it. Move to the new heading instead (not on first open: VoiceOver starts at the top).
+  useEffect(() => {
+    if (firstStep.current) {
+      firstStep.current = false;
+      return;
+    }
+    const t = setTimeout(() => titleRef.current && AccessibilityInfo.sendAccessibilityEvent(titleRef.current, 'focus'), 150);
+    return () => clearTimeout(t);
+  }, [step, phase]);
 
   const recommendations = useMemo(() => recommendTemplates(templates ?? [], answers), [templates, answers]);
 
@@ -96,9 +112,12 @@ export default function OnboardingScreen() {
   };
 
   const progress = phase === 'questions' ? Math.max(0, step + 1) / STEPS.length : 1;
+  const progressText = phase !== 'questions' ? 'Questions done' : step < 0 ? 'Not started' : `Question ${step + 1} of ${STEPS.length}`;
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top + spacing.sm, paddingBottom: insets.bottom + spacing.md }]}>
+      {/* This screen paints the page background under the status bar, so its text follows the theme. */}
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <View style={styles.topBar}>
         {phase === 'questions' && step > -1 ? (
           <Pressable onPress={() => setStep(step - 1)} accessibilityRole="button" accessibilityLabel="Back" hitSlop={10}>
@@ -107,11 +126,18 @@ export default function OnboardingScreen() {
         ) : (
           <View style={styles.spacer} />
         )}
-        <View style={[styles.track, { backgroundColor: colors.input }]} accessibilityLabel={`Setup ${Math.round(progress * 100)} percent done`}>
+        <View
+          style={[styles.track, { backgroundColor: colors.input }]}
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel="Setup progress"
+          accessibilityValue={{ min: 0, max: STEPS.length, now: Math.round(progress * STEPS.length), text: progressText }}
+        >
           <View style={[styles.fill, { width: `${progress * 100}%`, backgroundColor: colors.accentText }]} />
         </View>
-        <Pressable onPress={skipAll} accessibilityRole="button" hitSlop={10}>
-          <AppText variant="subhead" weight="600" tone="accent">
+        <Pressable onPress={skipAll} accessibilityRole="button" hitSlop={10} style={styles.skip}>
+          {/* Nav-bar control: grows only to the dense cap so the progress track keeps its room. */}
+          <AppText variant="subhead" weight="600" tone="accent" maxFontSizeMultiplier={DENSE_TEXT_MAX}>
             Skip setup
           </AppText>
         </Pressable>
@@ -120,7 +146,7 @@ export default function OnboardingScreen() {
       <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         {phase === 'questions' && step === -1 && (
           <View style={styles.stack}>
-            <AppText variant="largeTitle">{`Hi ${name}. Let's set up your training.`}</AppText>
+            <Heading titleRef={titleRef} variant="largeTitle" text={`Hi ${name}. Let's set up your training.`} />
             <AppText variant="body" tone="secondary">
               A few quick questions so we can suggest a plan. Every one is optional, and you can change your answers later.
             </AppText>
@@ -128,7 +154,7 @@ export default function OnboardingScreen() {
         )}
 
         {phase === 'questions' && STEPS[step] === 'experience' && (
-          <Question title="How long have you been lifting?">
+          <Question titleRef={titleRef} title="How long have you been lifting?">
             {EXPERIENCE.map((o) => (
               <Option key={o.value} title={o.title} body={o.body} selected={answers.experience === o.value} onPress={() => set({ experience: o.value })} />
             ))}
@@ -136,7 +162,7 @@ export default function OnboardingScreen() {
         )}
 
         {phase === 'questions' && STEPS[step] === 'goal' && (
-          <Question title="What's your main goal?">
+          <Question titleRef={titleRef} title="What's your main goal?">
             {GOALS.map((o) => (
               <Option key={o.value} title={o.title} icon={o.icon} selected={answers.goal === o.value} onPress={() => set({ goal: o.value })} />
             ))}
@@ -144,7 +170,7 @@ export default function OnboardingScreen() {
         )}
 
         {phase === 'questions' && STEPS[step] === 'equipment' && (
-          <Question title="What equipment can you use?" subtitle="Pick everything you have regular access to.">
+          <Question titleRef={titleRef} title="What equipment can you use?" subtitle="Pick everything you have regular access to.">
             <View style={styles.wrap}>
               {EQUIPMENT.map((o) => (
                 <Chip
@@ -160,10 +186,11 @@ export default function OnboardingScreen() {
         )}
 
         {phase === 'questions' && STEPS[step] === 'days' && (
-          <Question title="How many days a week can you train?">
+          <Question titleRef={titleRef} title="How many days a week can you train?">
             <Card>
-              <View style={styles.inline}>
-                <AppText variant="body" style={styles.flex}>
+              {/* Label above the control at accessibility sizes. The control speaks its own label. */}
+              <View style={large ? styles.stack : styles.inline}>
+                <AppText variant="body" style={!large && styles.flex} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                   Days per week
                 </AppText>
                 <Stepper label="Days per week" value={answers.daysPerWeek} onChange={(daysPerWeek) => set({ daysPerWeek })} min={1} max={7} />
@@ -176,17 +203,17 @@ export default function OnboardingScreen() {
         )}
 
         {phase === 'questions' && STEPS[step] === 'body' && (
-          <Question title="About you" subtitle="Optional. Bodyweight is used to count pull-ups, dips, and other bodyweight exercises. It's never shared.">
+          <Question titleRef={titleRef} title="About you" subtitle="Optional. Bodyweight is used to count pull-ups, dips, and other bodyweight exercises. It's never shared.">
             <Card>
               <View style={styles.stack}>
-                <View style={styles.inline}>
-                  <AppText variant="body" style={styles.flex}>
+                <View style={large ? styles.stack : styles.inline}>
+                  <AppText variant="body" style={!large && styles.flex} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                     Height
                   </AppText>
                   <NumberField label="Height in inches" value={answers.heightIn} onChange={(heightIn) => set({ heightIn })} unit="in" width={100} placeholder="70" />
                 </View>
-                <View style={styles.inline}>
-                  <AppText variant="body" style={styles.flex}>
+                <View style={large ? styles.stack : styles.inline}>
+                  <AppText variant="body" style={!large && styles.flex} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                     Bodyweight
                   </AppText>
                   <NumberField label="Bodyweight in pounds" value={answers.bodyweightLb} onChange={(bodyweightLb) => set({ bodyweightLb })} unit="lb" decimal width={100} placeholder="180" />
@@ -197,7 +224,7 @@ export default function OnboardingScreen() {
         )}
 
         {phase === 'questions' && STEPS[step] === 'limits' && (
-          <Question title="Anything to work around?" subtitle="Optional. Later this helps suggest swaps. This app doesn't give medical advice; check with a professional about pain or injuries.">
+          <Question titleRef={titleRef} title="Anything to work around?" subtitle="Optional. Later this helps suggest swaps. This app doesn't give medical advice; check with a professional about pain or injuries.">
             <View style={styles.wrap}>
               {LIMITS.map((l) => (
                 <Chip key={l} label={l} selected={answers.limitations.includes(l)} onPress={() => set({ limitations: answers.limitations.includes(l) ? answers.limitations.filter((x) => x !== l) : [...answers.limitations, l] })} />
@@ -209,17 +236,17 @@ export default function OnboardingScreen() {
 
         {phase === 'recommend' && (
           <View style={styles.stack}>
-            <AppText variant="largeTitle">Plans that fit you</AppText>
+            <Heading titleRef={titleRef} variant="largeTitle" text="Plans that fit you" />
             <AppText variant="body" tone="secondary">
               Based on your answers. Pick one to start, or build your own later in Plans.
             </AppText>
             {templatesQuery.error ? (
               <ErrorState title="Couldn't load plans" message="You can also pick one later in Plans." onRetry={() => templatesQuery.refetch()} />
             ) : templatesQuery.isLoading ? (
-              <>
+              <View style={styles.stack} accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }}>
                 <Skeleton height={190} radius={radius.card} />
                 <Skeleton height={160} radius={radius.card} />
-              </>
+              </View>
             ) : !recommendations.length ? (
               <EmptyState icon="square.stack.3d.up" title="No plans match yet" message="None of the starter plans fit your equipment. Browse them all, or build your own, in Plans." />
             ) : (
@@ -228,12 +255,12 @@ export default function OnboardingScreen() {
                   <View style={styles.stack}>
                     {i === 0 && (
                       <View style={[styles.best, { backgroundColor: colors.accent }]}>
-                        <AppText variant="caption" weight="800" tone="onAccent">
+                        <AppText variant="caption" weight="800" tone="onAccent" maxFontSizeMultiplier={DENSE_TEXT_MAX}>
                           BEST MATCH
                         </AppText>
                       </View>
                     )}
-                    <AppText variant="title3" weight="700">
+                    <AppText variant="title3" weight="700" accessibilityRole="header">
                       {template.name}
                     </AppText>
                     <AppText variant="footnote" weight="600" numeric>
@@ -248,9 +275,16 @@ export default function OnboardingScreen() {
                       </View>
                     ))}
                     {template.workouts.length ? (
-                      <Button title="Start this plan" variant={i === 0 ? 'primary' : 'secondary'} size="sm" loading={savePlan.isPending} onPress={() => startTemplate(template.id)} />
+                      <Button
+                        title="Start this plan"
+                        accessibilityLabel={`Start ${template.name}`}
+                        variant={i === 0 ? 'primary' : 'secondary'}
+                        size="sm"
+                        loading={savePlan.isPending}
+                        onPress={() => startTemplate(template.id)}
+                      />
                     ) : (
-                      <AppText variant="footnote" tone="tertiary">
+                      <AppText variant="footnote" tone="secondary">
                         This program is still being written.
                       </AppText>
                     )}
@@ -264,7 +298,7 @@ export default function OnboardingScreen() {
 
         {phase === 'tour' && (
           <View style={styles.stack}>
-            <AppText variant="largeTitle">Want a quick tour?</AppText>
+            <Heading titleRef={titleRef} variant="largeTitle" text="Want a quick tour?" />
             <AppText variant="body" tone="secondary">
               Five short cards on logging, rest timers, form recording, and progress. About 30 seconds. You can replay it anytime from Profile → About.
             </AppText>
@@ -279,12 +313,20 @@ export default function OnboardingScreen() {
             <Button title="Skip for now" variant="ghost" onPress={skipAll} style={styles.centerSelf} />
           </>
         )}
-        {phase === 'questions' && step >= 0 && (
-          <View style={styles.row}>
-            <Button title="Skip" variant="ghost" onPress={next} />
-            <Button title={step === STEPS.length - 1 ? 'See my plans' : 'Continue'} onPress={next} style={styles.flex} fullWidth />
-          </View>
-        )}
+        {phase === 'questions' &&
+          step >= 0 &&
+          (large ? (
+            // Stacked at accessibility sizes so neither title gets squeezed.
+            <>
+              <Button title={step === STEPS.length - 1 ? 'See my plans' : 'Continue'} onPress={next} fullWidth />
+              <Button title="Skip" accessibilityLabel="Skip this question" variant="ghost" onPress={next} style={styles.centerSelf} />
+            </>
+          ) : (
+            <View style={styles.row}>
+              <Button title="Skip" accessibilityLabel="Skip this question" variant="ghost" onPress={next} />
+              <Button title={step === STEPS.length - 1 ? 'See my plans' : 'Continue'} onPress={next} style={styles.flex} fullWidth />
+            </View>
+          ))}
         {phase === 'tour' && (
           <>
             <Button
@@ -305,12 +347,19 @@ export default function OnboardingScreen() {
   );
 }
 
-function Question({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
+/** A step's heading: a header for VoiceOver, and where focus moves when the step changes. */
+function Heading({ text, variant, titleRef }: { text: string; variant: 'largeTitle' | 'title1'; titleRef: RefObject<ViewInstance | null> }) {
+  return (
+    <View ref={titleRef} accessible accessibilityRole="header" accessibilityLabel={text}>
+      <AppText variant={variant}>{text}</AppText>
+    </View>
+  );
+}
+
+function Question({ title, subtitle, titleRef, children }: { title: string; subtitle?: string; titleRef: RefObject<ViewInstance | null>; children: ReactNode }) {
   return (
     <View style={styles.stack}>
-      <AppText variant="title1" accessibilityRole="header">
-        {title}
-      </AppText>
+      <Heading titleRef={titleRef} variant="title1" text={title} />
       {subtitle && (
         <AppText variant="subhead" tone="secondary">
           {subtitle}
@@ -355,6 +404,9 @@ const styles = StyleSheet.create({
   },
   spacer: {
     width: 20,
+  },
+  skip: {
+    flexShrink: 0,
   },
   track: {
     flex: 1,

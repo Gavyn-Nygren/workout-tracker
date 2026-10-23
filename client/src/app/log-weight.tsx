@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, ErrorState, NumberField, SegmentedControl, Skeleton, ToastViewport, useToast } from '@/components/ui';
 import { useRepository } from '@/data/DataProvider';
@@ -24,7 +24,7 @@ export default function LogWeightSheet() {
   // Wait for entries and units so the prefilled weight and the "replaces" hint are right.
   if (bodyweight.isLoading || preferences.isLoading) {
     return (
-      <View style={[styles.screen, { backgroundColor: colors.cardElevated }]}>
+      <View style={[styles.screen, { backgroundColor: colors.cardElevated }]} accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }}>
         <AppText variant="title2">Log bodyweight</AppText>
         <Skeleton width={150} height={44} radius={radius.md} />
         <Skeleton height={36} radius={radius.sm} />
@@ -50,7 +50,7 @@ function LogWeightForm({ entries, units }: { entries: BodyweightEntry[]; units: 
   const replaces = entries.some((e) => e.date === date);
 
   const submit = async () => {
-    if (!value) return;
+    if (!value || save.isPending) return;
     const now = new Date().toISOString();
     const weightKg = units === 'imperial' ? lbToKg(value) : value;
     if (!(await succeeded(save.mutateAsync({ id: newId('bw'), date, weightKg, createdAt: now, updatedAt: now })))) return;
@@ -59,32 +59,40 @@ function LogWeightForm({ entries, units }: { entries: BodyweightEntry[]; units: 
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.cardElevated }]}>
-      <AppText variant="title2">Log bodyweight</AppText>
-      <View style={styles.row}>
-        <NumberField label="Bodyweight" value={value} onChange={setValue} unit={unitLabel(units)} decimal width={150} placeholder="180" />
-      </View>
-      <SegmentedControl
-        label="Date"
-        options={[
-          { value: 'today', label: `Today · ${formatShortDate(today).split(', ')[1]}` },
-          { value: 'yesterday', label: 'Yesterday' },
-        ]}
-        value={day}
-        onChange={setDay}
-      />
-      <AppText variant="footnote" tone="secondary">
-        {replaces ? 'This replaces the weigh-in already logged for that day.' : 'Weigh in at a similar time each day for the steadiest trend.'}
-      </AppText>
-      <Button title="Save" fullWidth disabled={!value} loading={save.isPending} onPress={submit} />
+    // Scrolls, so Save stays reachable at large text sizes.
+    <View style={[styles.fill, { backgroundColor: colors.cardElevated }]} onAccessibilityEscape={() => router.back()}>
+      <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+        <AppText variant="title2" accessibilityRole="header">
+          Log bodyweight
+        </AppText>
+        <View style={styles.row}>
+          <NumberField label="Bodyweight" value={value} onChange={setValue} unit={unitLabel(units)} decimal width={150} placeholder="180" />
+        </View>
+        <SegmentedControl
+          label="Date"
+          options={[
+            { value: 'today', label: `Today · ${formatShortDate(today).split(', ')[1]}` },
+            { value: 'yesterday', label: 'Yesterday' },
+          ]}
+          value={day}
+          onChange={setDay}
+        />
+        <AppText variant="footnote" tone="secondary">
+          {replaces ? 'This replaces the weigh-in already logged for that day.' : 'Weigh in at a similar time each day for the steadiest trend.'}
+        </AppText>
+        <Button title="Save" fullWidth disabled={!value} loading={save.isPending} onPress={submit} />
+      </ScrollView>
       <ToastViewport bottomOffset={spacing.lg} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
+  fill: {
     flex: 1,
+  },
+  screen: {
+    flexGrow: 1,
     padding: spacing.xl,
     paddingTop: spacing.xxl,
     gap: spacing.lg,

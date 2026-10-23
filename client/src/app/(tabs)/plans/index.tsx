@@ -43,7 +43,7 @@ function MyPlans() {
   const today = useRepository().today();
   const { data: plans, isLoading, error, refetch } = usePlans();
   if (error) return <ErrorState title="Couldn't load your plans" onRetry={refetch} />;
-  if (isLoading) return <Skeleton height={180} radius={radius.card} />;
+  if (isLoading) return <Loading height={180} />;
 
   const active = (plans ?? []).filter((p) => p.status === 'active');
   const inactive = (plans ?? []).filter((p) => p.status !== 'active');
@@ -89,7 +89,7 @@ function Templates() {
       {error ? (
         <ErrorState title="Couldn't load templates" onRetry={refetch} />
       ) : isLoading ? (
-        <Skeleton height={160} radius={radius.card} />
+        <Loading height={160} />
       ) : (
         <Grid>
           {list.map((t) => (
@@ -116,6 +116,15 @@ function Exercises() {
         onPick={(e) => router.push({ pathname: '/plans/exercise', params: { id: e.id } })}
         accessory={<Button title="New custom exercise" variant="secondary" icon="plus" fullWidth onPress={() => router.push('/plans/exercise-form')} />}
       />
+    </View>
+  );
+}
+
+/** A card-shaped placeholder that VoiceOver reads as "Loading". */
+function Loading({ height }: { height: number }) {
+  return (
+    <View accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }}>
+      <Skeleton height={height} radius={radius.card} />
     </View>
   );
 }

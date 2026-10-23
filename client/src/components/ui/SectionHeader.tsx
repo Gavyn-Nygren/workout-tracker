@@ -5,6 +5,8 @@ import { AppText } from './AppText';
 
 type Props = {
   title: string;
+  /** Spoken title when the visible one has abbreviations, e.g. "Key exercises, estimated one-rep max". */
+  accessibilityLabel?: string;
   actionLabel?: string;
   onAction?: () => void;
   /** Spoken label for the action when "Add" or "Edit" alone is ambiguous, e.g. "Add goal". */
@@ -12,10 +14,10 @@ type Props = {
 };
 
 /** Uppercase label above a group of content, with an optional trailing action. */
-export function SectionHeader({ title, actionLabel, onAction, actionAccessibilityLabel }: Props) {
+export function SectionHeader({ title, accessibilityLabel, actionLabel, onAction, actionAccessibilityLabel }: Props) {
   return (
     <View style={styles.row}>
-      <AppText variant="label" tone="secondary" accessibilityRole="header" style={styles.title}>
+      <AppText variant="label" tone="secondary" accessibilityRole="header" accessibilityLabel={accessibilityLabel} style={styles.title}>
         {title}
       </AppText>
       {actionLabel && onAction && (

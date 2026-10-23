@@ -7,13 +7,13 @@ import { addDays } from '@/data/dates';
 import { succeeded, useBodyweight, useExercises, useFormReports, useGoals, useSaveGoal } from '@/data/hooks';
 import type { Exercise, FormMovementFamily, Goal, Joint, UnitSystem } from '@/data/types';
 import { kgToLb, lbToKg } from '@/data/units';
-import { formatShortDate, unitLabel } from '@/lib/format';
+import { formatShortDate, plural, unitLabel } from '@/lib/format';
 import { newId } from '@/lib/id';
 import { reportAngle } from '@/features/home/goals';
 import { useHomeData } from '@/features/home/useHomeData';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
-import { readable } from '@/theme/layout';
+import { DENSE_TEXT_MAX, readable, useTextScale } from '@/theme/layout';
 
 type GoalType = Goal['type'];
 const JOINTS: Record<FormMovementFamily, Joint[]> = { squat: ['knee', 'hip', 'ankle'], lunge: ['knee', 'hip', 'ankle'], deadlift: ['hip', 'knee'], calf_raise: ['ankle'] };
@@ -30,7 +30,7 @@ export default function GoalScreen() {
   const queries = [useExercises(), useFormReports(), useBodyweight(), ...(id ? [goals] : [])];
 
   const shell = (body: ReactNode) => (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+    <View style={[styles.screen, { backgroundColor: colors.background }]} onAccessibilityEscape={() => router.back()}>
       <Bar title={id ? 'Edit goal' : 'New goal'} canSave={false} />
       {body}
     </View>
@@ -50,19 +50,24 @@ export default function GoalScreen() {
   return <GoalForm existing={existing} home={home} />;
 }
 
-/** Cancel / title / Save. Shown while loading too, so the sheet can always be closed. */
+/**
+ * Cancel / title / Save. Shown while loading too, so the sheet can always be closed. Like a native
+ * nav bar, its text stops growing at 1.5×.
+ */
 function Bar({ title, canSave, onSave }: { title: string; canSave: boolean; onSave?: () => void }) {
   const { colors } = useAppTheme();
   return (
     <View style={[styles.bar, { borderBottomColor: colors.border }]}>
       <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={10}>
-        <AppText variant="body" tone="accent">
+        <AppText variant="body" tone="accent" maxFontSizeMultiplier={DENSE_TEXT_MAX}>
           Cancel
         </AppText>
       </Pressable>
-      <AppText variant="headline">{title}</AppText>
+      <AppText variant="headline" accessibilityRole="header" maxFontSizeMultiplier={DENSE_TEXT_MAX} style={styles.barTitle}>
+        {title}
+      </AppText>
       <Pressable onPress={onSave} disabled={!canSave} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={10}>
-        <AppText variant="body" weight="700" tone={canSave ? 'accent' : 'tertiary'}>
+        <AppText variant="body" weight="700" tone={canSave ? 'accent' : 'tertiary'} maxFontSizeMultiplier={DENSE_TEXT_MAX}>
           Save
         </AppText>
       </Pressable>
@@ -72,8 +77,12 @@ function Bar({ title, canSave, onSave }: { title: string; canSave: boolean; onSa
 
 function GoalForm({ existing, home }: { existing?: Goal; home: ReturnType<typeof useHomeData> }) {
   const { colors } = useAppTheme();
+  const { large } = useTextScale();
   const toast = useToast();
   const saveGoal = useSaveGoal();
+  // Large text: labels sit above their Stepper or field instead of being squeezed beside it.
+  const inline = [styles.inline, large && styles.stackedField];
+  const inlineLabel = !large && styles.flex;
   const units: UnitSystem = home.units;
   const exercises = [...home.exercisesById.values()].sort((a, b) => a.name.localeCompare(b.name));
   const toDisplay = (kg: number) => Math.round((units === 'imperial' ? kgToLb(kg) : kg) * 10) / 10;
@@ -129,7 +138,8 @@ function GoalForm({ existing, home }: { existing?: Goal; home: ReturnType<typeof
     (type === 'form' && Boolean(formExercise));
 
   const save = async () => {
-    if (!valid) return;
+    // Guards a double tap while the first save is still running.
+    if (!valid || saveGoal.isPending) return;
     const now = new Date().toISOString();
     const base = { id: existing?.id ?? newId('goal'), title, deadline: deadlineDate, createdAt: existing?.createdAt ?? now, updatedAt: now };
     let goal: Goal;
@@ -151,15 +161,16 @@ function GoalForm({ existing, home }: { existing?: Goal; home: ReturnType<typeof
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <Bar title={existing ? 'Edit goal' : 'New goal'} canSave={valid} onSave={save} />
+    <View style={[styles.screen, { backgroundColor: colors.background }]} onAccessibilityEscape={() => router.back()}>
+      <Bar title={existing ? 'Edit goal' : 'New goal'} canSave={valid && !saveGoal.isPending} onSave={save} />
 
       <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <SegmentedControl
           label="Goal type"
           options={[
             { value: 'lift', label: 'Lift' },
-            { value: 'frequency', label: 'Frequency' },
+            // "Frequency" truncates in a four-way control even at the default text size.
+            { value: 'frequency', label: 'Weekly' },
             { value: 'bodyweight', label: 'Weight' },
             { value: 'form', label: 'Form' },
           ]}
@@ -194,18 +205,18 @@ function GoalForm({ existing, home }: { existing?: Goal; home: ReturnType<typeof
               onChange={setLiftKind}
             />
             <Card>
-              <View style={styles.inline}>
-                <AppText variant="body" style={styles.flex}>
+              <View style={inline}>
+                <AppText variant="body" style={inlineLabel}>
                   {liftKind === 'e1rm' ? 'Target e1RM' : 'Target weight'}
                 </AppText>
                 <NumberField label="Target weight" value={liftLoad} onChange={setLiftLoad} unit={unitLabel(units)} decimal width={110} placeholder="225" />
               </View>
               {liftKind === 'load_reps' && (
-                <View style={[styles.inline, styles.spaced]}>
-                  <AppText variant="body" style={styles.flex}>
+                <View style={[inline, styles.spaced]}>
+                  <AppText variant="body" style={inlineLabel}>
                     For at least
                   </AppText>
-                  <Stepper label="Target reps" value={liftReps} onChange={setLiftReps} min={1} max={30} unit="reps" />
+                  <Stepper label="Target reps" value={liftReps} onChange={setLiftReps} min={1} max={30} unit="reps" spokenValue={(v) => plural(v, 'rep')} />
                 </View>
               )}
             </Card>
@@ -214,22 +225,22 @@ function GoalForm({ existing, home }: { existing?: Goal; home: ReturnType<typeof
 
         {type === 'frequency' && (
           <Card>
-            <View style={styles.inline}>
-              <View style={styles.flex}>
+            <View style={inline}>
+              <View style={inlineLabel}>
                 <AppText variant="body">Workouts per week</AppText>
                 <AppText variant="footnote" tone="secondary">
                   Also sets your weekly streak target.
                 </AppText>
               </View>
-              <Stepper label="Workouts per week" value={perWeek} onChange={setPerWeek} min={1} max={14} />
+              <Stepper label="Workouts per week" value={perWeek} onChange={setPerWeek} min={1} max={14} spokenValue={(v) => plural(v, 'workout')} />
             </View>
           </Card>
         )}
 
         {type === 'bodyweight' && (
           <Card>
-            <View style={styles.inline}>
-              <AppText variant="body" style={styles.flex}>
+            <View style={inline}>
+              <AppText variant="body" style={inlineLabel}>
                 Target bodyweight
               </AppText>
               <NumberField label="Target bodyweight" value={targetWeight} onChange={setTargetWeight} unit={unitLabel(units)} decimal width={110} placeholder="180" />
@@ -251,14 +262,14 @@ function GoalForm({ existing, home }: { existing?: Goal; home: ReturnType<typeof
             <SectionHeader title="Joint" />
             <SegmentedControl label="Joint" options={joints.map((j) => ({ value: j, label: JOINT_LABEL[j] }))} value={joint} onChange={setJoint} />
             <Card>
-              <View style={styles.inline}>
-                <View style={styles.flex}>
+              <View style={inline}>
+                <View style={inlineLabel}>
                   <AppText variant="body">Target angle at the bottom</AppText>
                   <AppText variant="footnote" tone="secondary">
                     {currentAngle !== undefined ? `Your last recording: ${Math.round(currentAngle)}°. Smaller is deeper.` : 'Record a set to see your current angle.'}
                   </AppText>
                 </View>
-                <Stepper label="Target angle" value={targetDeg} onChange={setTargetDeg} min={20} max={180} unit="°" />
+                <Stepper label="Target angle" value={targetDeg} onChange={setTargetDeg} min={20} max={180} unit="°" spokenValue={(v) => plural(v, 'degree')} />
               </View>
             </Card>
             <AppText variant="footnote" tone="secondary" style={styles.hint}>
@@ -275,9 +286,9 @@ function GoalForm({ existing, home }: { existing?: Goal; home: ReturnType<typeof
               options={[
                 { value: 'none', label: 'None' },
                 ...(existing?.deadline ? [{ value: 'keep' as const, label: formatShortDate(existing.deadline).split(', ')[1] }] : []),
-                { value: '28', label: '4 wk' },
-                { value: '56', label: '8 wk' },
-                { value: '84', label: '12 wk' },
+                { value: '28', label: '4 wk', accessibilityLabel: '4 weeks' },
+                { value: '56', label: '8 wk', accessibilityLabel: '8 weeks' },
+                { value: '84', label: '12 wk', accessibilityLabel: '12 weeks' },
               ]}
               value={deadline}
               onChange={setDeadline}
@@ -328,6 +339,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+  },
+  stackedField: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  barTitle: {
+    flexShrink: 1,
+    textAlign: 'center',
   },
   spaced: {
     marginTop: spacing.md,

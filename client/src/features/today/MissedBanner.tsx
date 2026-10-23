@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Card, Icon } from '@/components/ui';
 import { daysBetween } from '@/data/dates';
 import type { ISODate } from '@/data/types';
 import { useHaptics } from '@/hooks/useHaptics';
 import { formatWeekday, plural } from '@/lib/format';
+import { useTextScale } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import type { DayItem } from './agenda';
@@ -22,22 +23,41 @@ type Props = {
  */
 export function MissedBanner({ missed, today, onView }: Props) {
   const { colors } = useAppTheme();
+  const { large } = useTextScale();
   const haptics = useHaptics();
   const [state, setState] = useState<'asking' | 'pushed' | 'dismissed'>('asking');
   const days = daysBetween(missed.date, today);
   const planName = missed.plan?.name ?? 'this plan';
+  const weekday = formatWeekday(missed.date);
+  const pushedText = `${missed.name} moved to today, and the rest of ${planName} moved ${plural(days, 'day')} later.`;
+
+  // The pressed button disappears with the change, so VoiceOver confirms what happened.
+  const announce = (message: string) => AccessibilityInfo.announceForAccessibility(message);
 
   if (state === 'dismissed') return null;
 
   if (state === 'pushed') {
     return (
       <Card>
-        <View style={styles.row}>
-          <Icon name="checkmark.circle.fill" color={colors.successFill} size={22} />
-          <AppText variant="subhead" style={styles.flex}>
-            {`${missed.name} moved to today, and the rest of ${planName} moved ${plural(days, 'day')} later.`}
-          </AppText>
-          <Button title="Undo" variant="ghost" size="sm" onPress={() => setState('asking')} />
+        {/* Large text: Undo goes under the message instead of squeezing it into a narrow column. */}
+        <View style={[styles.row, large && styles.stacked]}>
+          <View style={[styles.row, styles.flexRow]}>
+            <Icon name="checkmark.circle.fill" color={colors.successFill} size={22} />
+            <AppText variant="subhead" style={styles.flex}>
+              {pushedText}
+            </AppText>
+          </View>
+          <Button
+            title="Undo"
+            variant="ghost"
+            size="sm"
+            accessibilityLabel="Undo push"
+            onPress={() => {
+              setState('asking');
+              announce(`Push undone. ${missed.name} stays on ${weekday}.`);
+            }}
+            style={large && styles.indent}
+          />
         </View>
       </Card>
     );
@@ -47,15 +67,16 @@ export function MissedBanner({ missed, today, onView }: Props) {
     <Card>
       <View style={styles.stack}>
         <View style={styles.row}>
-          <Icon name="exclamationmark.triangle.fill" color={colors.warningFill} size={22} />
+          {/* warningText: raw amber is 1.8:1 on a white card (the same amber in dark mode). */}
+          <Icon name="exclamationmark.triangle.fill" color={colors.warningText} size={22} />
           <View style={styles.flex}>
-            <AppText variant="headline">{`You missed ${missed.name} on ${formatWeekday(missed.date)}`}</AppText>
+            <AppText variant="headline">{`You missed ${missed.name} on ${weekday}`}</AppText>
             <AppText variant="subhead" tone="secondary">
-              {`Push ${planName} forward ${plural(days, 'day')} so ${missed.name} lands on today? If you keep the schedule, you can still do it from ${formatWeekday(missed.date)}.`}
+              {`Push ${planName} forward ${plural(days, 'day')} so ${missed.name} lands on today? If you keep the schedule, you can still do it from ${weekday}.`}
             </AppText>
           </View>
         </View>
-        <View style={styles.buttons}>
+        <View style={[styles.buttons, !large && styles.indent]}>
           <Button
             title={`Push forward ${plural(days, 'day')}`}
             variant="secondary"
@@ -63,10 +84,19 @@ export function MissedBanner({ missed, today, onView }: Props) {
             onPress={() => {
               haptics.tap();
               setState('pushed');
+              announce(pushedText);
             }}
           />
-          <Button title="Keep schedule" variant="ghost" size="sm" onPress={() => setState('dismissed')} />
-          <Button title={`View ${formatWeekday(missed.date).slice(0, 3)}`} variant="ghost" size="sm" onPress={onView} />
+          <Button
+            title="Keep schedule"
+            variant="ghost"
+            size="sm"
+            onPress={() => {
+              setState('dismissed');
+              announce('Schedule kept.');
+            }}
+          />
+          <Button title={`View ${weekday.slice(0, 3)}`} accessibilityLabel={`View ${weekday}`} variant="ghost" size="sm" onPress={onView} />
         </View>
       </View>
     </Card>
@@ -82,12 +112,23 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.md,
   },
+  stacked: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+  },
+  flexRow: {
+    flex: 1,
+  },
   buttons: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingLeft: 22 + spacing.md,
+  },
+  // Lines up with the text, past the 22 pt icon.
+  indent: {
+    marginLeft: 22 + spacing.md,
   },
   flex: {
     flex: 1,

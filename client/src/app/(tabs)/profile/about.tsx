@@ -13,7 +13,9 @@ export default function AboutScreen() {
   return (
     <ScrollView contentContainerStyle={[styles.content, readable]}>
       <View style={styles.header}>
-        <AppText variant="title2">{Constants.expoConfig?.name ?? 'Exercise Tracker'}</AppText>
+        <AppText variant="title2" accessibilityRole="header">
+          {Constants.expoConfig?.name ?? 'Exercise Tracker'}
+        </AppText>
         <AppText variant="subhead" tone="secondary">{`Version ${Constants.expoConfig?.version ?? '1.0.0'} · preview build`}</AppText>
         <AppText variant="subhead" tone="secondary" style={styles.center}>
           For independent lifters. Logging, plans, progress, and on-device form analysis.

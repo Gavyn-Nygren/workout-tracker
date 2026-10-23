@@ -1,7 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Linking, StyleSheet, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Icon, ToastViewport, useToast } from '@/components/ui';
 import type { Preferences } from '@/data/types';
@@ -51,34 +51,37 @@ export default function NotificationPermissionScreen() {
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.cardElevated }]}>
-      <View style={[styles.icon, { backgroundColor: colors.accentSubtle }]}>
-        <Icon name="bell.badge.fill" color={colors.accentText} size={32} />
-      </View>
-      <AppText variant="title2" style={styles.center}>
-        Stay on track without checking the app
-      </AppText>
-      <View style={styles.list}>
-        {BENEFITS.map((b) => (
-          <View key={b.text} style={styles.item}>
-            <Icon name={b.icon} color={colors.accentText} size={18} />
-            <AppText variant="subhead" style={styles.flex}>
-              {b.text}
+    <View style={[styles.flex, { backgroundColor: colors.cardElevated }]}>
+      {/* The sheet opens full height at large text sizes; the content scrolls so the buttons stay reachable. */}
+      <ScrollView contentContainerStyle={styles.screen}>
+        <View style={[styles.icon, { backgroundColor: colors.accentSubtle }]}>
+          <Icon name="bell.badge.fill" color={colors.accentText} size={32} />
+        </View>
+        <AppText variant="title2" accessibilityRole="header" style={styles.center}>
+          Stay on track without checking the app
+        </AppText>
+        <View style={styles.list}>
+          {BENEFITS.map((b) => (
+            <View key={b.text} style={styles.item}>
+              <Icon name={b.icon} color={colors.accentText} size={18} />
+              <AppText variant="subhead" style={styles.flex}>
+                {b.text}
+              </AppText>
+            </View>
+          ))}
+        </View>
+        {blocked ? (
+          <>
+            <AppText variant="footnote" tone="secondary" style={styles.center}>
+              Notifications are turned off for this app in iOS Settings.
             </AppText>
-          </View>
-        ))}
-      </View>
-      {blocked ? (
-        <>
-          <AppText variant="footnote" tone="secondary" style={styles.center}>
-            Notifications are turned off for this app in iOS Settings.
-          </AppText>
-          <Button title="Open iOS Settings" fullWidth onPress={() => Linking.openSettings()} />
-        </>
-      ) : (
-        <Button title="Turn on notifications" fullWidth onPress={allow} />
-      )}
-      <Button title="Not now" variant="ghost" onPress={() => router.back()} style={styles.centerSelf} />
+            <Button title="Open iOS Settings" fullWidth onPress={() => Linking.openSettings()} />
+          </>
+        ) : (
+          <Button title="Turn on notifications" fullWidth onPress={allow} />
+        )}
+        <Button title="Not now" variant="ghost" onPress={() => router.back()} style={styles.centerSelf} />
+      </ScrollView>
       <ToastViewport bottomOffset={spacing.lg} />
     </View>
   );
@@ -86,7 +89,6 @@ export default function NotificationPermissionScreen() {
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
     padding: spacing.xl,
     paddingTop: spacing.xxxl,
     gap: spacing.md,

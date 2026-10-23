@@ -6,8 +6,8 @@ import { TAB_BAR_CLEARANCE, ToastProvider, ToastViewport } from '@/components/ui
 import { DataProvider } from '@/data/DataProvider';
 import { SaveErrorToasts } from '@/data/SaveErrorToasts';
 import { authStore } from '@/features/auth/authStore';
-import { ActiveWorkoutProvider, useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
-import { MINI_BAR_HEIGHT } from '@/features/workout/MiniBar';
+import { ActiveWorkoutProvider } from '@/features/workout/ActiveWorkoutProvider';
+import { useMiniBarHeight } from '@/features/workout/MiniBar';
 import { useTextScale } from '@/theme/layout';
 import { AppThemeProvider, useAppTheme } from '@/theme/ThemeProvider';
 import { radius } from '@/theme/tokens';
@@ -27,7 +27,7 @@ export default function RootLayout() {
 function NavigationRoot() {
   const { scheme, colors } = useAppTheme();
   const auth = authStore.use();
-  const { workout } = useActiveWorkout();
+  const miniBarHeight = useMiniBarHeight();
   const { large } = useTextScale();
 
   const navigationTheme = useMemo<Theme>(() => {
@@ -109,7 +109,7 @@ function NavigationRoot() {
           </Stack.Protected>
         </Stack>
         {/* Clear the in-progress workout bar too, when it's showing above the tab bar. */}
-        <ToastViewport bottomOffset={TAB_BAR_CLEARANCE + (workout ? MINI_BAR_HEIGHT : 0)} />
+        <ToastViewport bottomOffset={TAB_BAR_CLEARANCE + miniBarHeight} />
         <SaveErrorToasts />
       </ToastProvider>
     </ThemeProvider>

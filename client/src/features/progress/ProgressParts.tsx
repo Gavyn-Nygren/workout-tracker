@@ -12,7 +12,7 @@ export function RangeChips() {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
       {RANGES.map((r) => (
-        <Chip key={r.value} label={r.label} selected={range === r.value} onPress={() => rangeStore.set(r.value)} />
+        <Chip key={r.value} label={r.label} accessibilityLabel={r.spoken} role="radio" selected={range === r.value} onPress={() => rangeStore.set(r.value)} />
       ))}
     </ScrollView>
   );
@@ -21,15 +21,17 @@ export function RangeChips() {
 /**
  * A change readout. Increases in green (strength metrics); decreases neutral, never red.
  * `neutral` greys both directions, for bodyweight where neither way is "better".
+ * `accessibilityLabel` is the spoken version, e.g. "Up 15 pounds since October 1".
  */
-export function Change({ text, delta, neutral }: { text: string; delta: number; neutral?: boolean }) {
+export function Change({ text, delta, neutral, accessibilityLabel }: { text: string; delta: number; neutral?: boolean; accessibilityLabel?: string }) {
   const { colors } = useAppTheme();
   const up = delta > 0.001;
   const good = up && !neutral;
   return (
     <View style={styles.change}>
       <Icon name={up ? 'arrowtriangle.up.fill' : delta < -0.001 ? 'arrowtriangle.down.fill' : 'equal'} color={good ? colors.successFill : colors.textTertiary} size={10} />
-      <AppText variant="footnote" weight="700" tone={good ? 'success' : 'secondary'} numeric>
+      {/* Shrinks and wraps beside a chart instead of running into it at large text sizes. */}
+      <AppText variant="footnote" weight="700" tone={good ? 'success' : 'secondary'} numeric style={styles.changeText} accessibilityLabel={accessibilityLabel}>
         {text}
       </AppText>
     </View>
@@ -60,6 +62,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
+  },
+  changeText: {
+    flexShrink: 1,
   },
   legend: {
     flexDirection: 'row',

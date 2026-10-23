@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
+import { useState, type Ref } from 'react';
+import { StyleSheet, TextInput, View, type TextInputInstance, type TextInputProps } from 'react-native';
 
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing, typography } from '@/theme/tokens';
@@ -10,10 +10,12 @@ type Props = Omit<TextInputProps, 'style'> & {
   /** Shown under the field in the error color, and announced by VoiceOver. */
   error?: string;
   hint?: string;
+  /** Forwarded to the input, e.g. to move VoiceOver focus to it after a failed submit. */
+  ref?: Ref<TextInputInstance>;
 };
 
 /** Labeled single-line text input: a filled box that gains a border on focus or error. */
-export function TextField({ label, error, hint, onFocus, onBlur, ...input }: Props) {
+export function TextField({ label, error, hint, onFocus, onBlur, ref, ...input }: Props) {
   const { colors, scheme } = useAppTheme();
   const [focused, setFocused] = useState(false);
 
@@ -26,6 +28,7 @@ export function TextField({ label, error, hint, onFocus, onBlur, ...input }: Pro
       </AppText>
       <TextInput
         {...input}
+        ref={ref}
         accessibilityLabel={error ? `${label}, error: ${error}` : label}
         accessibilityHint={hint}
         keyboardAppearance={scheme}

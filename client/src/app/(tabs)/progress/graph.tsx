@@ -5,14 +5,14 @@ import { FlatList, Pressable, ScrollView, StyleSheet, useWindowDimensions, View 
 import { LineChart } from '@/components/charts/LineChart';
 import { AppText, Button, Card, Chip, EmptyState, ErrorState, Icon, NotFoundState, ScreenState, Skeleton, useToast } from '@/components/ui';
 import { useExercises, useSessions } from '@/data/hooks';
-import { formatMonthDay, formatShortDate, plural } from '@/lib/format';
+import { formatLongDate, formatMonthDay, formatShortDate } from '@/lib/format';
 import { Change, RangeChips } from '@/features/progress/ProgressParts';
 import { addGraph, graphsStore, pinnedStore, removeGraph, togglePinned } from '@/features/progress/progressPrefs';
-import { changeOverTime, exerciseSeries, METRICS, metricLabel, metricShort, toDisplay, type Metric, type Point } from '@/features/progress/series';
-import { formatMetric, formatMetricDelta, useProgressData } from '@/features/progress/useProgressData';
+import { changeOverTime, describeTrend, exerciseSeries, METRICS, metricLabel, metricShort, toDisplay, type Metric, type Point } from '@/features/progress/series';
+import { formatMetric, formatMetricDelta, spokenMetric, spokenMetricDelta, useProgressData } from '@/features/progress/useProgressData';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
-import { readable } from '@/theme/layout';
+import { readable, useTextScale } from '@/theme/layout';
 
 /**
  * Full graph. Opened from Your graphs it pages through every saved graph (swipe, spec 2.10);
@@ -104,6 +104,7 @@ function GraphPage({
   onScrubbingChange?: (scrubbing: boolean) => void;
 }) {
   const { colors } = useAppTheme();
+  const { large } = useTextScale();
   const toast = useToast();
   const data = useProgressData();
   const sessions = useSessions();
@@ -120,12 +121,14 @@ function GraphPage({
   const change = changeOverTime(points);
   const saved = graphs.some((g) => g.exerciseId === exerciseId && g.metric === metric);
   const sessionName = (id?: string) => data.sessions.find((s) => s.id === id)?.name;
+  const speak = (v: number) => spokenMetric(v, metric, data.units);
+  const spokenPoint = (p: Point) => `${formatLongDate(p.date)}${sessionName(p.sessionId) ? `, ${sessionName(p.sessionId)}` : ''}: ${speak(p.value)}`;
 
   const failed = [sessions, exercises].filter((q) => q.error);
   if (failed.length) return <ErrorState fill title="Couldn't load this graph" onRetry={() => failed.forEach((q) => q.refetch())} />;
   if (sessions.isLoading || exercises.isLoading) {
     return (
-      <View style={[styles.content, readable]}>
+      <View style={[styles.content, readable]} accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }}>
         <View style={[styles.readout, styles.readoutSkeleton]}>
           <Skeleton width="55%" height={26} />
           <Skeleton width="35%" height={16} />
@@ -142,7 +145,9 @@ function GraphPage({
   return (
     <ScrollView contentContainerStyle={[styles.content, readable]} scrollEnabled={!scrubbing}>
       <View style={styles.readout} accessibilityLiveRegion="polite">
-        <AppText variant="title2">{exercise?.name ?? 'Exercise'}</AppText>
+        <AppText variant="title2" accessibilityRole="header">
+          {exercise?.name ?? 'Exercise'}
+        </AppText>
         <AppText variant="subhead" tone="secondary">
           {metricLabel(metric)}
         </AppText>
@@ -158,7 +163,13 @@ function GraphPage({
             No sets in this range.
           </AppText>
         )}
-        {!selected && change && <Change text={`${formatMetricDelta(change.delta, metric, data.units)} since ${formatMonthDay(change.since)}`} delta={change.delta} />}
+        {!selected && change && (
+          <Change
+            text={`${formatMetricDelta(change.delta, metric, data.units)} since ${formatMonthDay(change.since)}`}
+            accessibilityLabel={`${spokenMetricDelta(change.delta, metric, data.units)} since ${formatLongDate(change.since)}`}
+            delta={change.delta}
+          />
+        )}
       </View>
 
       <RangeChips />
@@ -174,12 +185,15 @@ function GraphPage({
               setScrubbing(on);
               onScrubbingChange?.(on);
             }}
-            label={`${exercise?.name} ${metricLabel(metric)}: ${plural(points.length, 'session')}, latest ${latest ? formatMetric(latest.value, metric, data.units) : 'none'}. Values are listed below.`}
+            label={`${exercise?.name ?? 'Exercise'} ${metricLabel(metric)}, ${describeTrend(points, speak)}. Values are listed below.`}
+            describePoint={spokenPoint}
+            accessibilityHint="Swipe up or down to step through sessions."
           />
         ) : (
           <EmptyState icon="chart.xyaxis.line" title="No data in this range" message="Try a longer range, or log this exercise in a workout." />
         )}
-        <AppText variant="caption" tone="tertiary" style={styles.hint}>
+        {/* VoiceOver users step through the chart instead; its hint says how. */}
+        <AppText variant="caption" tone="secondary" style={styles.hint} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           Drag across the chart to read any session.
         </AppText>
       </Card>
@@ -187,7 +201,7 @@ function GraphPage({
       {switchable && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
           {METRICS.map((m) => (
-            <Chip key={m.value} label={m.short} selected={metric === m.value} onPress={() => setMetric(m.value)} />
+            <Chip key={m.value} label={m.short} accessibilityLabel={metricLabel(m.value)} role="radio" selected={metric === m.value} onPress={() => setMetric(m.value)} />
           ))}
         </ScrollView>
       )}
@@ -223,20 +237,28 @@ function GraphPage({
 
       {points.length > 0 && (
         <Card padding="none">
-          <View style={[styles.tableRow, { borderBottomColor: colors.border }]}>
-            <AppText variant="caption" weight="700" tone="tertiary" style={styles.flex}>
-              SESSION
+          {/* Each row reads as one item ("date, session: value"), so the header is for sight only. */}
+          <View style={[styles.tableRow, { borderBottomColor: colors.border }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <AppText variant="caption" weight="700" tone="secondary" style={styles.flex}>
+              {large ? `SESSION · ${metricShort(metric).toUpperCase()}` : 'SESSION'}
             </AppText>
-            <AppText variant="caption" weight="700" tone="tertiary">
-              {metricShort(metric).toUpperCase()}
-            </AppText>
+            {!large && (
+              <AppText variant="caption" weight="700" tone="secondary">
+                {metricShort(metric).toUpperCase()}
+              </AppText>
+            )}
           </View>
           {[...points].reverse().map((p, i, arr) => (
-            <View key={`${p.date}-${i}`} style={[styles.tableRow, i < arr.length - 1 && { borderBottomColor: colors.border }]}>
-              <AppText variant="subhead" style={styles.flex} numberOfLines={1}>
+            <View
+              key={`${p.date}-${i}`}
+              accessible
+              accessibilityLabel={spokenPoint(p)}
+              style={[large ? styles.tableRowStacked : styles.tableRow, i < arr.length - 1 && { borderBottomColor: colors.border }]}
+            >
+              <AppText variant="subhead" style={large ? undefined : styles.flex} numberOfLines={large ? undefined : 2}>
                 {`${formatShortDate(p.date)}${sessionName(p.sessionId) ? ` · ${sessionName(p.sessionId)}` : ''}`}
               </AppText>
-              <AppText variant="subhead" weight="700" numeric>
+              <AppText variant="subhead" weight="700" numeric style={large ? undefined : styles.shrink}>
                 {formatMetric(p.value, metric, data.units)}
               </AppText>
             </View>
@@ -280,6 +302,18 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'transparent',
+  },
+  // Large text: the session on one line, its value under it.
+  tableRowStacked: {
+    gap: 2,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'transparent',
+  },
+  shrink: {
+    flexShrink: 1,
+    textAlign: 'right',
   },
   flex: {
     flex: 1,

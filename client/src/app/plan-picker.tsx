@@ -48,13 +48,16 @@ export default function PlanExercisePicker() {
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.cardElevated }]}>
+    // The page background, not the sheet color, so the list cards stand out (iOS grouped style).
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <View style={styles.header}>
           {loading ? (
             <Skeleton width="60%" height={28} />
           ) : (
-            <AppText variant="title2">{mode === 'swap' ? `Swap ${current?.name ?? 'exercise'}` : `Add to ${workout?.name ?? 'workout'}`}</AppText>
+            <AppText variant="title2" accessibilityRole="header">
+              {mode === 'swap' ? `Swap ${current?.name ?? 'exercise'}` : `Add to ${workout?.name ?? 'workout'}`}
+            </AppText>
           )}
           <AppText variant="subhead" tone="secondary">
             {mode === 'swap' ? 'Keeps the sets, reps, and progression.' : 'Starts with 3 × 8–12; adjust it after.'}

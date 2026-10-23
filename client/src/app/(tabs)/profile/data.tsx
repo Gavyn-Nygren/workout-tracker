@@ -26,12 +26,13 @@ export default function DataAccountScreen() {
   // Export only once everything has loaded, so the file is never missing data.
   const all = Object.values(queries);
   const ready = all.every((q) => q.data !== undefined);
+  const loadFailed = !ready && all.some((q) => q.error);
   const [busy, setBusy] = useState<'csv' | 'json' | null>(null);
 
   const stamp = new Date().toISOString().slice(0, 10);
   const run = async (kind: 'csv' | 'json') => {
     if (!ready) {
-      if (all.some((q) => q.error)) {
+      if (loadFailed) {
         all.forEach((q) => q.error && q.refetch());
         toast.show({ message: "Couldn't load your data to export. Try again.", tone: 'error' });
       }
@@ -63,15 +64,16 @@ export default function DataAccountScreen() {
       <View style={styles.section}>
         <SectionHeader title="Export your data" />
         <Card padding="none">
+          {/* Exports wait for every query, so a file is never missing data. */}
           <ListRow
             title={busy === 'csv' ? 'Preparing…' : 'Workouts as CSV'}
-            subtitle={ready ? `Every logged set from ${completed} workouts, for spreadsheets` : 'Loading your workouts…'}
+            subtitle={loadFailed ? "Couldn't load your workouts. Tap to try again." : ready ? `Every logged set from ${completed} workouts, for spreadsheets` : 'Loading your workouts…'}
             icon="tablecells"
             onPress={() => !busy && run('csv')}
           />
           <ListRow
             title={busy === 'json' ? 'Preparing…' : 'Everything as JSON'}
-            subtitle="Plans, workouts, bodyweight, goals, and form metrics"
+            subtitle={loadFailed ? "Couldn't load your data. Tap to try again." : ready ? 'Plans, workouts, bodyweight, goals, and form metrics' : 'Loading your data…'}
             icon="doc.text"
             onPress={() => !busy && run('json')}
             separator={false}

@@ -1,14 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
+import { AccessibilityInfo } from 'react-native';
 
 import { toISODate } from '@/data/dates';
 import { useBodyweight, useExercises, usePreferences, useSaveSession, useSessions } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import type { Exercise, LoggedSet, SessionBlock, SessionExercise, WorkoutSession } from '@/data/types';
 import { useHaptics } from '@/hooks/useHaptics';
+import { spokenDuration } from '@/hooks/useNow';
 import type { DayItem } from '../today/agenda';
 import { sessionForReopen, sessionFromPlan } from './buildSession';
 import { completedNewestFirst, computeBests, isNewRecord } from './history';
-import { countSets, workoutReducer, type ActiveWorkout, type SetCounts, type WorkoutAction } from './workoutReducer';
+import { countSets, setName, setNumber, workoutReducer, type ActiveWorkout, type SetCounts, type WorkoutAction } from './workoutReducer';
 
 export type RestTimer = {
   /** When the countdown reaches zero (ms epoch); ignored while paused. */
@@ -83,13 +85,15 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
     return entries[entries.length - 1]?.weightKg;
   }, [bodyweight.data]);
 
-  // Countdown end: haptic, then a brief "Rest over" state. Works while the sheet is minimized.
+  // Countdown end: haptic and a VoiceOver announcement (iOS has no live regions), then a brief
+  // "Rest over" state. Works while the sheet is minimized, and with haptics turned off.
   const endTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (endTimer.current) clearTimeout(endTimer.current);
     if (!rest || rest.pausedRemainingMs !== undefined) return;
     endTimer.current = setTimeout(() => {
       haptics.timerEnd();
+      AccessibilityInfo.announceForAccessibility('Rest over. Time for your next set.');
       setRest(null);
       setRestJustEnded(true);
       setTimeout(() => setRestJustEnded(false), 3000);
@@ -132,12 +136,19 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'completeSet', entryId, setId, completedAt: new Date().toISOString(), bodyweightKg });
 
       const completed: LoggedSet = { ...set, completedAt: 'now', bodyweightSnapshotKg: bodyweightKg ?? set.bodyweightSnapshotKg };
-      if (exercise && isNewRecord(completed, exercise, bests.get(exercise.id))) {
-        setPrSetIds((prev) => new Set(prev).add(setId));
-      }
+      const isPR = Boolean(exercise && isNewRecord(completed, exercise, bests.get(exercise.id)));
+      if (isPR) setPrSetIds((prev) => new Set(prev).add(setId));
 
-      const setNumber = found.entry.sets.indexOf(set) + 1;
-      startRest(restAfter(found.block, found.entry, set), `${exercise?.name ?? 'Set'} · set ${setNumber}`);
+      // Numbered like the set table, where warm-ups count separately from working sets.
+      const name = setName(set.kind, setNumber(found.entry.sets, set)).toLowerCase();
+      const exerciseName = exercise?.name ?? 'Exercise';
+      const restSec = restAfter(found.block, found.entry, set);
+      startRest(restSec, `${exerciseName} · ${name}`);
+      // Queued so it follows VoiceOver reading the check's new state.
+      AccessibilityInfo.announceForAccessibilityWithOptions(
+        `${exerciseName} ${name} done.${isPR ? ' New personal record!' : ''}${restSec > 0 ? ` Rest ${spokenDuration(restSec)}.` : ''}`,
+        { queue: true },
+      );
     },
     [workout, exercisesById, latestBodyweightKg, bests, haptics, restAfter, startRest],
   );
@@ -172,7 +183,10 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       },
       completeSet,
       uncompleteSet: (entryId, setId) => {
+        const entry = workout ? locate(workout.session, entryId)?.entry : undefined;
+        const set = entry?.sets.find((s) => s.id === setId);
         dispatch({ type: 'uncompleteSet', entryId, setId });
+        if (entry && set) AccessibilityInfo.announceForAccessibilityWithOptions(`${setName(set.kind, setNumber(entry.sets, set))} marked not done.`, { queue: true });
         setPrSetIds((prev) => {
           const next = new Set(prev);
           next.delete(setId);

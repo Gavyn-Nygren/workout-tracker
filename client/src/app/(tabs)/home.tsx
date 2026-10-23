@@ -31,7 +31,7 @@ export default function HomeScreen() {
 
   if (isLoading || !streak) {
     return (
-      <View style={[styles.content, dashboard]}>
+      <View style={[styles.content, dashboard]} accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }}>
         <Skeleton height={190} radius={radius.card + 4} />
         <Skeleton height={140} radius={radius.card} />
         <Skeleton height={140} radius={radius.card} />
@@ -69,7 +69,7 @@ export default function HomeScreen() {
             <WeeklySnapshot streak={streak} week={week} today={today} onPress={() => router.navigate('/')} />
 
             <View style={styles.section}>
-              <SectionHeader title="Goals" actionLabel="Add" onAction={() => router.push('/goal')} />
+              <SectionHeader title="Goals" actionLabel="Add" actionAccessibilityLabel="Add goal" onAction={() => router.push('/goal')} />
               {goals.length ? (
                 <Card padding="none">
                   {goals.map(({ goal, progress }, i) => (
@@ -99,12 +99,17 @@ export default function HomeScreen() {
 
             <View style={styles.section}>
               <SectionHeader title={`Badges · ${earned.length} earned`} />
+              {earned.length === 0 && upcoming.length === 0 && (
+                <Card>
+                  <EmptyState icon="medal" title="No badges yet" message="Finish workouts, keep your streak, and set PRs to earn them." />
+                </Card>
+              )}
               {earned.length > 0 && <EarnedRow badges={earned} onPress={(b) => router.push({ pathname: '/badge', params: { key: b.badgeKey } })} />}
               {upcoming.length > 0 && (
                 <>
                   <SectionHeader title="Next up" />
                   <NextUpList badges={upcoming.slice(0, 3)} onPress={(b) => router.push({ pathname: '/badge', params: { key: b.badgeKey } })} />
-          </>
+                </>
               )}
             </View>
 

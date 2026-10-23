@@ -1,31 +1,33 @@
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText, Button, Icon } from '@/components/ui';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 
-/** Shown instead of the camera on phones older than iPhone 12 (spec 2.2). */
+/** Shown instead of the camera on phones older than iPhone 12 (spec 2.2). Scrolls so "Got it" stays reachable at large text sizes. */
 export function FormUnavailable({ onClose }: { onClose: () => void }) {
   const { colors } = useAppTheme();
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.wrap}>
+    <ScrollView contentContainerStyle={[styles.wrap, { paddingBottom: insets.bottom + spacing.xxl }]}>
       <View style={[styles.icon, { backgroundColor: colors.input }]}>
         <Icon name="video.slash.fill" color={colors.textSecondary} size={30} />
       </View>
-      <AppText variant="title2" style={styles.center}>
+      <AppText variant="title2" accessibilityRole="header" style={styles.center}>
         Form analysis needs a newer iPhone
       </AppText>
       <AppText variant="body" tone="secondary" style={styles.center}>
         Analyzing video on the phone needs an iPhone 12 or newer, so the camera stays off on this device. Everything else works as usual, including logging every set.
       </AppText>
       <Button title="Got it" onPress={onClose} style={styles.button} />
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xxl,

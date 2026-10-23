@@ -6,17 +6,18 @@ import { AppText, Button, Card, EmptyState, ErrorState, Icon, NotFoundState, Scr
 import { succeeded, useExercises, usePlan, usePreferences, useSavePlan } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import type { Plan, PlannedBlock, PlannedExercise, PlanWorkout } from '@/data/types';
-import { formatClock } from '@/hooks/useNow';
-import { describeProgression, exerciseName, prescriptionSummary, workoutDays } from '@/features/plans/describe';
+import { formatClock, spokenDuration } from '@/hooks/useNow';
+import { describeProgression, exerciseName, prescriptionSummary, spokenPrescription, workoutDays } from '@/features/plans/describe';
 import { moveBlock, removeExercise, removeWorkout, supersetWithNext, ungroup, updateWorkout } from '@/features/plans/planEdits';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
-import { readable } from '@/theme/layout';
+import { readable, useTextScale } from '@/theme/layout';
 
 /** Edit one plan workout: its exercises, order, and supersets. Changes save immediately. */
 export default function PlanWorkoutScreen() {
   const { plan: planId, workout: workoutId } = useLocalSearchParams<{ plan: string; workout: string }>();
   const { colors, scheme } = useAppTheme();
+  const { large } = useTextScale();
   const planQuery = usePlan(planId);
   const exercisesQuery = useExercises();
   const units = (usePreferences().data ?? defaultPreferences).units;
@@ -89,7 +90,9 @@ export default function PlanWorkoutScreen() {
       />
       <ScrollView contentContainerStyle={[styles.content, readable]}>
         <View style={styles.header}>
-          <AppText variant="title2">{workout.name}</AppText>
+          <AppText variant="title2" accessibilityRole="header">
+            {workout.name}
+          </AppText>
           <AppText variant="subhead" tone="secondary">
             {[plan.name, days].filter(Boolean).join('  ·  ')}
           </AppText>
@@ -98,12 +101,23 @@ export default function PlanWorkoutScreen() {
         {workout.blocks.map((block, blockIndex) => (
           <Card key={block.id} padding="none">
             {block.type !== 'single' && (
-              <View style={[styles.groupHeader, { backgroundColor: colors.accentSubtle }]}>
-                <Icon name={block.type === 'superset' ? 'arrow.left.arrow.right' : 'arrow.triangle.2.circlepath'} color={colors.accentText} size={13} />
-                <AppText variant="label" tone="accent" style={styles.flex}>
-                  {block.type === 'superset' ? 'Superset' : 'Circuit'}
-                </AppText>
-                {block.roundRestSec !== undefined && (
+              <View
+                style={[styles.groupHeader, { backgroundColor: colors.accentSubtle }]}
+                accessible
+                accessibilityRole="header"
+                accessibilityLabel={`${block.type === 'superset' ? 'Superset' : 'Circuit'}${block.roundRestSec !== undefined ? `, ${spokenDuration(block.roundRestSec)} rest after each round` : ''}`}
+              >
+                <View style={styles.groupTitle}>
+                  <Icon name={block.type === 'superset' ? 'arrow.left.arrow.right' : 'arrow.triangle.2.circlepath'} color={colors.accentText} size={13} />
+                  <AppText variant="label" tone="accent" style={styles.flex}>
+                    {block.type === 'superset' ? 'Superset' : 'Circuit'}
+                  </AppText>
+                  {!large && block.roundRestSec !== undefined && (
+                    <AppText variant="caption" tone="accent" style={styles.shrink}>{`${formatClock(block.roundRestSec)} rest after each round`}</AppText>
+                  )}
+                </View>
+                {/* Large text: the rest caption gets its own line so "SUPERSET" isn't squeezed out. */}
+                {large && block.roundRestSec !== undefined && (
                   <AppText variant="caption" tone="accent">{`${formatClock(block.roundRestSec)} rest after each round`}</AppText>
                 )}
               </View>
@@ -111,35 +125,14 @@ export default function PlanWorkoutScreen() {
             {block.exercises.map((planned, i) => (
               <Fragment key={planned.id}>
                 {i > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
-                <Pressable
+                <ExerciseRow
+                  name={exerciseName(exercisesById, planned.exerciseId)}
+                  summary={prescriptionSummary(planned)}
+                  spokenSummary={spokenPrescription(planned)}
+                  progression={planned.progression && describeProgression(planned.progression, units)}
                   onPress={() => router.push({ pathname: '/plans/prescription', params: { plan: plan.id, workout: workout.id, pe: planned.id } })}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${exerciseName(exercisesById, planned.exerciseId)}, ${prescriptionSummary(planned)}. Edit sets and reps`}
-                  style={({ pressed }) => [styles.exercise, pressed && { backgroundColor: colors.input }]}
-                >
-                  <View style={styles.flex}>
-                    <AppText variant="headline" numberOfLines={1}>
-                      {exerciseName(exercisesById, planned.exerciseId)}
-                    </AppText>
-                    <AppText variant="footnote" tone="secondary" numeric>
-                      {prescriptionSummary(planned)}
-                    </AppText>
-                    {planned.progression && (
-                      <AppText variant="caption" tone="accent">
-                        {describeProgression(planned.progression, units)}
-                      </AppText>
-                    )}
-                  </View>
-                  <Pressable
-                    onPress={() => openMenu(block, blockIndex, planned)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${exerciseName(exercisesById, planned.exerciseId)} options`}
-                    hitSlop={8}
-                    style={[styles.menu, { backgroundColor: colors.input }]}
-                  >
-                    <Icon name="ellipsis" color={colors.text} size={15} />
-                  </Pressable>
-                </Pressable>
+                  onMenu={() => openMenu(block, blockIndex, planned)}
+                />
               </Fragment>
             ))}
           </Card>
@@ -181,6 +174,55 @@ export default function PlanWorkoutScreen() {
   );
 }
 
+/**
+ * One exercise in the workout. The row and its options button are siblings, not nested, so
+ * VoiceOver can reach both; the gray press highlight still covers the whole row.
+ */
+function ExerciseRow({
+  name,
+  summary,
+  spokenSummary,
+  progression,
+  onPress,
+  onMenu,
+}: {
+  name: string;
+  summary: string;
+  spokenSummary: string;
+  progression?: string;
+  onPress: () => void;
+  onMenu: () => void;
+}) {
+  const { colors } = useAppTheme();
+  const [pressed, setPressed] = useState(false);
+  return (
+    <View style={[styles.exercise, pressed && { backgroundColor: colors.input }]}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={() => setPressed(true)}
+        onPressOut={() => setPressed(false)}
+        accessibilityRole="button"
+        accessibilityLabel={`${name}, ${spokenSummary}${progression ? `. Progression: ${progression.replace(/ · /g, ', ')}` : ''}`}
+        accessibilityHint="Edits sets and reps."
+        style={styles.exerciseBody}
+      >
+        <AppText variant="headline">{name}</AppText>
+        <AppText variant="footnote" tone="secondary" numeric>
+          {summary}
+        </AppText>
+        {progression && (
+          <AppText variant="caption" tone="accent">
+            {progression}
+          </AppText>
+        )}
+      </Pressable>
+      <Pressable onPress={onMenu} accessibilityRole="button" accessibilityLabel={`More options for ${name}`} hitSlop={8} style={[styles.menu, { backgroundColor: colors.input }]}>
+        <Icon name="ellipsis" color={colors.text} size={15} />
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   content: {
     padding: spacing.lg,
@@ -193,11 +235,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   groupHeader: {
+    gap: 2,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  groupTitle: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
@@ -206,8 +251,13 @@ const styles = StyleSheet.create({
   exercise: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
+    paddingRight: spacing.lg,
+  },
+  // The tappable body runs right up to the options button, so there's no dead strip between them.
+  exerciseBody: {
+    flex: 1,
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.md,
     paddingVertical: spacing.md,
   },
   menu: {
@@ -219,6 +269,9 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  shrink: {
+    flexShrink: 1,
   },
   centerSelf: {
     alignSelf: 'center',

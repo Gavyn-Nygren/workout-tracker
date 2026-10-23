@@ -8,7 +8,7 @@ import type { Preferences, Weekday } from '@/data/types';
 import { dateToTime, timeToDate, useSettings } from '@/features/settings/useSettings';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
-import { readable } from '@/theme/layout';
+import { readable, useTextScale } from '@/theme/layout';
 
 type Toggles = 'workoutReminders' | 'restTimer' | 'missedWorkout' | 'weeklySummary' | 'formAnalysisComplete';
 
@@ -27,7 +27,10 @@ const ROWS: { key: Toggles; title: string; subtitle: string; icon: 'calendar' | 
 export default function NotificationsScreen() {
   const { colors, scheme } = useAppTheme();
   const { preferences, update } = useSettings();
+  const { large } = useTextScale();
   const n = preferences.notifications;
+  // At accessibility sizes the time pickers go under their labels so neither gets squeezed.
+  const sub = large ? [styles.subStack, styles.stacked] : styles.sub;
   const set = (patch: Partial<Preferences['notifications']>) => update((p) => ({ ...p, notifications: { ...p.notifications, ...patch } }));
 
   // The first time one is turned on, explain before iOS asks (spec 2.11).
@@ -68,8 +71,8 @@ export default function NotificationsScreen() {
               separator={i < ROWS.length - 1 || (row.key === 'weeklySummary' && n.weeklySummary)}
             />
             {row.key === 'workoutReminders' && n.workoutReminders && (
-              <View style={[styles.sub, { borderBottomColor: colors.border }]}>
-                <AppText variant="subhead" tone="secondary" style={styles.flex}>
+              <View style={[sub, { borderBottomColor: colors.border }]}>
+                <AppText variant="subhead" tone="secondary" style={!large && styles.flex}>
                   Remind me at
                 </AppText>
                 {picker(n.reminderTime, (reminderTime) => set({ reminderTime }), 'Reminder time')}
@@ -86,8 +89,8 @@ export default function NotificationsScreen() {
                   value={String(n.weeklySummaryAt.weekday) as '7' | '1'}
                   onChange={(d) => set({ weeklySummaryAt: { ...n.weeklySummaryAt, weekday: Number(d) as Weekday } })}
                 />
-                <View style={styles.inline}>
-                  <AppText variant="subhead" tone="secondary" style={styles.flex}>
+                <View style={large ? styles.stacked : styles.inline}>
+                  <AppText variant="subhead" tone="secondary" style={!large && styles.flex}>
                     At
                   </AppText>
                   {picker(n.weeklySummaryAt.time, (time) => set({ weeklySummaryAt: { ...n.weeklySummaryAt, time } }), 'Weekly summary time')}
@@ -110,14 +113,14 @@ export default function NotificationsScreen() {
           />
           {n.quietHours && (
             <>
-              <View style={[styles.sub, { borderBottomColor: colors.border }]}>
-                <AppText variant="subhead" tone="secondary" style={styles.flex}>
+              <View style={[sub, { borderBottomColor: colors.border }]}>
+                <AppText variant="subhead" tone="secondary" style={!large && styles.flex}>
                   From
                 </AppText>
                 {picker(n.quietHours.start, (start) => set({ quietHours: { ...n.quietHours!, start } }), 'Quiet hours start')}
               </View>
-              <View style={[styles.sub, { borderBottomWidth: 0 }]}>
-                <AppText variant="subhead" tone="secondary" style={styles.flex}>
+              <View style={[sub, { borderBottomWidth: 0 }]}>
+                <AppText variant="subhead" tone="secondary" style={!large && styles.flex}>
                   Until
                 </AppText>
                 {picker(n.quietHours.end, (end) => set({ quietHours: { ...n.quietHours!, end } }), 'Quiet hours end')}
@@ -161,6 +164,10 @@ const styles = StyleSheet.create({
   inline: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  stacked: {
+    alignItems: 'flex-start',
+    gap: spacing.sm,
   },
   hint: {
     paddingHorizontal: spacing.xs,

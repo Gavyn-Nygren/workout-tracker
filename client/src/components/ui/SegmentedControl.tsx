@@ -7,7 +7,8 @@ import { radius, spacing } from '@/theme/tokens';
 import { AppText } from './AppText';
 import { Icon } from './Icon';
 
-type Option<T extends string> = { value: T; label: string };
+/** `accessibilityLabel` is the spoken form when the label is abbreviated, e.g. "4 weeks" for "4 wk". */
+type Option<T extends string> = { value: T; label: string; accessibilityLabel?: string };
 
 type Props<T extends string> = {
   /** Read by VoiceOver for the group, e.g. "Appearance". */
@@ -41,7 +42,7 @@ export function SegmentedControl<T extends string>({ label, options, value, onCh
               }
             }}
             accessibilityRole="button"
-            accessibilityLabel={option.label}
+            accessibilityLabel={option.accessibilityLabel ?? option.label}
             accessibilityHint={label}
             accessibilityState={{ selected }}
             accessibilityValue={{ text: `${i + 1} of ${options.length}` }}

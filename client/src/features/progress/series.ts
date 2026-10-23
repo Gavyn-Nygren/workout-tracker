@@ -20,12 +20,13 @@ export const isLoadMetric = (m: Metric) => m === 'e1rm' || m === 'top_set' || m 
 export type Point = { date: ISODate; value: number; sessionId?: string };
 
 export type RangeKey = '1M' | '3M' | '6M' | '1Y' | 'All';
-export const RANGES: { value: RangeKey; label: string; days?: number }[] = [
-  { value: '1M', label: '1M', days: 30 },
-  { value: '3M', label: '3M', days: 91 },
-  { value: '6M', label: '6M', days: 182 },
-  { value: '1Y', label: '1Y', days: 365 },
-  { value: 'All', label: 'All' },
+/** `spoken` is for VoiceOver, which reads "1M" as "1 meter". */
+export const RANGES: { value: RangeKey; label: string; spoken: string; days?: number }[] = [
+  { value: '1M', label: '1M', spoken: '1 month', days: 30 },
+  { value: '3M', label: '3M', spoken: '3 months', days: 91 },
+  { value: '6M', label: '6M', spoken: '6 months', days: 182 },
+  { value: '1Y', label: '1Y', spoken: '1 year', days: 365 },
+  { value: 'All', label: 'All', spoken: 'All time' },
 ];
 export function rangeStart(range: RangeKey, today: ISODate): ISODate | undefined {
   const days = RANGES.find((r) => r.value === range)?.days;
@@ -90,6 +91,23 @@ export function changeOverTime(points: Point[], days = 28): { delta: number; sin
   const base = [...points].reverse().find((p) => p.date <= cutoff) ?? points[0];
   if (base === last) return undefined;
   return { delta: last.value - base.value, since: base.date };
+}
+
+/**
+ * A chart's direction for VoiceOver: "rising from 290 to 330 lb over 6 sessions". `format` turns a
+ * value into speech (with its unit); `noun` names one point.
+ */
+export function describeTrend(points: Point[], format: (value: number) => string, noun = 'session'): string {
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (!first || !last) return 'no data in this range';
+  if (points.length === 1) return `1 ${noun}: ${format(last.value)}`;
+  const change = last.value - first.value;
+  const span = Math.max(Math.abs(first.value), Math.abs(last.value)) || 1;
+  // Within half a percent reads as flat, so rounding noise isn't called a trend.
+  const direction = Math.abs(change) / span < 0.005 ? 'steady' : change > 0 ? 'rising' : 'falling';
+  const count = `${points.length} ${noun}s`;
+  return direction === 'steady' ? `steady at ${format(last.value)} over ${count}` : `${direction} from ${format(first.value)} to ${format(last.value)} over ${count}`;
 }
 
 /**

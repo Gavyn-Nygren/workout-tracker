@@ -595,6 +595,32 @@ All token values live in `client/src/theme/tokens.ts`. Every text and background
   - **Detail screens and forms** (plan editor, history, graphs, settings pages, sign-in, the active workout, the summary, the form report) stay one centered column, up to 720 pt wide.
   - **Sheets** become iPad's centered cards automatically.
   - On iPhone nothing changes: the right column's sections follow the left column's.
+- **Large text (Dynamic Type):** the user picked **scale fully, reflow rows**.
+  - Text grows with the iOS setting, up to how far iOS's own text styles grow: body text fully, big titles less.
+  - At accessibility sizes, rows such as "title … value" and "label + stepper" stack, segmented controls become a vertical list, and sheets open full height.
+  - Dense spots grow only to **1.5×**: set-table numbers, the week strip, badges, and camera overlays.
+  - The workout set table stays **one row per set**. From about 1.3×, "previous" moves to a second line under the inputs.
+- **Motion:** the user picked:
+  - When a set completes, **the check pops and the row's green tint fades in**.
+  - Tappable cards **shrink slightly (97%)** while pressed; list rows keep the iOS gray highlight.
+  - The rest timer and the in-progress workout bar slide in.
+  - With Reduce Motion on, cards dim instead and nothing moves.
+- **Contrast fixes (user's picks):**
+  - Light-mode inputs, chips and segmented controls use a **slightly darker gray** (#E4E7EC), so they show on the gray page. The "border only on focus or error" style stays.
+  - Dark-mode hero cards get a **thin blue edge** (#2E4A5C).
+  - Selected chips and segments get a **darker blue outline** in light mode.
+  - Dark success text is #2DBE2D.
+  - Text people need to read never uses the tertiary gray.
+- **Screen states:** every screen checks them in the same order: error, then loading, then not found, then empty, then content.
+  - **Load error:** "Couldn't load {thing}" / "Your data is still saved on this phone." / Try again.
+  - **Not found:** "{Thing} not found" / "It may have been deleted." / Back (or Close in sheets).
+  - **Loading:** skeletons shaped like the content.
+  - **Failed save:** an error toast, "Couldn't save {thing}. Try again." The screen stays open with the user's input.
+  - **Testing:** Profile → Developer → Component gallery has switches that make loads slow or fail, and saves fail.
+- **VoiceOver:**
+  - Every control has a spoken label, and steppers, timers and charts are adjustable (swipe up or down).
+  - Set completion, rest ending, PRs and form-recording progress are announced.
+  - Screen and section titles are headings.
 
 ---
 
@@ -729,10 +755,9 @@ any ──delete──▶ tombstone (stats recalculate)
 
 ### Design system remainder
 
-- Full color token set: success, warning, error, chart series colors, and disabled states.
-- Spacing scale, motion specs, and empty, loading, and error states.
-- Usability guidance for the camera screen.
-- Accessibility targets: WCAG AA contrast, VoiceOver, and Dynamic Type at large sizes.
+- Usability guidance for the camera screen (with the real camera in Phase 4).
+
+*Settled in G1.1 and G2.11 (see 2.13): the full color token set, spacing, motion, empty/loading/error states, and the accessibility targets (WCAG AA contrast, VoiceOver, and Dynamic Type at large sizes).*
 
 ---
 

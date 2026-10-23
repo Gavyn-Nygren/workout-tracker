@@ -27,6 +27,8 @@ export default function TabsLayout() {
         headerStyle: { backgroundColor: colors.chrome },
         headerTintColor: colors.onChrome,
         headerTitleStyle: { fontWeight: '800' },
+        // The JS header is a fixed 44 pt bar, like a native nav bar whose title doesn't scale.
+        headerTitleAllowFontScaling: false,
         headerShadowVisible: false,
         tabBarStyle: { backgroundColor: colors.chrome, borderTopColor: colors.chromeBorder },
         tabBarActiveTintColor: colors.accent,

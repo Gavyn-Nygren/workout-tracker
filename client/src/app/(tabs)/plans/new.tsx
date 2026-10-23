@@ -1,18 +1,18 @@
 import type { SFSymbol } from 'expo-symbols';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState, type RefObject } from 'react';
+import { AccessibilityInfo, ScrollView, StyleSheet, View, type ViewInstance } from 'react-native';
 
 import { AppText, Button, Card, Chip, Icon, PressableScale, SectionHeader, SegmentedControl, Stepper, TextField } from '@/components/ui';
 import { useRepository } from '@/data/DataProvider';
 import { succeeded, useSavePlan } from '@/data/hooks';
 import type { PlanSchedule, Weekday } from '@/data/types';
-import { formatShortDate } from '@/lib/format';
-import { ALL_WEEKDAYS, WEEKDAY_SHORT } from '@/features/plans/describe';
+import { formatShortDate, plural } from '@/lib/format';
+import { ALL_WEEKDAYS, WEEKDAY_LONG, WEEKDAY_SHORT } from '@/features/plans/describe';
 import { newPlan, nextMonday } from '@/features/plans/planEdits';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
-import { readable } from '@/theme/layout';
+import { readable, useTextScale } from '@/theme/layout';
 
 type PlanType = PlanSchedule['type'];
 
@@ -25,6 +25,7 @@ const TYPES: { type: PlanType; title: string; body: string; icon: SFSymbol }[] =
 /** New plan setup (user's pick): type → name and start → days or cycle, then the plan editor. */
 export default function NewPlanScreen() {
   const { colors } = useAppTheme();
+  const { large } = useTextScale();
   const today = useRepository().today();
   const savePlan = useSavePlan();
   const [step, setStep] = useState(1);
@@ -34,6 +35,18 @@ export default function NewPlanScreen() {
   const [weekdays, setWeekdays] = useState<Weekday[]>([1, 3, 5]);
   const [weeks, setWeeks] = useState(8);
   const [cycle, setCycle] = useState<('workout' | 'rest')[]>(['workout', 'workout', 'rest']);
+
+  // Each step replaces the screen's content, so VoiceOver focus moves to the new step's title.
+  const titleRef = useRef<ViewInstance>(null);
+  const firstStep = useRef(true);
+  useEffect(() => {
+    if (firstStep.current) {
+      firstStep.current = false;
+      return;
+    }
+    const t = setTimeout(() => titleRef.current && AccessibilityInfo.sendAccessibilityEvent(titleRef.current, 'focus'), 100);
+    return () => clearTimeout(t);
+  }, [step]);
 
   const startDate = start === 'today' ? today : nextMonday(today);
   const canContinue = step === 1 || (step === 2 ? name.trim().length > 0 : type === 'rotating' ? cycle.includes('workout') : weekdays.length > 0);
@@ -47,7 +60,13 @@ export default function NewPlanScreen() {
 
   return (
     <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-      <View style={styles.progress} accessibilityLabel={`Step ${step} of 3`}>
+      <View
+        style={styles.progress}
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel="New plan setup"
+        accessibilityValue={{ min: 1, max: 3, now: step, text: `Step ${step} of 3` }}
+      >
         {[1, 2, 3].map((s) => (
           <View key={s} style={[styles.progressBar, { backgroundColor: s <= step ? colors.accentText : colors.input }]} />
         ))}
@@ -55,7 +74,7 @@ export default function NewPlanScreen() {
 
       {step === 1 && (
         <View style={styles.section}>
-          <AppText variant="title2">What kind of plan?</AppText>
+          <StepTitle title="What kind of plan?" focusRef={titleRef} />
           {TYPES.map((t) => {
             const selected = type === t.type;
             return (
@@ -83,7 +102,7 @@ export default function NewPlanScreen() {
 
       {step === 2 && (
         <View style={styles.section}>
-          <AppText variant="title2">Name and start</AppText>
+          <StepTitle title="Name and start" focusRef={titleRef} />
           <TextField label="Plan name" value={name} onChangeText={setName} placeholder="e.g. Summer Strength" autoFocus returnKeyType="done" />
           <SectionHeader title="Starts" />
           <SegmentedControl
@@ -100,22 +119,29 @@ export default function NewPlanScreen() {
 
       {step === 3 && type !== 'rotating' && (
         <View style={styles.section}>
-          <AppText variant="title2">Which days do you train?</AppText>
+          <StepTitle title="Which days do you train?" focusRef={titleRef} />
           <AppText variant="subhead" tone="secondary">
             You'll get one workout per day to fill in. Rename or reassign them later.
           </AppText>
           <View style={styles.wrap}>
             {ALL_WEEKDAYS.map((d) => (
-              <Chip key={d} label={WEEKDAY_SHORT[d]} selected={weekdays.includes(d)} onPress={() => setWeekdays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]))} />
+              <Chip
+                key={d}
+                label={WEEKDAY_SHORT[d]}
+                accessibilityLabel={WEEKDAY_LONG[d]}
+                selected={weekdays.includes(d)}
+                onPress={() => setWeekdays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]))}
+              />
             ))}
           </View>
           {type === 'fixed' && (
             <Card>
-              <View style={styles.typeRow}>
-                <AppText variant="body" style={styles.flex}>
+              {/* Large text: the label sits above the stepper so neither gets squeezed. */}
+              <View style={large ? styles.stacked : styles.typeRow}>
+                <AppText variant="body" style={large ? undefined : styles.flex}>
                   Program length
                 </AppText>
-                <Stepper label="Program length in weeks" value={weeks} onChange={setWeeks} min={1} max={52} unit="wk" />
+                <Stepper label="Program length" value={weeks} onChange={setWeeks} min={1} max={52} unit="wk" spokenValue={(v) => plural(v, 'week')} />
               </View>
             </Card>
           )}
@@ -124,13 +150,21 @@ export default function NewPlanScreen() {
 
       {step === 3 && type === 'rotating' && (
         <View style={styles.section}>
-          <AppText variant="title2">Build the cycle</AppText>
+          <StepTitle title="Build the cycle" focusRef={titleRef} />
           <AppText variant="subhead" tone="secondary">
             The cycle repeats from your start date. Tap a day to remove it.
           </AppText>
           <View style={styles.wrap}>
             {cycle.map((s, i) => (
-              <Chip key={i} label={`${i + 1} · ${s === 'rest' ? 'Rest' : 'Workout'}`} selected={s === 'workout'} onPress={() => setCycle((prev) => prev.filter((_, j) => j !== i))} />
+              // Tapping removes the day, so VoiceOver hears a button, not a checkbox.
+              <Chip
+                key={i}
+                label={`${i + 1} · ${s === 'rest' ? 'Rest' : 'Workout'}`}
+                role="button"
+                accessibilityLabel={`Day ${i + 1}, ${s === 'rest' ? 'rest' : 'workout'}. Remove`}
+                selected={s === 'workout'}
+                onPress={() => setCycle((prev) => prev.filter((_, j) => j !== i))}
+              />
             ))}
           </View>
           <View style={styles.wrap}>
@@ -156,6 +190,15 @@ export default function NewPlanScreen() {
   );
 }
 
+/** A step's title: a VoiceOver heading that takes focus when the step appears. */
+function StepTitle({ title, focusRef }: { title: string; focusRef: RefObject<ViewInstance | null> }) {
+  return (
+    <View ref={focusRef} accessible accessibilityRole="header" accessibilityLabel={title}>
+      <AppText variant="title2">{title}</AppText>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   content: {
     padding: spacing.lg,
@@ -178,6 +221,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+  },
+  stacked: {
+    gap: spacing.sm,
+    alignItems: 'flex-start',
   },
   iconWell: {
     width: 40,

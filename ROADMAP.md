@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G2.11 (polish pass).
+**Current goal:** G2.12 (app icon & splash).
 
 ## How we work
 
@@ -218,15 +218,17 @@ Load the `dataviz` skill before building any charts.
 
 ### G2.11 Polish pass 👁
 
-- [ ] Check every screen in dark mode.
-- [ ] Check every screen at large Dynamic Type sizes.
-- [ ] Add VoiceOver labels.
-- [ ] Make every empty, loading, and error state consistent.
-- [ ] Refine motion.
+- [x] Check every screen in dark mode. *Audited for contrast; inputs, success text, and gold icons retuned, and dark hero cards get a thin blue edge and light-mode selections a darker outline (user's picks).*
+- [x] Check every screen at large Dynamic Type sizes. *Scale fully, reflow rows (user's pick): text grows to iOS-like ceilings, rows stack, sheets open full height, and dense spots stop at 1.5×. The set table stays one row per set.*
+- [x] Add VoiceOver labels. *Every control is labeled; steppers, timers, and charts are adjustable; sets, rest, PRs, and recording are announced.*
+- [x] Make every empty, loading, and error state consistent. *Shared states in one order (error, loading, not found, empty), a toast for every failed save, and developer switches to slow or fail data (Profile → Developer → Component gallery).*
+- [x] Refine motion. *Set complete pops the check, cards shrink when pressed, and the rest and workout bars slide in (user's picks). Reduce Motion turns movement off.*
+- [ ] The user has reviewed the polish pass on their iPhone.
 
 ### G2.12 App icon & splash 👁
 
 - [ ] Present icon and splash options; the user picks.
+- [ ] Light and dark splash backgrounds, and a themed root background, so dark-mode launches don't flash white. *Expo Go shows its own splash; these take effect in the development build (G4.1).*
 
 ### 🏁 Design sign-off
 

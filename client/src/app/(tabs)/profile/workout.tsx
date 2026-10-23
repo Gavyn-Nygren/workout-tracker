@@ -1,11 +1,11 @@
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Card, ListRow, SectionHeader, Stepper, Toggle } from '@/components/ui';
-import { formatClock } from '@/hooks/useNow';
+import { formatClock, spokenDuration } from '@/hooks/useNow';
 import { useSettings } from '@/features/settings/useSettings';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
-import { readable } from '@/theme/layout';
+import { readable, useTextScale } from '@/theme/layout';
 
 const REST_ROWS = [
   { key: 'compound', label: 'Compound lifts', hint: 'Squats, presses, rows, deadlifts' },
@@ -17,6 +17,7 @@ const REST_ROWS = [
 export default function WorkoutDefaultsScreen() {
   const { colors } = useAppTheme();
   const { preferences, update } = useSettings();
+  const { large } = useTextScale();
 
   return (
     <ScrollView contentContainerStyle={[styles.content, readable]}>
@@ -24,8 +25,9 @@ export default function WorkoutDefaultsScreen() {
         <SectionHeader title="Default rest" />
         <Card padding="none">
           {REST_ROWS.map((row, i) => (
-            <View key={row.key} style={[styles.row, i < REST_ROWS.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-              <View style={styles.flex}>
+            // At accessibility sizes the label sits above the stepper so neither gets squeezed.
+            <View key={row.key} style={[large ? styles.stacked : styles.row, i < REST_ROWS.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+              <View style={!large && styles.flex}>
                 <AppText variant="body">{row.label}</AppText>
                 <AppText variant="footnote" tone="secondary">
                   {row.hint}
@@ -39,6 +41,7 @@ export default function WorkoutDefaultsScreen() {
                 min={15}
                 max={600}
                 formatValue={formatClock}
+                spokenValue={spokenDuration}
               />
             </View>
           ))}
@@ -86,6 +89,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  stacked: {
+    alignItems: 'flex-start',
+    gap: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },

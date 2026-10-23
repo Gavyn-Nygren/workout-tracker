@@ -1,11 +1,13 @@
 import type { SFSymbol } from 'expo-symbols';
 import { useState, type ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Card, Icon, PRBadge, SectionHeader } from '@/components/ui';
 import { succeeded } from '@/data/hooks';
 import type { PersonalRecord, PRType, UnitSystem } from '@/data/types';
-import { formatDuration, formatLoad, formatShortDate, formatSigned, formatSignedLoad, plural } from '@/lib/format';
+import { spokenDuration } from '@/hooks/useNow';
+import { formatDuration, formatLoad, formatLoadValue, formatShortDate, formatSigned, formatSignedLoad, plural } from '@/lib/format';
+import { useTextScale } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import type { BestSet, ExerciseSummary, WorkoutSummary } from './summarize';
@@ -17,6 +19,33 @@ const PR_LABEL: Record<PRType, string> = {
   reps_at_weight: 'Most reps',
   longest_hold: 'Longest hold',
 };
+const PR_SPOKEN: Record<PRType, string> = { ...PR_LABEL, e1rm: 'Estimated one-rep max' };
+
+// VoiceOver versions of the numbers below: "1,240 pounds", "up 2 sets", "no change".
+const spokenLoad = (kg: number, units: UnitSystem) => `${formatLoadValue(kg, units)} ${units === 'imperial' ? 'pounds' : 'kilograms'}`;
+function spokenChange(amount: number, unit: (n: number) => string): string {
+  if (Math.abs(amount) < 0.01) return 'no change';
+  return `${amount > 0 ? 'up' : 'down'} ${unit(Math.abs(amount))}`;
+}
+
+function spokenRecord(record: PersonalRecord, units: UnitSystem): string {
+  const previous = record.previousValue;
+  switch (record.type) {
+    case 'reps_at_weight':
+      return `${plural(record.value, 'rep')} at ${spokenLoad(record.atLoadKg ?? 0, units)}${previous !== undefined ? `, was ${plural(previous, 'rep')}` : ''}`;
+    case 'longest_hold':
+      return `${spokenDuration(record.value)}${previous !== undefined ? `, was ${spokenDuration(previous)}` : ''}`;
+    default:
+      return `${spokenLoad(record.value, units)}${previous !== undefined ? `, was ${spokenLoad(previous, units)}` : ''}`;
+  }
+}
+
+function spokenBest(best: BestSet | undefined, units: UnitSystem): string {
+  if (!best) return 'no sets logged';
+  if (best.kind === 'hold') return `best hold ${spokenDuration(best.seconds)}`;
+  if (best.kind === 'bodyweight') return best.addedKg > 0 ? `best bodyweight plus ${spokenLoad(best.addedKg, units)} for ${plural(best.reps, 'rep')}` : `best ${plural(best.reps, 'rep')}`;
+  return `best ${spokenLoad(best.loadKg, units)} for ${plural(best.reps, 'rep')}`;
+}
 
 function formatRecord(record: PersonalRecord, units: UnitSystem): { value: string; was?: string } {
   switch (record.type) {
@@ -64,25 +93,57 @@ export function ComparisonCard({ summary, units, name }: { summary: WorkoutSumma
     <View style={styles.section}>
       <SectionHeader title={`vs last ${name} · ${previous.session.completedDate ? formatShortDate(previous.session.completedDate) : ''}`} />
       <Card padding="none">
-        <Row label="Volume" value={formatLoad(summary.volumeKg, units)} delta={<Delta text={formatSignedLoad(volume, units)} direction={direction(volume)} />} />
+        <Row
+          label="Volume"
+          value={formatLoad(summary.volumeKg, units)}
+          delta={<Delta text={formatSignedLoad(volume, units)} direction={direction(volume)} />}
+          spoken={`Volume: ${spokenLoad(summary.volumeKg, units)}, ${spokenChange(volume, (n) => spokenLoad(n, units))} vs last time`}
+        />
         {minutes !== undefined && summary.minutes !== undefined && (
           // Time isn't better or worse either way, so both directions are neutral.
-          <Row label="Time" value={formatDuration(summary.minutes)} delta={<Delta text={formatSigned(minutes, 'min')} direction={direction(Math.round(minutes))} neutral />} />
+          <Row
+            label="Time"
+            value={formatDuration(summary.minutes)}
+            delta={<Delta text={formatSigned(minutes, 'min')} direction={direction(Math.round(minutes))} neutral />}
+            spoken={`Time: ${spokenDuration(Math.round(summary.minutes) * 60)}, ${spokenChange(Math.round(minutes), (n) => plural(n, 'minute'))} vs last time`}
+          />
         )}
-        <Row label="Sets logged" value={String(summary.setsDone)} delta={<Delta text={formatSigned(sets, Math.abs(sets) === 1 ? 'set' : 'sets')} direction={direction(sets)} />} last />
+        <Row
+          label="Sets logged"
+          value={String(summary.setsDone)}
+          delta={<Delta text={formatSigned(sets, Math.abs(sets) === 1 ? 'set' : 'sets')} direction={direction(sets)} />}
+          spoken={`Sets logged: ${summary.setsDone}, ${spokenChange(sets, (n) => plural(n, 'set'))} vs last time`}
+          last
+        />
       </Card>
     </View>
   );
 }
 
-function Row({ label, value, delta, last }: { label: string; value: string; delta: ReactNode; last?: boolean }) {
+function Row({ label, value, delta, spoken, last }: { label: string; value: string; delta: ReactNode; spoken: string; last?: boolean }) {
   const { colors } = useAppTheme();
+  const { large } = useTextScale();
+  const border = !last && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth };
+  if (large) {
+    // Large text: the label on its own line, the value and change under it.
+    return (
+      <View style={[styles.rowStacked, border]} accessible accessibilityLabel={spoken}>
+        <AppText variant="body">{label}</AppText>
+        <View style={styles.wrapLine}>
+          <AppText variant="body" weight="600" numeric>
+            {value}
+          </AppText>
+          {delta}
+        </View>
+      </View>
+    );
+  }
   return (
-    <View style={[styles.row, !last && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+    <View style={[styles.row, border]} accessible accessibilityLabel={spoken}>
       <AppText variant="body" style={styles.flex}>
         {label}
       </AppText>
-      <AppText variant="body" weight="600" numeric>
+      <AppText variant="body" weight="600" numeric style={styles.shrink}>
         {value}
       </AppText>
       <View style={styles.deltaCell}>{delta}</View>
@@ -92,6 +153,9 @@ function Row({ label, value, delta, last }: { label: string; value: string; delt
 
 export function RecordsCard({ summary, units }: { summary: WorkoutSummary; units: UnitSystem }) {
   const { colors } = useAppTheme();
+  const { fontScale } = useTextScale();
+  // The badge crowds the value out early, so record lines stack from XXXL.
+  const stacked = fontScale >= 1.3;
   if (!summary.records.length) return null;
   const byExercise = new Map<string, PersonalRecord[]>();
   for (const r of summary.records) byExercise.set(r.exerciseId, [...(byExercise.get(r.exerciseId) ?? []), r]);
@@ -106,16 +170,29 @@ export function RecordsCard({ summary, units }: { summary: WorkoutSummary; units
             <AppText variant="headline">{names.get(exerciseId) ?? 'Exercise'}</AppText>
             {records.map((r) => {
               const { value, was } = formatRecord(r, units);
+              const valueText = (
+                <AppText variant="subhead" weight="600" numeric style={stacked ? styles.shrink : styles.flex}>
+                  {value}
+                </AppText>
+              );
+              const wasText = was && (
+                <AppText variant="footnote" tone="secondary" numeric style={styles.shrink}>
+                  {`was ${was}`}
+                </AppText>
+              );
               return (
-                <View key={r.id} style={styles.prLine}>
+                <View key={r.id} style={stacked ? styles.prLineStacked : styles.prLine} accessible accessibilityLabel={`Personal record, ${PR_SPOKEN[r.type]}: ${spokenRecord(r, units)}`}>
                   <PRBadge label={PR_LABEL[r.type]} />
-                  <AppText variant="subhead" weight="600" numeric style={styles.flex}>
-                    {value}
-                  </AppText>
-                  {was && (
-                    <AppText variant="footnote" tone="secondary" numeric>
-                      {`was ${was}`}
-                    </AppText>
+                  {stacked ? (
+                    <View style={styles.wrapLine}>
+                      {valueText}
+                      {wasText}
+                    </View>
+                  ) : (
+                    <>
+                      {valueText}
+                      {wasText}
+                    </>
                   )}
                 </View>
               );
@@ -134,24 +211,40 @@ function formatExerciseDelta(e: ExerciseSummary, units: UnitSystem): string | un
 
 export function ExercisesCard({ summary, units }: { summary: WorkoutSummary; units: UnitSystem }) {
   const { colors } = useAppTheme();
+  const { large } = useTextScale();
   return (
     <View style={styles.section}>
       <SectionHeader title="Exercises" />
       <Card padding="none">
         {summary.exercises.map((e, i) => {
           const delta = formatExerciseDelta(e, units);
+          const pr = e.prTypes.length > 0;
+          const spokenDelta =
+            delta && e.delta ? `, ${spokenChange(e.delta.amount, (n) => (e.delta!.kind === 'hold' ? spokenDuration(n) : spokenLoad(n, units)))} since last time` : '';
+          const marks = (pr || delta) && (
+            <>
+              {pr && <Icon name="star.fill" color={colors.prOnSurface} size={14} />}
+              {delta && <Delta text={delta} direction={direction(e.delta!.amount)} />}
+            </>
+          );
           return (
-            <View key={e.entryId} style={[styles.row, i < summary.exercises.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+            <View
+              key={e.entryId}
+              accessible
+              accessibilityLabel={`${e.name}, ${e.skipped ? 'skipped' : `${e.setsDone} of ${plural(e.setsTotal, 'set')}, ${spokenBest(e.best, units)}`}${pr ? ', personal record' : ''}${spokenDelta}`}
+              style={[styles.row, i < summary.exercises.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
+            >
               <View style={styles.flex}>
-                <AppText variant="body" weight="600" tone={e.skipped ? 'tertiary' : 'primary'} numberOfLines={1}>
+                <AppText variant="body" weight="600" tone={e.skipped ? 'secondary' : 'primary'} numberOfLines={large ? undefined : 2}>
                   {e.name}
                 </AppText>
                 <AppText variant="footnote" tone="secondary" numeric>
                   {e.skipped ? 'Skipped' : `${e.setsDone} of ${plural(e.setsTotal, 'set')} · ${formatBest(e.best, units)}`}
                 </AppText>
+                {/* Large text: the PR star and change move under the name so it keeps the width. */}
+                {large && marks && <View style={styles.marksLine}>{marks}</View>}
               </View>
-              {e.prTypes.length > 0 && <Icon name="star.fill" color={colors.pr} size={14} />}
-              {delta && <Delta text={delta} direction={direction(e.delta!.amount)} />}
+              {!large && marks}
             </View>
           );
         })}
@@ -163,6 +256,7 @@ export function ExercisesCard({ summary, units }: { summary: WorkoutSummary; uni
 /** Offers to save mid-workout changes back to the plan (spec 2.6). */
 export function SavePlanCard({ workoutName, planName, changes, onSave }: { workoutName: string; planName: string; changes: string[]; onSave: () => Promise<void> }) {
   const { colors } = useAppTheme();
+  const { large } = useTextScale();
   const [state, setState] = useState<'asking' | 'saving' | 'saved' | 'dismissed'>('asking');
   if (state === 'dismissed') return null;
 
@@ -181,14 +275,15 @@ export function SavePlanCard({ workoutName, planName, changes, onSave }: { worko
             <Icon name="square.and.pencil" color={colors.accentText} size={20} />
             <AppText variant="headline" style={styles.flex}>{`Update ${workoutName} in your plan?`}</AppText>
           </View>
-          <View style={styles.changes}>
+          <View style={[styles.changes, large && styles.noIndent]}>
             {changes.map((c) => (
-              <AppText key={c} variant="subhead" tone="secondary">
+              // The bullet is visual only; VoiceOver would read it as "bullet".
+              <AppText key={c} variant="subhead" tone="secondary" accessibilityLabel={c}>
                 {`•  ${c}`}
               </AppText>
             ))}
           </View>
-          <View style={styles.buttons}>
+          <View style={[styles.buttons, large && styles.noIndent]}>
             <Button
               title="Update plan"
               variant="secondary"
@@ -197,10 +292,21 @@ export function SavePlanCard({ workoutName, planName, changes, onSave }: { worko
               onPress={async () => {
                 setState('saving');
                 // On failure the error toast is already shown; ask again so they can retry.
-                setState((await succeeded(onSave())) ? 'saved' : 'asking');
+                const ok = await succeeded(onSave());
+                setState(ok ? 'saved' : 'asking');
+                // The pressed button disappears, so say what happened.
+                if (ok) AccessibilityInfo.announceForAccessibility(`${workoutName} in ${planName} updated.`);
               }}
             />
-            <Button title="Just this time" variant="ghost" size="sm" onPress={() => setState('dismissed')} />
+            <Button
+              title="Just this time"
+              variant="ghost"
+              size="sm"
+              onPress={() => {
+                setState('dismissed');
+                AccessibilityInfo.announceForAccessibility('Plan left as it was.');
+              }}
+            />
           </View>
         </View>
       )}
@@ -220,9 +326,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm + 2,
   },
+  rowStacked: {
+    gap: 2,
+    minHeight: 50,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+  },
+  wrapLine: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: spacing.md,
+    rowGap: 2,
+  },
+  marksLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: 2,
+  },
   deltaCell: {
     minWidth: 92,
+    flexShrink: 1,
     alignItems: 'flex-end',
+  },
+  shrink: {
+    flexShrink: 1,
   },
   delta: {
     flexDirection: 'row',
@@ -238,6 +367,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
+  prLineStacked: {
+    gap: spacing.xs,
+  },
   saveStack: {
     gap: spacing.md,
   },
@@ -252,8 +384,12 @@ const styles = StyleSheet.create({
   },
   buttons: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
     paddingLeft: 20 + spacing.md,
+  },
+  noIndent: {
+    paddingLeft: 0,
   },
   flex: {
     flex: 1,

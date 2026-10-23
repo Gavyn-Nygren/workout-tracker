@@ -3,7 +3,8 @@ import { StyleSheet, View } from 'react-native';
 import { AppText, Icon, PressableScale, ProgressRing } from '@/components/ui';
 import { daysBetween } from '@/data/dates';
 import type { ISODate, StreakState } from '@/data/types';
-import { plural } from '@/lib/format';
+import { formatWeekday, plural } from '@/lib/format';
+import { useTextScale } from '@/theme/layout';
 import { SchemeOverride, useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import type { DayItem } from '../today/agenda';
@@ -16,6 +17,19 @@ type Props = {
 };
 
 const LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+/** Text inside the ring and under the narrow day columns stops growing here, like WeekStrip. */
+const COMPACT_TEXT_MAX = 1.3;
+
+type DayStatus = 'done' | 'partial' | 'missed' | 'planned' | 'rest';
+const DAY_WORDS: Record<Exclude<DayStatus, 'rest'>, string> = { done: 'done', partial: 'partly done', missed: 'missed', planned: 'planned' };
+
+function dayStatus(items: DayItem[]): DayStatus {
+  if (items.some((x) => x.status === 'completed')) return 'done';
+  if (items.some((x) => x.status === 'partial')) return 'partial';
+  if (items.some((x) => x.status === 'missed')) return 'missed';
+  if (items.some((x) => x.status === 'planned' || x.status === 'in_progress')) return 'planned';
+  return 'rest';
+}
 
 /** Home's top card (user's pick): this week's ring, the week streak, and the days at a glance. */
 export function WeeklySnapshot(props: Props) {
@@ -36,30 +50,48 @@ function message(streak: StreakState, daysLeft: number): string {
 
 function Body({ streak, week, today, onPress, outerScheme }: Props & { outerScheme: 'light' | 'dark' }) {
   const { colors } = useAppTheme();
+  const { large } = useTextScale();
   const daysLeft = Math.max(1, daysBetween(today, week[6].date) + 1);
+  const days = week.map(({ date, items }) => ({ date, status: dayStatus(items) }));
+
+  // One VoiceOver stop that says what the ring, the streak, and the day dots show.
+  const dayList = days
+    .filter((d) => d.status !== 'rest')
+    .map((d) => `${formatWeekday(d.date)} ${DAY_WORDS[d.status as Exclude<DayStatus, 'rest'>]}`)
+    .join(', ');
+  const spoken = [
+    `This week: ${streak.thisWeekCompleted} of ${plural(streak.thisWeekTarget, 'workout')}.`,
+    `${streak.currentWeeks}-week streak.`,
+    message(streak, daysLeft),
+    dayList && `${dayList}.`,
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
-    <PressableScale onPress={onPress} accessibilityRole="button" accessibilityHint="Opens Today">
+    <PressableScale onPress={onPress} accessibilityRole="button" accessibilityLabel={spoken} accessibilityHint="Opens Today">
       <View
         style={[
           styles.card,
           {
             backgroundColor: colors.chrome,
-            borderColor: outerScheme === 'dark' ? colors.border : colors.chrome,
+            // Dark mode: a thin blue edge lifts the card off the near-black page (user's pick). Light keeps the shadow.
+            borderColor: outerScheme === 'dark' ? colors.heroBorder : colors.chrome,
             boxShadow: outerScheme === 'light' ? '0px 10px 28px rgba(11, 15, 20, 0.22)' : undefined,
           },
         ]}
       >
-        <View style={styles.top}>
+        {/* Large text: the streak text gets the card's full width under the ring. */}
+        <View style={[styles.top, large && styles.topStacked]}>
           <ProgressRing value={streak.thisWeekCompleted / Math.max(1, streak.thisWeekTarget)} label={`${streak.thisWeekCompleted} of ${streak.thisWeekTarget} workouts this week`} size={104} strokeWidth={10}>
-            <AppText variant="title1" numeric>{`${streak.thisWeekCompleted}/${streak.thisWeekTarget}`}</AppText>
-            <AppText variant="caption" tone="secondary">
+            <AppText variant="title1" numeric maxFontSizeMultiplier={COMPACT_TEXT_MAX}>{`${streak.thisWeekCompleted}/${streak.thisWeekTarget}`}</AppText>
+            <AppText variant="caption" tone="secondary" maxFontSizeMultiplier={COMPACT_TEXT_MAX}>
               this week
             </AppText>
           </ProgressRing>
-          <View style={styles.streak}>
+          <View style={[styles.streak, large && styles.streakStacked]}>
             <View style={styles.streakRow}>
-              <Icon name="flame.fill" color={streak.currentWeeks ? colors.pr : colors.textTertiary} size={26} />
+              <Icon name="flame.fill" color={streak.currentWeeks ? colors.pr : colors.textSecondary} size={26} />
               <AppText variant="display" numeric>
                 {streak.currentWeeks}
               </AppText>
@@ -74,24 +106,18 @@ function Body({ streak, week, today, onPress, outerScheme }: Props & { outerSche
         </View>
 
         <View style={[styles.days, { borderTopColor: colors.border }]}>
-          {week.map(({ date, items }, i) => {
+          {days.map(({ date, status }, i) => {
             const isToday = date === today;
-            const done = items.some((x) => x.status === 'completed');
-            const partial = !done && items.some((x) => x.status === 'partial');
-            const missed = items.some((x) => x.status === 'missed');
-            const planned = items.some((x) => x.status === 'planned' || x.status === 'in_progress');
-            const dotStyle = done
-              ? { backgroundColor: colors.successFill }
-              : partial
-                ? { backgroundColor: colors.warningFill }
-                : missed
-                  ? { borderColor: colors.warningFill, borderWidth: 2 }
-                  : planned
-                    ? { borderColor: colors.accentText, borderWidth: 2 }
-                    : { backgroundColor: colors.input, transform: [{ scale: 0.5 }] };
+            const dotStyle = {
+              done: { backgroundColor: colors.successFill },
+              partial: { backgroundColor: colors.warningFill },
+              missed: { borderColor: colors.warningFill, borderWidth: 2 },
+              planned: { borderColor: colors.accentText, borderWidth: 2 },
+              rest: { backgroundColor: colors.input, transform: [{ scale: 0.5 }] },
+            }[status];
             return (
               <View key={date} style={styles.day}>
-                <AppText variant="caption" weight="700" tone={isToday ? 'accent' : 'secondary'}>
+                <AppText variant="caption" weight="700" tone={isToday ? 'accent' : 'secondary'} maxFontSizeMultiplier={COMPACT_TEXT_MAX}>
                   {LETTERS[i]}
                 </AppText>
                 <View style={[styles.dot, dotStyle]} />
@@ -108,7 +134,7 @@ function Body({ streak, week, today, onPress, outerScheme }: Props & { outerSche
 const styles = StyleSheet.create({
   card: {
     borderRadius: radius.card + 4,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing.xl,
     gap: spacing.lg,
   },
@@ -117,9 +143,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xl,
   },
+  topStacked: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
   streak: {
     flex: 1,
     gap: 2,
+  },
+  streakStacked: {
+    flex: 0,
+    alignSelf: 'stretch',
   },
   streakRow: {
     flexDirection: 'row',

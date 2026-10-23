@@ -8,7 +8,10 @@ import { useAppTheme } from '@/theme/ThemeProvider';
 type Props = {
   points: { date: string; value: number }[];
   height?: number;
-  /** Read by VoiceOver, e.g. "Back Squat e1RM rising from 290 to 330 lb". */
+  /**
+   * Read by VoiceOver, e.g. "Back Squat e1RM rising from 290 to 330 lb" (`describeTrend` builds the
+   * direction part). Inside a tappable card it isn't reached, so put the trend in the card's label.
+   */
   label: string;
 };
 

@@ -24,7 +24,7 @@ export function EmptyState({ icon, title, message, actionLabel, onAction }: Prop
       <View style={[styles.iconWell, { backgroundColor: colors.accentSubtle }]}>
         <Icon name={icon} color={colors.accentText} size={26} />
       </View>
-      <AppText variant="title3" weight="700" style={styles.center}>
+      <AppText variant="title3" weight="700" style={styles.center} accessibilityRole="header">
         {title}
       </AppText>
       <AppText variant="subhead" tone="secondary" style={[styles.center, styles.message]}>

@@ -4,10 +4,11 @@ import { AppText, Card, Icon, PressableScale } from '@/components/ui';
 import { addDays } from '@/data/dates';
 import { programWeek, workoutsOn } from '@/data/schedule';
 import type { ISODate, Plan } from '@/data/types';
-import { formatShortDate } from '@/lib/format';
+import { formatLongDate, formatShortDate } from '@/lib/format';
+import { DENSE_TEXT_MAX, useTextScale } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
-import { describeSchedule, PLAN_TYPE_LABEL } from './describe';
+import { describeSchedule } from './describe';
 import { ScheduleGrid } from './ScheduleGrid';
 
 /** The next scheduled workout from `today` within two weeks. */
@@ -28,7 +29,7 @@ export function StatusPill({ status }: { status: Plan['status'] }) {
   return (
     <View style={[styles.pill, { backgroundColor: active ? colors.successSubtle : colors.input }]}>
       <View style={[styles.dot, { backgroundColor: active ? colors.successFill : colors.textTertiary }]} />
-      <AppText variant="caption" weight="700" tone={active ? 'success' : 'secondary'}>
+      <AppText variant="caption" weight="700" tone={active ? 'success' : 'secondary'} maxFontSizeMultiplier={DENSE_TEXT_MAX}>
         {status === 'active' ? 'Active' : status === 'paused' ? 'Paused' : 'Archived'}
       </AppText>
     </View>
@@ -38,20 +39,27 @@ export function StatusPill({ status }: { status: Plan['status'] }) {
 /** One plan in the My plans list. */
 export function PlanCard({ plan, today, onPress }: { plan: Plan; today: ISODate; onPress: () => void }) {
   const { colors } = useAppTheme();
+  const { large } = useTextScale();
   const next = nextWorkout(plan, today);
   const week = programWeek(plan, today);
+  const spoken = [
+    `${plan.name}, ${plan.status}`,
+    `${describeSchedule(plan.schedule)}${week ? `, week ${week}` : ''}`,
+    next && `Next: ${next.name}, ${next.date === today ? 'today' : formatLongDate(next.date)}`,
+  ];
 
   return (
-    <PressableScale onPress={onPress} style={styles.fill} accessibilityRole="button" accessibilityLabel={`${plan.name}, ${plan.status}, ${describeSchedule(plan.schedule)}`}>
+    <PressableScale onPress={onPress} style={styles.fill} accessibilityRole="button" accessibilityLabel={spoken.filter(Boolean).join('. ')}>
       <Card style={styles.fill}>
         <View style={styles.stack}>
-          <View style={styles.row}>
-            <View style={styles.flex}>
-              <AppText variant="title3" weight="700" numberOfLines={1}>
+          {/* Large text: the status pill drops under the name instead of squeezing it. */}
+          <View style={large ? styles.rowStacked : styles.row}>
+            <View style={large ? undefined : styles.flex}>
+              <AppText variant="title3" weight="700" numberOfLines={large ? undefined : 2}>
                 {plan.name}
               </AppText>
               <AppText variant="footnote" tone="secondary">
-                {`${PLAN_TYPE_LABEL[plan.schedule.type]}  ·  ${describeSchedule(plan.schedule)}${week ? `  ·  week ${week}` : ''}`}
+                {`${describeSchedule(plan.schedule)}${week ? `  ·  week ${week}` : ''}`}
               </AppText>
             </View>
             <StatusPill status={plan.status} />
@@ -84,6 +92,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.md,
+  },
+  rowStacked: {
+    gap: spacing.sm,
+    alignItems: 'flex-start',
   },
   flex: {
     flex: 1,

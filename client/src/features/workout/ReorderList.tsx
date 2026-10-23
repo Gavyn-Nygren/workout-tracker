@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from 'react';
-import { Animated, PanResponder, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, Animated, PanResponder, StyleSheet, View } from 'react-native';
 
 import { AppText, Icon } from '@/components/ui';
 import { useHaptics } from '@/hooks/useHaptics';
+import { DENSE_TEXT_MAX } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 
@@ -15,6 +16,7 @@ type Props = {
   onDraggingChange?: (dragging: boolean) => void;
 };
 
+/** Rows are fixed-height and absolutely placed, so their text stops at 1.5× (33 + 27 pt fits in 64). */
 const ROW_HEIGHT = 64;
 const GAP = 8;
 const STEP = ROW_HEIGHT + GAP;
@@ -28,7 +30,7 @@ function moved<T>(list: T[], from: number, to: number): T[] {
 
 /**
  * Drag the handle to reorder. Built on PanResponder so it runs in Expo Go; VoiceOver users get
- * "move up/down" actions on each row instead.
+ * "Move up" and "Move down" in each row's Actions rotor instead.
  */
 export function ReorderList({ items, onMove, onDraggingChange }: Props) {
   const { colors } = useAppTheme();
@@ -39,6 +41,13 @@ export function ReorderList({ items, onMove, onDraggingChange }: Props) {
   const clampIndex = (i: number) => Math.max(0, Math.min(items.length - 1, i));
 
   const order = drag ? moved(items, drag.from, drag.to) : items;
+
+  const moveBy = (index: number, delta: number) => {
+    const to = index + delta;
+    if (to < 0 || to >= items.length) return;
+    onMove(index, to);
+    AccessibilityInfo.announceForAccessibility(`${items[index].title}, position ${to + 1} of ${items.length}`);
+  };
 
   const responders = useMemo(
     () =>
@@ -90,14 +99,15 @@ export function ReorderList({ items, onMove, onDraggingChange }: Props) {
           <Animated.View
             key={item.id}
             accessible
-            accessibilityLabel={`${item.title}, position ${index + 1} of ${items.length}`}
+            accessibilityLabel={[item.title, item.subtitle, `position ${index + 1} of ${items.length}`].filter(Boolean).join(', ')}
+            // Custom actions (not increment/decrement, which only fire on adjustable elements), offered only where they apply.
             accessibilityActions={[
-              { name: 'increment', label: 'Move up' },
-              { name: 'decrement', label: 'Move down' },
+              ...(index > 0 ? [{ name: 'moveUp', label: 'Move up' }] : []),
+              ...(index < items.length - 1 ? [{ name: 'moveDown', label: 'Move down' }] : []),
             ]}
             onAccessibilityAction={(e) => {
-              if (e.nativeEvent.actionName === 'increment' && index > 0) onMove(index, index - 1);
-              if (e.nativeEvent.actionName === 'decrement' && index < items.length - 1) onMove(index, index + 1);
+              if (e.nativeEvent.actionName === 'moveUp') moveBy(index, -1);
+              if (e.nativeEvent.actionName === 'moveDown') moveBy(index, 1);
             }}
             style={[
               styles.row,
@@ -112,11 +122,11 @@ export function ReorderList({ items, onMove, onDraggingChange }: Props) {
             ]}
           >
             <View style={styles.text}>
-              <AppText variant="headline" numberOfLines={1}>
+              <AppText variant="headline" numberOfLines={1} maxFontSizeMultiplier={DENSE_TEXT_MAX}>
                 {item.title}
               </AppText>
               {item.subtitle && (
-                <AppText variant="footnote" tone="secondary" numberOfLines={1}>
+                <AppText variant="footnote" tone="secondary" numberOfLines={1} maxFontSizeMultiplier={DENSE_TEXT_MAX}>
                   {item.subtitle}
                 </AppText>
               )}

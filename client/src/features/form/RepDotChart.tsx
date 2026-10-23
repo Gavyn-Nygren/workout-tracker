@@ -21,7 +21,8 @@ const PAD = { top: 14, right: 14, bottom: 26, left: 40 };
 
 /**
  * Bottom angle per rep (user's pick): this recording's reps as solid dots, the comparison's as
- * lighter dots behind. Low-confidence reps are hollow rings. Tap a rep to read both values.
+ * lighter dots behind. Low-confidence reps are hollow rings. Tap a rep to read both values; with
+ * VoiceOver, swipe up or down to step through the reps.
  */
 export function RepDotChart({ current, comparison, joint, height = 200 }: Props) {
   const { colors } = useAppTheme();
@@ -30,8 +31,19 @@ export function RepDotChart({ current, comparison, joint, height = 200 }: Props)
 
   const value = (r: RepMetrics) => r.angles[joint]?.minDeg;
   const all = [...current.reps, ...(comparison?.reps ?? [])].map(value).filter((v): v is number => v !== undefined);
-  const ticks = niceTicks(Math.min(...all), Math.max(...all), 4);
   const count = Math.max(current.reps.length, comparison?.reps.length ?? 0);
+  // For calf raises a larger ankle angle is a higher raise, so "lower is deeper" only fits knees and hips.
+  const direction = joint === 'ankle' ? '' : ' Lower is deeper.';
+
+  if (!all.length) {
+    return (
+      <AppText variant="footnote" tone="secondary">
+        {`No ${joint} angle readings for this recording.`}
+      </AppText>
+    );
+  }
+
+  const ticks = niceTicks(Math.min(...all), Math.max(...all), 4);
   const plotW = Math.max(1, width - PAD.left - PAD.right);
   const x = (i: number) => PAD.left + (count <= 1 ? plotW / 2 : (i / (count - 1)) * plotW);
   const y = (v: number) => PAD.top + (1 - (v - ticks[0]) / (ticks[ticks.length - 1] - ticks[0] || 1)) * (height - PAD.top - PAD.bottom);
@@ -45,7 +57,19 @@ export function RepDotChart({ current, comparison, joint, height = 200 }: Props)
         ]
           .filter(Boolean)
           .join(' · ')
-      : `Tap a rep to compare. Lower is deeper.`;
+      : `Tap a rep to compare.${direction}`;
+
+  // Spoken per rep: a missing reading says so instead of "0 degrees", and unsure reps are flagged.
+  const spokenRep = (r: RepMetrics | undefined) => {
+    const v = r && value(r);
+    return `${v === undefined ? 'no reading' : `${Math.round(v)} degrees`}${r?.confidence === 'low' ? ', low confidence' : ''}`;
+  };
+  const spokenSeries = (s: Series) => s.reps.map((r, i) => `Rep ${i + 1}: ${spokenRep(r)}`).join('. ');
+  const summary = `Bottom ${joint} angle for each rep. ${current.label}: ${spokenSeries(current)}.${comparison ? ` ${comparison.label}: ${spokenSeries(comparison)}.` : ''}${direction}`;
+  const spokenSelected =
+    selected !== undefined
+      ? `Rep ${selected + 1}. ${current.label}: ${spokenRep(current.reps[selected])}${comparison ? `. ${comparison.label}: ${spokenRep(comparison.reps[selected])}` : ''}`
+      : undefined;
 
   const dots = (series: Series, filled: boolean) =>
     series.reps.map((r, i) => {
@@ -68,15 +92,24 @@ export function RepDotChart({ current, comparison, joint, height = 200 }: Props)
 
   return (
     <View style={styles.wrap}>
-      <AppText variant="footnote" tone="secondary" numeric accessibilityLiveRegion="polite">
+      {/* VoiceOver hears the same readout as the chart's value, below. */}
+      <AppText variant="footnote" tone="secondary" numeric accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         {readout}
       </AppText>
       <View
         style={{ height }}
         onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
         accessible
-        accessibilityRole="image"
-        accessibilityLabel={`Bottom ${joint} angle for each rep. ${current.label}: ${current.reps.map((r) => `${Math.round(value(r) ?? 0)}°`).join(', ')}.${comparison ? ` ${comparison.label}: ${comparison.reps.map((r) => `${Math.round(value(r) ?? 0)}°`).join(', ')}.` : ''}`}
+        accessibilityRole="adjustable"
+        accessibilityLabel={summary}
+        accessibilityValue={spokenSelected ? { text: spokenSelected } : undefined}
+        accessibilityHint="Swipe up or down to read one rep at a time."
+        accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+        onAccessibilityAction={(e) => {
+          if (!count) return;
+          const up = e.nativeEvent.actionName === 'increment';
+          setSelected((s) => (s === undefined ? (up ? 0 : count - 1) : Math.min(count - 1, Math.max(0, s + (up ? 1 : -1)))));
+        }}
       >
         {width > 0 && (
           <Svg width={width} height={height}>
@@ -105,8 +138,6 @@ export function RepDotChart({ current, comparison, joint, height = 200 }: Props)
               <Pressable
                 key={i}
                 onPress={() => setSelected(selected === i ? undefined : i)}
-                accessibilityRole="button"
-                accessibilityLabel={`Rep ${i + 1}`}
                 style={{ position: 'absolute', left: x(i) - Math.max(16, plotW / count / 2), width: Math.max(32, plotW / count), top: 0, bottom: 0 }}
               />
             ))}

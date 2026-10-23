@@ -45,6 +45,18 @@ export function formatMetric(value: number, metric: Metric | 'bodyweight', units
   return `${value >= 1000 ? Math.round(value).toLocaleString('en-US') : Math.round(value)}${unit}`;
 }
 
+/** formatMetric for VoiceOver: "225 pounds", "12 reps". */
+export function spokenMetric(value: number, metric: Metric | 'bodyweight', units: UnitSystem): string {
+  if (metric === 'reps' || metric === 'sets') return formatMetric(value, metric, units);
+  return `${formatMetric(value, metric, units, false)} ${units === 'imperial' ? 'pounds' : 'kilograms'}`;
+}
+
+/** "up 15 pounds" / "down 3 reps" / "no change" for VoiceOver. */
+export function spokenMetricDelta(delta: number, metric: Metric | 'bodyweight', units: UnitSystem): string {
+  if (Math.abs(delta) < 0.05) return 'no change';
+  return `${delta > 0 ? 'up' : 'down'} ${spokenMetric(Math.abs(delta), metric, units)}`;
+}
+
 /** "+15 lb" / "−3 reps" with a true minus sign. */
 export function formatMetricDelta(delta: number, metric: Metric | 'bodyweight', units: UnitSystem): string {
   const sign = delta > 0 ? '+' : delta < 0 ? '−' : '±';

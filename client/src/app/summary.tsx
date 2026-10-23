@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useRef } from 'react';
+import { AccessibilityInfo, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Confetti, ErrorState, NotFoundState, ScreenSkeleton, ToastViewport } from '@/components/ui';
@@ -11,6 +11,7 @@ import { ComparisonCard, ExercisesCard, RecordsCard, SavePlanCard } from '@/feat
 import { SummaryHero } from '@/features/summary/SummaryHero';
 import { buildSummary } from '@/features/summary/summarize';
 import { useHaptics } from '@/hooks/useHaptics';
+import { plural } from '@/lib/format';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { readable } from '@/theme/layout';
@@ -52,6 +53,19 @@ export default function SummaryScreen() {
   useEffect(() => {
     if (celebrate) haptics.success();
   }, [celebrate, haptics]);
+
+  // Confetti and haptics are silent to VoiceOver, so say the result once after a fresh finish.
+  // Queued, so it follows the screen's first reading instead of cutting it off.
+  const announced = useRef(false);
+  useEffect(() => {
+    if (!justFinished || !summary || !session || announced.current) return;
+    announced.current = true;
+    const records = summary.records.length;
+    AccessibilityInfo.announceForAccessibilityWithOptions(
+      `${session.completion === 'partial' ? 'Partial workout saved.' : 'Workout complete.'}${records ? ` ${plural(records, 'new personal record')}.` : ''}`,
+      { queue: true },
+    );
+  }, [justFinished, summary, session]);
 
   const failed = [sessions, exercises].filter((q) => q.error);
   if (failed.length) return <ErrorState fill title="Couldn't load this workout" onRetry={() => failed.forEach((q) => q.refetch())} />;

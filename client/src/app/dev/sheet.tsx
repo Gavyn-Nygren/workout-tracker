@@ -21,7 +21,9 @@ export default function SheetDemo() {
   return (
     <ScrollView style={{ backgroundColor: colors.cardElevated }} contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <AppText variant="title2">Set 3 type</AppText>
+        <AppText variant="title2" accessibilityRole="header">
+          Set 3 type
+        </AppText>
         <AppText variant="subhead" tone="secondary">
           A set has one kind and any number of modifiers.
         </AppText>
@@ -29,9 +31,9 @@ export default function SheetDemo() {
 
       <SectionHeader title="Kind" />
       <View style={styles.wrapRow}>
-        <Chip label="Normal" selected={kind === 'normal'} onPress={() => setKind('normal')} />
+        <Chip label="Normal" role="radio" selected={kind === 'normal'} onPress={() => setKind('normal')} />
         {KINDS.map((k) => (
-          <Chip key={k} label={setTagLabel(k)} selected={kind === k} onPress={() => setKind(k)} />
+          <Chip key={k} label={setTagLabel(k)} role="radio" selected={kind === k} onPress={() => setKind(k)} />
         ))}
       </View>
 

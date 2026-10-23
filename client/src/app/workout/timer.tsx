@@ -1,39 +1,58 @@
 import { router } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Chip, ProgressRing } from '@/components/ui';
-import { formatClock, useNow } from '@/hooks/useNow';
+import { formatClock, spokenDuration, useNow } from '@/hooks/useNow';
 import { restRemainingMs, useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
+import { useTextScale } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 
 const PRESETS = [60, 90, 120, 180, 240, 300];
+const RING = 200;
 
 /** Expanded rest timer: pause, adjust, presets, skip. */
 export default function RestTimerSheet() {
   const { colors } = useAppTheme();
+  const { fontScale } = useTextScale();
   const { rest, startRest, adjustRest, togglePauseRest, skipRest } = useActiveWorkout();
   const now = useNow(250, Boolean(rest));
 
   const remaining = rest ? restRemainingMs(rest, now) / 1000 : 0;
+  const secondsLeft = Math.ceil(remaining);
   const paused = rest?.pausedRemainingMs !== undefined;
+  // The ring grows a little with the text so the (capped) time stays inside it.
+  const ringSize = RING * Math.min(Math.max(fontScale, 1), 1.3);
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.cardElevated }]}>
-      <AppText variant="title2" style={styles.center}>
+    <ScrollView
+      style={{ backgroundColor: colors.cardElevated }}
+      contentContainerStyle={styles.content}
+      onAccessibilityEscape={() => router.back()}
+    >
+      <AppText variant="title2" accessibilityRole="header" style={styles.center}>
         Rest timer
       </AppText>
-      <AppText variant="subhead" tone="secondary" style={styles.center} numberOfLines={1}>
+      <AppText variant="subhead" tone="secondary" style={styles.center}>
         {rest ? `After ${rest.label}` : 'No rest running. Pick a time to start one.'}
       </AppText>
 
-      <View style={styles.ring}>
-        <ProgressRing value={rest ? remaining / rest.durationSec : 0} label={`${formatClock(remaining)} remaining`} size={200} strokeWidth={12}>
+      {/* One adjustable element for VoiceOver: swipe up or down to add or take off 15 seconds. */}
+      <View
+        accessible
+        accessibilityRole={rest ? 'adjustable' : 'text'}
+        accessibilityLabel="Rest remaining"
+        accessibilityValue={{ text: rest ? `${spokenDuration(secondsLeft)}${paused ? ', paused' : ''}` : 'Not running' }}
+        accessibilityActions={rest ? [{ name: 'increment' }, { name: 'decrement' }] : undefined}
+        onAccessibilityAction={(e) => adjustRest(e.nativeEvent.actionName === 'increment' ? 15 : -15)}
+        style={styles.ring}
+      >
+        <ProgressRing value={rest ? remaining / rest.durationSec : 0} label="Rest remaining" size={ringSize} strokeWidth={12}>
           <AppText variant="display" numeric>
-            {formatClock(Math.ceil(remaining))}
+            {formatClock(secondsLeft)}
           </AppText>
           {paused && (
-            <AppText variant="footnote" tone="secondary" weight="700">
+            <AppText variant="footnote" tone="secondary" weight="700" maxFontSizeMultiplier={1.3}>
               PAUSED
             </AppText>
           )}
@@ -42,16 +61,27 @@ export default function RestTimerSheet() {
 
       {rest && (
         <View style={styles.row}>
-          <Button title="−15 s" variant="secondary" onPress={() => adjustRest(-15)} />
+          <Button title="−15 s" variant="secondary" onPress={() => adjustRest(-15)} accessibilityLabel="Subtract 15 seconds" />
           <Button title={paused ? 'Resume' : 'Pause'} icon={paused ? 'play.fill' : 'pause.fill'} onPress={togglePauseRest} />
-          <Button title="+15 s" variant="secondary" onPress={() => adjustRest(15)} />
+          <Button title="+15 s" variant="secondary" onPress={() => adjustRest(15)} accessibilityLabel="Add 15 seconds" />
         </View>
       )}
 
       <View style={styles.presets}>
-        {PRESETS.map((sec) => (
-          <Chip key={sec} label={formatClock(sec)} selected={rest?.durationSec === sec} onPress={() => startRest(sec, rest?.label ?? 'manual timer')} />
-        ))}
+        {PRESETS.map((sec) => {
+          const selected = rest?.durationSec === sec;
+          return (
+            <Chip
+              key={sec}
+              label={formatClock(sec)}
+              selected={selected}
+              // Starts a rest rather than toggling, so it reads as a button.
+              role="button"
+              accessibilityLabel={`Start ${spokenDuration(sec)} rest`}
+              onPress={() => startRest(sec, rest?.label ?? 'manual timer')}
+            />
+          );
+        })}
       </View>
 
       {rest && (
@@ -65,15 +95,15 @@ export default function RestTimerSheet() {
           style={styles.centerSelf}
         />
       )}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
+  content: {
     padding: spacing.xl,
     paddingTop: spacing.xxl,
+    paddingBottom: spacing.huge,
     gap: spacing.md,
   },
   center: {
@@ -86,8 +116,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.md,
   },
+  // Wraps rather than running off both edges at larger text sizes.
   row: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
     gap: spacing.sm,
   },

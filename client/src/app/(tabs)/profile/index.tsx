@@ -3,11 +3,11 @@ import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Card, ListRow, SectionHeader, SegmentedControl } from '@/components/ui';
 import { usePersonalRecords, useSessions, useStreak } from '@/data/hooks';
-import { formatClock } from '@/hooks/useNow';
+import { formatClock, spokenDuration } from '@/hooks/useNow';
 import { authStore, resetFirstRun } from '@/features/auth/authStore';
 import { useSettings } from '@/features/settings/useSettings';
 import { useAppTheme, type ThemePreference } from '@/theme/ThemeProvider';
-import { Columns, dashboard } from '@/theme/layout';
+import { Columns, dashboard, DENSE_TEXT_MAX, useTextScale } from '@/theme/layout';
 import { radius, spacing } from '@/theme/tokens';
 
 const THEME_OPTIONS = [
@@ -20,6 +20,7 @@ const THEME_OPTIONS = [
 export default function ProfileScreen() {
   const { colors, preference, setPreference } = useAppTheme();
   const { preferences } = useSettings();
+  const { large } = useTextScale();
   const auth = authStore.use();
   const account = { name: auth.name, method: auth.method === 'apple' ? 'Signed in with Apple' : auth.email ?? 'Signed in with email' };
   const { data: sessions } = useSessions();
@@ -27,6 +28,8 @@ export default function ProfileScreen() {
   const { data: records } = usePersonalRecords();
 
   const workouts = (sessions ?? []).filter((s) => s.status === 'completed').length;
+  const prCount = records ? new Set(records.map((r) => r.setId)).size : 0;
+  const rest = preferences.restDefaultsSec;
   const notificationsOn = Object.entries(preferences.notifications).filter(([k, v]) => typeof v === 'boolean' && v && k !== 'quietHours').length;
   const go = (pathname: '/profile/units' | '/profile/workout' | '/profile/notifications' | '/profile/privacy' | '/profile/data' | '/profile/about') => router.push(pathname);
 
@@ -38,23 +41,26 @@ export default function ProfileScreen() {
         left={
           <>
             <Card>
-              <View style={styles.account}>
-                <View style={[styles.avatar, { backgroundColor: colors.accent }]}>
-                  <AppText variant="title2" tone="onAccent">
+              {/* At accessibility sizes the avatar sits above the name so the name gets the full width. */}
+              <View style={large ? styles.accountStacked : styles.account}>
+                {/* Decorative: the name is right beside it. */}
+                <View style={[styles.avatar, { backgroundColor: colors.accent }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                  <AppText variant="title2" tone="onAccent" maxFontSizeMultiplier={DENSE_TEXT_MAX}>
                     {account.name.slice(0, 1)}
                   </AppText>
                 </View>
-                <View style={styles.flex}>
+                <View style={!large && styles.flex}>
                   <AppText variant="title2">{account.name}</AppText>
                   <AppText variant="footnote" tone="secondary">
                     {account.method}
                   </AppText>
                 </View>
               </View>
-              <View style={[styles.stats, { borderTopColor: colors.border }]}>
-                <Stat value={sessions ? String(workouts) : '—'} label="workouts" />
-                <Stat value={streak ? `${streak.currentWeeks} wk` : '—'} label="streak" />
-                <Stat value={records ? String(new Set(records.map((r) => r.setId)).size) : '—'} label="PRs set" />
+              {/* Three narrow columns can't hold the words at accessibility sizes, so the stats become lines. */}
+              <View style={[large ? styles.statsStacked : styles.stats, { borderTopColor: colors.border }]}>
+                <Stat value={sessions ? String(workouts) : '—'} label="workouts" spoken={sessions ? `${workouts} ${workouts === 1 ? 'workout' : 'workouts'}` : 'Workouts, loading'} inline={large} />
+                <Stat value={streak ? `${streak.currentWeeks} wk` : '—'} label="streak" spoken={streak ? `${streak.currentWeeks}-week streak` : 'Streak, loading'} inline={large} />
+                <Stat value={records ? String(prCount) : '—'} label="PRs set" spoken={records ? `${prCount} ${prCount === 1 ? 'PR' : 'PRs'} set` : 'PRs, loading'} inline={large} />
               </View>
             </Card>
 
@@ -71,11 +77,18 @@ export default function ProfileScreen() {
             <View style={styles.section}>
               <SectionHeader title="Settings" />
               <Card padding="none">
-                <ListRow title="Units & logging" icon="scalemass" value={`${preferences.units === 'imperial' ? 'lb' : 'kg'} · ${preferences.effortScale.toUpperCase()}`} onPress={() => go('/profile/units')} />
+                <ListRow
+                  title="Units & logging"
+                  icon="scalemass"
+                  value={`${preferences.units === 'imperial' ? 'lb' : 'kg'} · ${preferences.effortScale.toUpperCase()}`}
+                  accessibilityLabel={`Units & logging, ${preferences.units === 'imperial' ? 'pounds' : 'kilograms'}, ${preferences.effortScale === 'rpe' ? 'RPE' : 'reps in reserve'}`}
+                  onPress={() => go('/profile/units')}
+                />
                 <ListRow
                   title="Workout defaults"
                   icon="timer"
-                  value={`${formatClock(preferences.restDefaultsSec.compound)} · ${formatClock(preferences.restDefaultsSec.isolation)}`}
+                  value={`${formatClock(rest.compound)} · ${formatClock(rest.isolation)}`}
+                  accessibilityLabel={`Workout defaults, compound rest ${spokenDuration(rest.compound)}, isolation rest ${spokenDuration(rest.isolation)}`}
                   onPress={() => go('/profile/workout')}
                 />
                 <ListRow title="Notifications" icon="bell" value={notificationsOn ? `${notificationsOn} on` : 'Off'} onPress={() => go('/profile/notifications')} />
@@ -112,13 +125,14 @@ export default function ProfileScreen() {
   );
 }
 
-function Stat({ value, label }: { value: string; label: string }) {
+/** One VoiceOver stop per stat, e.g. "3-week streak". `inline` puts the label after the value on one line. */
+function Stat({ value, label, spoken, inline }: { value: string; label: string; spoken: string; inline?: boolean }) {
   return (
-    <View style={styles.stat}>
+    <View style={inline ? styles.statInline : styles.stat} accessible accessibilityLabel={spoken}>
       <AppText variant="title3" weight="800" numeric>
         {value}
       </AppText>
-      <AppText variant="caption" tone="secondary">
+      <AppText variant="caption" tone="secondary" style={inline && styles.flex}>
         {label}
       </AppText>
     </View>
@@ -136,6 +150,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.lg,
   },
+  accountStacked: {
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
   avatar: {
     width: 60,
     height: 60,
@@ -149,9 +167,20 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     paddingTop: spacing.md,
   },
+  statsStacked: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    gap: spacing.sm,
+  },
   stat: {
     flex: 1,
     alignItems: 'center',
+  },
+  statInline: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: spacing.sm,
   },
   section: {
     gap: spacing.sm,

@@ -5,19 +5,20 @@ import { AppText, Button, Card, EmptyState, ErrorState, Icon, NotFoundState, Scr
 import { useRepository } from '@/data/DataProvider';
 import { succeeded, useExercises, useSavePlan, useTemplates } from '@/data/hooks';
 import { formatShortDate } from '@/lib/format';
-import { CATEGORY_LABEL, describeSchedule, exerciseName, PLAN_TYPE_LABEL, prescriptionSummary, workoutDays } from '@/features/plans/describe';
+import { CATEGORY_LABEL, describeSchedule, exerciseName, PLAN_TYPE_LABEL, prescriptionSummary, spokenPrescription, workoutDays } from '@/features/plans/describe';
 import { nextMonday, planFromTemplate } from '@/features/plans/planEdits';
 import { ScheduleGrid } from '@/features/plans/ScheduleGrid';
 import { templateMeta } from '@/features/plans/TemplateCard';
 import { EQUIPMENT_LABEL } from '@/features/exercises/ExerciseList';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
-import { readable } from '@/theme/layout';
+import { DENSE_TEXT_MAX, readable, useTextScale } from '@/theme/layout';
 
 /** A starter template's details, and "Use this template" to copy it into a new plan. */
 export default function TemplateScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors, scheme } = useAppTheme();
+  const { large } = useTextScale();
   const toast = useToast();
   const today = useRepository().today();
   const templatesQuery = useTemplates();
@@ -61,11 +62,13 @@ export default function TemplateScreen() {
       <ScrollView contentContainerStyle={[styles.content, readable]}>
         <View style={styles.header}>
           <View style={[styles.category, { backgroundColor: colors.accentSubtle }]}>
-            <AppText variant="caption" weight="800" tone="accent">
+            <AppText variant="caption" weight="800" tone="accent" maxFontSizeMultiplier={DENSE_TEXT_MAX}>
               {CATEGORY_LABEL[template.category].toUpperCase()}
             </AppText>
           </View>
-          <AppText variant="title1">{template.name}</AppText>
+          <AppText variant="title1" accessibilityRole="header">
+            {template.name}
+          </AppText>
           <AppText variant="body" tone="secondary">
             {template.description}
           </AppText>
@@ -96,17 +99,32 @@ export default function TemplateScreen() {
                 <SectionHeader title={[w.name, workoutDays(template, w.id)].filter(Boolean).join(' · ')} />
                 <Card padding="none">
                   {w.blocks.flatMap((b) =>
-                    b.exercises.map((pe, i) => (
-                      <View key={pe.id} style={[styles.line, { borderTopColor: colors.border, borderTopWidth: i === 0 && b === w.blocks[0] ? 0 : StyleSheet.hairlineWidth }]}>
-                        {b.type !== 'single' && <Icon name="arrow.left.arrow.right" color={colors.accentText} size={12} />}
-                        <AppText variant="body" style={styles.flex} numberOfLines={1}>
-                          {exerciseName(exercisesById, pe.exerciseId)}
-                        </AppText>
-                        <AppText variant="footnote" tone="secondary" numeric>
+                    b.exercises.map((pe, i) => {
+                      const name = exerciseName(exercisesById, pe.exerciseId);
+                      const sets = (
+                        <AppText variant="footnote" tone="secondary" numeric style={large ? undefined : styles.shrink}>
                           {prescriptionSummary(pe).split(' · ')[0]}
                         </AppText>
-                      </View>
-                    )),
+                      );
+                      return (
+                        <View
+                          key={pe.id}
+                          accessible
+                          accessibilityLabel={`${b.type !== 'single' ? 'Superset, ' : ''}${name}, ${spokenPrescription(pe).split(', ')[0]}`}
+                          style={[styles.line, { borderTopColor: colors.border, borderTopWidth: i === 0 && b === w.blocks[0] ? 0 : StyleSheet.hairlineWidth }]}
+                        >
+                          {b.type !== 'single' && <Icon name="arrow.left.arrow.right" color={colors.accentText} size={12} />}
+                          {/* Large text: the sets and reps go under the name instead of squeezing it. */}
+                          <View style={styles.flex}>
+                            <AppText variant="body" numberOfLines={large ? undefined : 2}>
+                              {name}
+                            </AppText>
+                            {large && sets}
+                          </View>
+                          {!large && sets}
+                        </View>
+                      );
+                    }),
                   )}
                 </Card>
               </View>
@@ -153,5 +171,9 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  shrink: {
+    flexShrink: 1,
+    textAlign: 'right',
   },
 });

@@ -40,7 +40,7 @@ export function Chip({ label, selected = false, onPress, icon, role = 'checkbox'
       }}
       accessibilityRole={role}
       accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityState={role === 'button' ? undefined : { checked: selected }}
+      accessibilityState={role === 'button' ? { selected } : { checked: selected }}
       hitSlop={4}
       style={[
         styles.chip,

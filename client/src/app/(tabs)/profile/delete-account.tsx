@@ -23,10 +23,17 @@ export default function DeleteAccountScreen() {
 
   return (
     <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-      <AppText variant="title2">What happens when you delete your account</AppText>
+      <AppText variant="title2" accessibilityRole="header">
+        What happens when you delete your account
+      </AppText>
       <Card padding="none">
         {TIMELINE.map((step, i) => (
-          <View key={step.when} style={[styles.step, i < TIMELINE.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+          <View
+            key={step.when}
+            style={[styles.step, i < TIMELINE.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
+            accessible
+            accessibilityLabel={`${step.when}: ${step.what}`}
+          >
             <Icon name={step.icon} color={i === 0 ? colors.errorText : colors.textSecondary} size={22} />
             <View style={styles.flex}>
               <AppText variant="headline">{step.when}</AppText>

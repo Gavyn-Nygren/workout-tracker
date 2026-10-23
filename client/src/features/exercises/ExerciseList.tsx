@@ -112,7 +112,8 @@ export function ExerciseList({ exercises, onPick, similarTo, groupCustom, access
       <TextField label="Search" value={query} onChangeText={setQuery} placeholder="Exercise name" autoCorrect={false} clearButtonMode="while-editing" />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} keyboardShouldPersistTaps="handled">
         {FILTERS.map((m) => (
-          <Chip key={m} label={MUSCLE_LABEL[m]} selected={muscle === m} onPress={() => setMuscle(muscle === m ? null : m)} />
+          // One muscle at a time, so VoiceOver reads these as a pick-one group.
+          <Chip key={m} label={MUSCLE_LABEL[m]} role="radio" selected={muscle === m} onPress={() => setMuscle(muscle === m ? null : m)} />
         ))}
       </ScrollView>
       {accessory}
@@ -162,10 +163,10 @@ export function ExerciseList({ exercises, onPick, similarTo, groupCustom, access
   );
 }
 
-/** Placeholder for the list while it loads, shaped like a section of rows. */
+/** Placeholder for the list while it loads, shaped like a section of rows. VoiceOver hears "Loading". */
 function SkeletonRows() {
   return (
-    <View style={styles.group}>
+    <View style={styles.group} accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }}>
       <Skeleton width={120} height={13} />
       <Card padding="none">
         {Array.from({ length: 6 }, (_, i) => (

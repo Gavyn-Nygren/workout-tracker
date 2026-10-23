@@ -6,6 +6,7 @@ import { addDays, daysBetween, isoWeekday, startOfWeek } from '@/data/dates';
 import type { ISODate } from '@/data/types';
 import { useHaptics } from '@/hooks/useHaptics';
 import { formatLongDate, formatMonthYear, plural } from '@/lib/format';
+import { DENSE_TEXT_MAX } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import type { Agenda, DayItem, DayItemStatus } from './agenda';
@@ -80,8 +81,9 @@ export function WeekStrip({ agenda, today, selected, onSelect, range }: Props) {
 
   return (
     <View style={styles.wrap} onLayout={(e) => setMeasured(Math.round(e.nativeEvent.layout.width))}>
+      {/* Wraps at large text sizes: the buttons drop to their own line instead of off the edge. */}
       <View style={styles.header}>
-        <AppText variant="headline" weight="700" accessibilityRole="header">
+        <AppText variant="headline" weight="700" accessibilityRole="header" style={styles.month}>
           {monthLabel}
         </AppText>
         <View style={styles.headerActions}>
@@ -96,15 +98,15 @@ export function WeekStrip({ agenda, today, selected, onSelect, range }: Props) {
               hitSlop={8}
               style={[styles.todayPill, { backgroundColor: colors.accentSubtle }]}
             >
-              <AppText variant="footnote" tone="accent" weight="700">
+              <AppText variant="footnote" tone="accent" weight="700" maxFontSizeMultiplier={DENSE_TEXT_MAX}>
                 Today
               </AppText>
             </Pressable>
           )}
-          <Pressable onPress={() => goToWeek(visibleWeek - 1)} accessibilityRole="button" accessibilityLabel="Previous week" hitSlop={10}>
+          <Pressable onPress={() => goToWeek(visibleWeek - 1)} disabled={visibleWeek <= 0} accessibilityRole="button" accessibilityLabel="Previous week" hitSlop={10}>
             <Icon name="chevron.left" color={visibleWeek > 0 ? colors.accentText : colors.textTertiary} size={18} />
           </Pressable>
-          <Pressable onPress={() => goToWeek(visibleWeek + 1)} accessibilityRole="button" accessibilityLabel="Next week" hitSlop={10}>
+          <Pressable onPress={() => goToWeek(visibleWeek + 1)} disabled={visibleWeek >= weeks.length - 1} accessibilityRole="button" accessibilityLabel="Next week" hitSlop={10}>
             <Icon name="chevron.right" color={visibleWeek < weeks.length - 1 ? colors.accentText : colors.textTertiary} size={18} />
           </Pressable>
         </View>
@@ -187,8 +189,10 @@ function DayCell({
       <View
         style={[
           styles.dateCircle,
-          isSelected && { backgroundColor: colors.accent },
-          !isSelected && isToday && { borderColor: colors.accentText, borderWidth: 1.5 },
+          // Light mode outlines the selected day, since baby blue is pale on white (user's pick). The
+          // border is always there (transparent when unused) so the circle doesn't shift.
+          isSelected && { backgroundColor: colors.accent, borderColor: colors.selectedOutline },
+          !isSelected && isToday && { borderColor: colors.accentText },
         ]}
       >
         <AppText
@@ -212,13 +216,14 @@ function DayCell({
 
 function StatusDot({ status }: { status: DayItemStatus }) {
   const { colors } = useAppTheme();
+  // Amber as warningText: raw amber is 1.8:1 on the light page (it's the same amber in dark mode).
   const style = {
     completed: { backgroundColor: colors.successFill },
-    partial: { backgroundColor: colors.warningFill },
+    partial: { backgroundColor: colors.warningText },
     in_progress: { backgroundColor: colors.accentText },
     planned: { borderColor: colors.accentText, borderWidth: 1.5 },
-    missed: { borderColor: colors.warningFill, borderWidth: 1.5 },
-    skipped: { borderColor: colors.textTertiary, borderWidth: 1.5 },
+    missed: { borderColor: colors.warningText, borderWidth: 1.5 },
+    skipped: { borderColor: colors.textSecondary, borderWidth: 1.5 },
   }[status];
   return <View style={[styles.dot, style]} />;
 }
@@ -229,14 +234,21 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
+    rowGap: spacing.xs,
+    columnGap: spacing.md,
     paddingHorizontal: spacing.lg + spacing.xs,
+  },
+  month: {
+    flexShrink: 1,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.lg,
+    marginLeft: 'auto',
   },
   todayPill: {
     borderRadius: radius.pill,
@@ -257,6 +269,8 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },

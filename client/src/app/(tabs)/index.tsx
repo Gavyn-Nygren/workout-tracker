@@ -2,7 +2,7 @@ import { router, useNavigation } from 'expo-router';
 import { useLayoutEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
-import { EmptyState, SectionHeader, Skeleton } from '@/components/ui';
+import { ErrorState, SectionHeader, Skeleton } from '@/components/ui';
 import type { ISODate } from '@/data/types';
 import { ComingUp } from '@/features/today/ComingUp';
 import { MissedBanner } from '@/features/today/MissedBanner';
@@ -79,19 +79,7 @@ export default function TodayScreen() {
     ]);
   };
 
-  if (error) {
-    return (
-      <View style={styles.center}>
-        <EmptyState
-          icon="exclamationmark.triangle"
-          title="Couldn't load your schedule"
-          message="Your workouts are still saved on this phone."
-          actionLabel="Try again"
-          onAction={retry}
-        />
-      </View>
-    );
-  }
+  if (error) return <ErrorState fill title="Couldn't load your schedule" message="Your workouts are still saved on this phone." onRetry={retry} />;
 
   return (
     <ScrollView contentContainerStyle={[styles.content, dashboard]} contentInsetAdjustmentBehavior="automatic">
@@ -170,10 +158,5 @@ const styles = StyleSheet.create({
   },
   skeleton: {
     gap: spacing.md,
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
   },
 });

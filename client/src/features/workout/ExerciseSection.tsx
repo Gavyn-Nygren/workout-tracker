@@ -3,11 +3,13 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { AppText, Button, Icon } from '@/components/ui';
 import type { Exercise, LoggedSet, SessionExercise, UnitSystem } from '@/data/types';
 import { formatRepTarget, unitLabel } from '@/lib/format';
-import { formatClock } from '@/hooks/useNow';
+import { formatClock, spokenDuration } from '@/hooks/useNow';
+import { DENSE_TEXT_MAX } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { isFormAnalysisSupported } from '../form/capability';
-import { SET_COLUMNS, SetRow } from './SetRow';
+import { SetRow, useSetColumns } from './SetRow';
+import { setNumber } from './workoutReducer';
 
 type Props = {
   entry: SessionExercise;
@@ -27,14 +29,15 @@ type Props = {
   onUnskip: () => void;
 };
 
-function targetSummary(entry: SessionExercise): string {
+/** "3 × 8-12 · Rest 1:30"; `spoken` says "Rest 1 minute 30 seconds" so VoiceOver doesn't read a time of day. */
+function targetSummary(entry: SessionExercise, spoken = false): string {
   const working = entry.sets.filter((s) => s.kind !== 'warmup');
   const target = working[0]?.target;
   const parts: string[] = [];
   if (target?.kind === 'timed_hold') parts.push(`${working.length} × ${target.targetDurationSec ?? 0} s`);
   else if (target?.targetReps !== undefined) parts.push(`${working.length} × ${formatRepTarget(target.targetReps)}`);
   else parts.push(`${working.length} sets`);
-  if (target?.restSec) parts.push(`Rest ${formatClock(target.restSec)}`);
+  if (target?.restSec) parts.push(`Rest ${spoken ? spokenDuration(target.restSec) : formatClock(target.restSec)}`);
   if (target?.tempo) parts.push(`Tempo ${target.tempo}`);
   return parts.join(' · ');
 }
@@ -43,24 +46,34 @@ function targetSummary(entry: SessionExercise): string {
 export function ExerciseSection(props: Props) {
   const { entry, exercise, label, previous, units, effortScale, prSetIds, onChangeSet, onToggleSet, onOpenSet, onAddSet, onOpenMenu, onCamera, onUnskip } = props;
   const { colors } = useAppTheme();
+  const cols = useSetColumns();
   const name = exercise?.name ?? 'Exercise';
-  let workingNumber = 0;
+  // Header labels grow with the set numbers, but no further.
+  const head = { variant: 'caption', tone: 'secondary', weight: '700', maxFontSizeMultiplier: DENSE_TEXT_MAX } as const;
 
   return (
     <View style={styles.section}>
       <View style={styles.header}>
         {label && (
-          <View style={[styles.letter, { backgroundColor: colors.accentSubtle }]}>
-            <AppText variant="caption" weight="800" tone="accent">
+          // The letter is part of the heading's spoken label below.
+          <View style={[styles.letter, { backgroundColor: colors.accentSubtle }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <AppText variant="caption" weight="800" tone="accent" maxFontSizeMultiplier={DENSE_TEXT_MAX}>
               {label}
             </AppText>
           </View>
         )}
         <View style={styles.flex}>
-          <AppText variant="headline" weight="700" numberOfLines={2} tone={entry.skipped ? 'tertiary' : 'primary'}>
+          <AppText
+            variant="headline"
+            weight="700"
+            tone={entry.skipped ? 'secondary' : 'primary'}
+            // A heading per exercise, so the VoiceOver rotor can jump between them.
+            accessibilityRole="header"
+            accessibilityLabel={`${label ? `${label}, ` : ''}${name}${entry.skipped ? ', skipped' : ''}`}
+          >
             {name}
           </AppText>
-          <AppText variant="footnote" tone="secondary" numberOfLines={1}>
+          <AppText variant="footnote" tone="secondary" accessibilityLabel={entry.skipped ? undefined : targetSummary(entry, true)}>
             {entry.skipped ? 'Skipped' : targetSummary(entry)}
           </AppText>
         </View>
@@ -86,49 +99,53 @@ export function ExerciseSection(props: Props) {
 
       {entry.skipped ? (
         <View style={styles.skipped}>
-          <Button title="Undo skip" variant="ghost" size="sm" icon="arrow.uturn.backward" onPress={onUnskip} />
+          <Button title="Undo skip" variant="ghost" size="sm" icon="arrow.uturn.backward" onPress={onUnskip} accessibilityLabel={`Undo skip ${name}`} />
         </View>
       ) : (
         <>
-          <View style={styles.tableHeader} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-            <AppText variant="caption" tone="tertiary" weight="700" style={[styles.headCell, { width: SET_COLUMNS.set, textAlign: 'center' }]}>
+          {/* Hidden from VoiceOver: each field's label already names its column and unit. */}
+          <View style={[styles.tableHeader, { gap: cols.gap }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <AppText {...head} style={[styles.headCell, { minWidth: cols.set, textAlign: 'center' }]}>
               SET
             </AppText>
-            <AppText variant="caption" tone="tertiary" weight="700" style={[styles.headCell, styles.flex]}>
-              PREVIOUS
-            </AppText>
-            <AppText variant="caption" tone="tertiary" weight="700" style={[styles.headCell, { width: SET_COLUMNS.load, textAlign: 'center' }]}>
+            {cols.stacked ? (
+              // PREVIOUS moves under each row's inputs at large text sizes.
+              <View style={styles.flex} />
+            ) : (
+              <AppText {...head} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={[styles.headCell, styles.flex]}>
+                PREVIOUS
+              </AppText>
+            )}
+            <AppText {...head} style={[styles.headCell, { width: cols.load, textAlign: 'center' }]}>
               {exercise?.isBodyweight ? `+${unitLabel(units).toUpperCase()}` : unitLabel(units).toUpperCase()}
             </AppText>
-            <AppText variant="caption" tone="tertiary" weight="700" style={[styles.headCell, { width: SET_COLUMNS.reps, textAlign: 'center' }]}>
+            <AppText {...head} style={[styles.headCell, { width: cols.reps, textAlign: 'center' }]}>
               {entry.sets.some((s) => s.kind === 'timed_hold') ? 'SEC' : 'REPS'}
             </AppText>
-            <View style={{ width: SET_COLUMNS.check, alignItems: 'center' }}>
-              <Icon name="checkmark" color={colors.textTertiary} size={12} weight="bold" />
+            <View style={{ width: cols.check, alignItems: 'center' }}>
+              <Icon name="checkmark" color={colors.textSecondary} size={12} weight="bold" />
             </View>
           </View>
 
-          {entry.sets.map((set, i) => {
-            if (set.kind !== 'warmup') workingNumber++;
-            return (
-              <SetRow
-                key={set.id}
-                set={set}
-                number={set.kind === 'warmup' ? i + 1 : workingNumber}
-                previous={previous[i]}
-                exercise={exercise}
-                units={units}
-                effortScale={effortScale}
-                isPR={prSetIds.has(set.id)}
-                onChange={(patch) => onChangeSet(set.id, patch)}
-                onToggle={() => onToggleSet(set)}
-                onOpenDetail={() => onOpenSet(set.id)}
-              />
-            );
-          })}
+          {entry.sets.map((set, i) => (
+            <SetRow
+              key={set.id}
+              set={set}
+              number={setNumber(entry.sets, set)}
+              previous={previous[i]}
+              exercise={exercise}
+              exerciseName={name}
+              units={units}
+              effortScale={effortScale}
+              isPR={prSetIds.has(set.id)}
+              onChange={(patch) => onChangeSet(set.id, patch)}
+              onToggle={() => onToggleSet(set)}
+              onOpenDetail={() => onOpenSet(set.id)}
+            />
+          ))}
 
           <View style={styles.footer}>
-            <Button title="Add set" variant="ghost" size="sm" icon="plus" onPress={onAddSet} />
+            <Button title="Add set" variant="ghost" size="sm" icon="plus" onPress={onAddSet} accessibilityLabel={`Add set to ${name}`} />
           </View>
         </>
       )}
@@ -150,7 +167,7 @@ const styles = StyleSheet.create({
   },
   letter: {
     minWidth: 28,
-    height: 28,
+    minHeight: 28,
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
@@ -173,7 +190,6 @@ const styles = StyleSheet.create({
   tableHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.xs,
   },

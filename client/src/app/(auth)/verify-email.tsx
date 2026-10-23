@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Linking, StyleSheet, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Icon, useToast } from '@/components/ui';
 import { signIn } from '@/features/auth/authStore';
@@ -24,12 +24,13 @@ export default function VerifyEmailScreen() {
   }, [cooldown]);
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+    // Scrolls at large text sizes so every button stays reachable.
+    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.screen}>
       <View style={[styles.body, readable]}>
         <View style={[styles.icon, { backgroundColor: colors.accentSubtle }]}>
           <Icon name="envelope.badge.fill" color={colors.accentText} size={34} />
         </View>
-        <AppText variant="title1" style={styles.center}>
+        <AppText variant="title1" accessibilityRole="header" style={styles.center}>
           Check your inbox
         </AppText>
         <AppText variant="body" tone="secondary" style={styles.center}>
@@ -46,6 +47,7 @@ export default function VerifyEmailScreen() {
           />
           <Button
             title={cooldown > 0 ? `Resend email in ${cooldown}s` : 'Resend email'}
+            accessibilityLabel={cooldown > 0 ? `Resend email in ${cooldown} seconds` : 'Resend email'}
             variant="ghost"
             disabled={cooldown > 0}
             onPress={() => {
@@ -56,17 +58,17 @@ export default function VerifyEmailScreen() {
           />
           <Button title="Use a different email" variant="ghost" size="sm" onPress={() => router.back()} style={styles.centerSelf} />
         </View>
-        <AppText variant="footnote" tone="tertiary" style={styles.center}>
+        <AppText variant="footnote" tone="secondary" style={styles.center}>
           Can't find it? Check spam, or make sure the address is right.
         </AppText>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
+    flexGrow: 1,
     padding: spacing.xl,
     justifyContent: 'center',
   },

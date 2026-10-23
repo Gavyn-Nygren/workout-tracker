@@ -16,7 +16,11 @@ type Props = {
   decimal?: boolean;
   placeholder?: string;
   width?: number;
+  /** How far the text (and the field with it) grows with Dynamic Type. Dense tables pass 1.5. */
+  maxScale?: number;
 };
+
+const SPOKEN_UNITS: Record<string, string> = { s: 'seconds', sec: 'seconds', min: 'minutes', lb: 'pounds', lbs: 'pounds', kg: 'kilograms', in: 'inches', cm: 'centimeters', '%': 'percent', '°': 'degrees' };
 
 /** Accepts both "." and "," as the decimal separator. */
 export function parseNumber(text: string, decimal: boolean): number | undefined {
@@ -31,11 +35,9 @@ function formatNumber(value: number | undefined): string {
   return String(Math.round(value * 100) / 100);
 }
 
-/** Text in the field grows up to 2x with Dynamic Type, and the field widens to match. */
-const MAX_SCALE = 2;
-
 /** Compact numeric input for weights, reps, and times. Uses the number or decimal keypad. */
-export function NumberField({ label, value, onChange, unit, decimal = false, placeholder, width = 88 }: Props) {
+/** Compact numeric input. Text grows up to `maxScale` with Dynamic Type and the field widens to match. */
+export function NumberField({ label, value, onChange, unit, decimal = false, placeholder, width = 88, maxScale = 2 }: Props) {
   const { colors, scheme } = useAppTheme();
   const { fontScale } = useWindowDimensions();
   const [text, setText] = useState(formatNumber(value));
@@ -50,7 +52,7 @@ export function NumberField({ label, value, onChange, unit, decimal = false, pla
     <View
       style={[
         styles.field,
-        { width: width * Math.min(Math.max(fontScale, 1), MAX_SCALE), backgroundColor: colors.input, borderColor: focused ? colors.accentText : 'transparent' },
+        { width: width * Math.min(Math.max(fontScale, 1), maxScale), backgroundColor: colors.input, borderColor: focused ? colors.accentText : 'transparent' },
       ]}
     >
       <TextInput
@@ -68,12 +70,12 @@ export function NumberField({ label, value, onChange, unit, decimal = false, pla
         placeholderTextColor={colors.textTertiary}
         selectionColor={colors.accentText}
         keyboardAppearance={scheme}
-        maxFontSizeMultiplier={MAX_SCALE}
-        accessibilityLabel={unit ? `${label}, ${unit}` : label}
+        maxFontSizeMultiplier={maxScale}
+        accessibilityLabel={unit ? `${label}, ${SPOKEN_UNITS[unit] ?? unit}` : label}
         style={[typography.headline, tabularNums, styles.input, { color: colors.text }]}
       />
       {unit && (
-        <AppText variant="footnote" tone="secondary" maxFontSizeMultiplier={MAX_SCALE} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <AppText variant="footnote" tone="secondary" maxFontSizeMultiplier={maxScale} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           {unit}
         </AppText>
       )}

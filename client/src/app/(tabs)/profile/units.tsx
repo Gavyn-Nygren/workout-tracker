@@ -7,7 +7,7 @@ import { EQUIPMENT_LABEL } from '@/features/exercises/ExerciseList';
 import { useSettings } from '@/features/settings/useSettings';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
-import { readable } from '@/theme/layout';
+import { readable, useTextScale } from '@/theme/layout';
 
 const ROUNDED: Equipment[] = ['barbell', 'dumbbell', 'machine', 'cable', 'kettlebell'];
 
@@ -15,6 +15,7 @@ const ROUNDED: Equipment[] = ['barbell', 'dumbbell', 'machine', 'cable', 'kettle
 export default function UnitsScreen() {
   const { colors } = useAppTheme();
   const { preferences, update } = useSettings();
+  const { large } = useTextScale();
   const unit = preferences.units === 'imperial' ? 'lb' : 'kg';
 
   return (
@@ -56,8 +57,10 @@ export default function UnitsScreen() {
         <SectionHeader title="Weight rounding" />
         <Card padding="none">
           {ROUNDED.map((equipment, i) => (
-            <View key={equipment} style={[styles.row, i < ROUNDED.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-              <AppText variant="body" style={styles.flex}>
+            // At accessibility sizes the label sits above the field so neither gets squeezed.
+            <View key={equipment} style={[large ? styles.stacked : styles.row, i < ROUNDED.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+              {/* The field speaks "Barbell rounding increment" itself. */}
+              <AppText variant="body" style={!large && styles.flex} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                 {EQUIPMENT_LABEL[equipment]}
               </AppText>
               <NumberField
@@ -95,6 +98,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     minHeight: 54,
+  },
+  stacked: {
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
   hint: {
     paddingHorizontal: spacing.xs,

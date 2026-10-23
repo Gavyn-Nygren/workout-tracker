@@ -121,6 +121,25 @@ export function workoutReducer(state: ActiveWorkout | null, action: WorkoutActio
   }
 }
 
+/**
+ * A set's number as the set table shows it: working sets (drops included) count 1, 2, 3…, and
+ * warm-ups count separately because they show a "W" tag instead of a number.
+ */
+export function setNumber(sets: LoggedSet[], set: LoggedSet): number {
+  const warmup = set.kind === 'warmup';
+  let n = 0;
+  for (const s of sets) {
+    if ((s.kind === 'warmup') === warmup) n++;
+    if (s.id === set.id) break;
+  }
+  return n;
+}
+
+/** "Set 2" or "Warm-up set 1", for titles, labels, and announcements. */
+export function setName(kind: LoggedSet['kind'], number: number): string {
+  return kind === 'warmup' ? `Warm-up set ${number}` : `Set ${number}`;
+}
+
 export type SetCounts = { done: number; total: number };
 
 /** Sets that count toward progress: everything in exercises that aren't skipped. */

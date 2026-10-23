@@ -1,20 +1,22 @@
 import { router } from 'expo-router';
 import { useMemo } from 'react';
-import { ActionSheetIOS, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, ActionSheetIOS, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Sparkline } from '@/components/charts/Sparkline';
 import { AppText, Button, Card, EmptyState, ErrorState, Icon, ListRow, PressableScale, ScreenState, SectionHeader, Skeleton } from '@/components/ui';
 import { addDays } from '@/data/dates';
-import { formatMonthDay, formatShortDate, plural } from '@/lib/format';
+import { formatLongDate, formatMonthDay, formatShortDate, plural } from '@/lib/format';
 import { Change, RangeChips } from '@/features/progress/ProgressParts';
 import { graphsStore, pinnedStore, removeGraph, togglePinned } from '@/features/progress/progressPrefs';
-import { bodyweightSeries, changeOverTime, exerciseSeries, metricShort, mostFrequent, toDisplay, type Metric } from '@/features/progress/series';
-import { formatMetric, formatMetricDelta, useProgressData } from '@/features/progress/useProgressData';
+import { bodyweightSeries, changeOverTime, describeTrend, exerciseSeries, metricLabel, metricShort, mostFrequent, toDisplay, type Metric } from '@/features/progress/series';
+import { formatMetric, formatMetricDelta, spokenMetric, spokenMetricDelta, useProgressData } from '@/features/progress/useProgressData';
 import { useAppTheme } from '@/theme/ThemeProvider';
-import { Columns, dashboard } from '@/theme/layout';
+import { Columns, dashboard, useTextScale } from '@/theme/layout';
 import { radius, spacing } from '@/theme/tokens';
 
 const KEY_LIMIT = 6;
+
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /**
  * Progress (roadmap G2.6), one scrolling page (user's pick): range, key exercises, your graphs,
@@ -22,6 +24,7 @@ const KEY_LIMIT = 6;
  */
 export default function ProgressScreen() {
   const { colors, scheme } = useAppTheme();
+  const { large } = useTextScale();
   const data = useProgressData();
   const pinned = pinnedStore.use();
   const graphs = graphsStore.use();
@@ -53,7 +56,7 @@ export default function ProgressScreen() {
 
   if (data.isLoading) {
     return (
-      <View style={[styles.content, dashboard]}>
+      <View style={[styles.content, dashboard]} accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }}>
         <Skeleton height={36} radius={radius.pill} />
         <Skeleton height={96} radius={radius.card} />
         <Skeleton height={96} radius={radius.card} />
@@ -68,14 +71,20 @@ export default function ProgressScreen() {
   const bwTrend = bw.trend.map((p) => ({ ...p, value: toDisplay(p.value, 'bodyweight', data.units) }));
   const bwChange = bwTrend.length > 1 ? bwTrend[bwTrend.length - 1].value - bwTrend[0].value : undefined;
 
+  const pinLabel = (exerciseId: string) => (pinned.includes(exerciseId) ? 'Unpin from Key exercises' : 'Pin to Key exercises');
+  const openHistory = (exerciseId: string) => router.push({ pathname: '/progress/history', params: { id: exerciseId } });
   const keyMenu = (exerciseId: string) =>
     ActionSheetIOS.showActionSheetWithOptions(
-      { title: name(exerciseId), options: [pinned.includes(exerciseId) ? 'Unpin from Key exercises' : 'Pin to Key exercises', 'View history', 'Cancel'], cancelButtonIndex: 2, userInterfaceStyle: scheme },
+      { title: name(exerciseId), options: [pinLabel(exerciseId), 'View history', 'Cancel'], cancelButtonIndex: 2, userInterfaceStyle: scheme },
       (i) => {
         if (i === 0) togglePinned(exerciseId);
-        if (i === 1) router.push({ pathname: '/progress/history', params: { id: exerciseId } });
+        if (i === 1) openHistory(exerciseId);
       },
     );
+  const removeGraphNow = (id: string) => {
+    removeGraph(id);
+    AccessibilityInfo.announceForAccessibility('Graph removed.');
+  };
 
   return (
     <ScrollView contentContainerStyle={[styles.content, dashboard]}>
@@ -85,25 +94,39 @@ export default function ProgressScreen() {
       <Columns
         left={
           <View style={styles.section}>
-            <SectionHeader title="Key exercises · e1RM" />
+            <SectionHeader title="Key exercises · e1RM" accessibilityLabel="Key exercises, estimated one-rep max" />
             {keyIds.map((id) => {
               const points = series(id, 'e1rm');
               const latest = points[points.length - 1];
               const change = changeOverTime(points);
+              const status = change
+                ? `${capitalize(spokenMetricDelta(change.delta, 'e1rm', data.units))} since ${formatLongDate(change.since)}`
+                : points.length
+                  ? 'Not enough sessions in range'
+                  : 'No sets in this range';
               return (
                 <PressableScale
                   key={id}
                   onPress={() => router.push({ pathname: '/progress/graph', params: { exercise: id, metric: 'e1rm' } })}
                   onLongPress={() => keyMenu(id)}
                   accessibilityRole="button"
-                  accessibilityHint="Opens the full graph. Long press to pin or unpin."
+                  accessibilityLabel={`${name(id)}${pinned.includes(id) ? ', pinned' : ''}. Estimated one-rep max ${latest ? spokenMetric(latest.value, 'e1rm', data.units) : 'not available'}. ${status}.`}
+                  accessibilityHint="Opens the full graph."
+                  accessibilityActions={[
+                    { name: 'pin', label: pinLabel(id) },
+                    { name: 'history', label: 'View history' },
+                  ]}
+                  onAccessibilityAction={(e) => {
+                    if (e.nativeEvent.actionName === 'pin') togglePinned(id);
+                    if (e.nativeEvent.actionName === 'history') openHistory(id);
+                  }}
                 >
                   <Card>
-                    <View style={styles.keyRow}>
-                      <View style={styles.keyText}>
+                    <View style={large ? styles.keyColumn : styles.keyRow}>
+                      <View style={large ? undefined : styles.keyText}>
                         <View style={styles.inline}>
                           {pinned.includes(id) && <Icon name="pin.fill" color={colors.accentText} size={11} />}
-                          <AppText variant="subhead" weight="700" numberOfLines={1} style={styles.flex}>
+                          <AppText variant="subhead" weight="700" numberOfLines={large ? undefined : 2} style={styles.flex}>
                             {name(id)}
                           </AppText>
                         </View>
@@ -118,8 +141,10 @@ export default function ProgressScreen() {
                           </AppText>
                         )}
                       </View>
-                      <View style={styles.spark}>
-                        {points.length > 0 && <Sparkline points={points} height={64} label={`${name(id)} e1RM over ${plural(points.length, 'session')}`} />}
+                      <View style={large ? undefined : styles.spark}>
+                        {points.length > 0 && (
+                          <Sparkline points={points} height={64} label={`${name(id)} estimated one-rep max, ${describeTrend(points, (v) => spokenMetric(v, 'e1rm', data.units))}`} />
+                        )}
                       </View>
                     </View>
                   </Card>
@@ -136,11 +161,13 @@ export default function ProgressScreen() {
         right={
           <>
             <View style={styles.section}>
-              <SectionHeader title="Your graphs" actionLabel="New" onAction={() => router.push('/graph-builder')} />
+              <SectionHeader title="Your graphs" actionLabel="New" actionAccessibilityLabel="New graph" onAction={() => router.push('/graph-builder')} />
               <Card padding="none">
                 {graphs.map((g, i) => {
                   const points = series(g.exerciseId, g.metric);
                   const latest = points[points.length - 1];
+                  const speak = (v: number) => spokenMetric(v, g.metric, data.units);
+                  const trend = points.length > 1 ? ` ${capitalize(describeTrend(points, speak))}.` : '';
                   return (
                     <Pressable
                       key={g.id}
@@ -152,16 +179,24 @@ export default function ProgressScreen() {
                         )
                       }
                       accessibilityRole="button"
-                      accessibilityHint="Opens the graph. Long press to remove it."
+                      accessibilityLabel={`${name(g.exerciseId)}, ${metricLabel(g.metric)}. ${latest ? `Latest ${speak(latest.value)}, ${formatLongDate(latest.date)}.` : 'No sets in this range.'}${trend}`}
+                      accessibilityHint="Opens the graph."
+                      accessibilityActions={[{ name: 'remove', label: 'Remove graph' }]}
+                      onAccessibilityAction={(e) => e.nativeEvent.actionName === 'remove' && removeGraphNow(g.id)}
                       style={({ pressed }) => [styles.graphRow, i < graphs.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }, pressed && { backgroundColor: colors.input }]}
                     >
                       <View style={styles.flex}>
-                        <AppText variant="subhead" weight="700" numberOfLines={1}>{`${name(g.exerciseId)} · ${metricShort(g.metric)}`}</AppText>
+                        <AppText variant="subhead" weight="700" numberOfLines={large ? undefined : 2}>{`${name(g.exerciseId)} · ${metricShort(g.metric)}`}</AppText>
                         <AppText variant="footnote" tone="secondary" numeric>
                           {latest ? `${formatMetric(latest.value, g.metric, data.units)} · ${formatShortDate(latest.date)}` : 'No sets in this range'}
                         </AppText>
                       </View>
-                      <View style={styles.miniSpark}>{points.length > 0 && <Sparkline points={points} height={36} label={`${name(g.exerciseId)} ${metricShort(g.metric)}`} />}</View>
+                      {/* At large text sizes the name needs the room; the full graph is a tap away. */}
+                      {!large && (
+                        <View style={styles.miniSpark}>
+                          {points.length > 0 && <Sparkline points={points} height={36} label={`${name(g.exerciseId)} ${metricLabel(g.metric)}, ${describeTrend(points, speak)}`} />}
+                        </View>
+                      )}
                       <Icon name="chevron.right" color={colors.textTertiary} size={13} />
                     </Pressable>
                   );
@@ -171,11 +206,16 @@ export default function ProgressScreen() {
             </View>
 
             <View style={styles.section}>
-              <SectionHeader title="Bodyweight" actionLabel="Log" onAction={() => router.push('/log-weight')} />
-              <PressableScale onPress={() => router.push('/progress/bodyweight')} accessibilityRole="button" accessibilityHint="Opens your bodyweight log">
+              <SectionHeader title="Bodyweight" actionLabel="Log" actionAccessibilityLabel="Log bodyweight" onAction={() => router.push('/log-weight')} />
+              <PressableScale
+                onPress={() => router.push('/progress/bodyweight')}
+                accessibilityRole="button"
+                accessibilityLabel={`Bodyweight, 7-day trend ${bwTrend.length ? spokenMetric(bwTrend[bwTrend.length - 1].value, 'bodyweight', data.units) : 'not available'}.${bwChange !== undefined ? ` ${capitalize(spokenMetricDelta(bwChange, 'bodyweight', data.units))} in range.` : ''}`}
+                accessibilityHint="Opens your bodyweight log."
+              >
                 <Card>
-                  <View style={styles.keyRow}>
-                    <View style={styles.keyText}>
+                  <View style={large ? styles.keyColumn : styles.keyRow}>
+                    <View style={large ? undefined : styles.keyText}>
                       <AppText variant="subhead" weight="700">
                         7-day trend
                       </AppText>
@@ -184,7 +224,9 @@ export default function ProgressScreen() {
                       </AppText>
                       {bwChange !== undefined && <Change text={`${formatMetricDelta(bwChange, 'bodyweight', data.units)} in range`} delta={bwChange} neutral />}
                     </View>
-                    <View style={styles.spark}>{bwTrend.length > 0 && <Sparkline points={bwTrend} height={64} label="Bodyweight trend" />}</View>
+                    <View style={large ? undefined : styles.spark}>
+                      {bwTrend.length > 0 && <Sparkline points={bwTrend} height={64} label={`Bodyweight trend, ${describeTrend(bwTrend, (v) => spokenMetric(v, 'bodyweight', data.units), 'weigh-in')}`} />}
+                    </View>
                   </View>
                 </Card>
               </PressableScale>
@@ -233,6 +275,10 @@ const styles = StyleSheet.create({
   keyText: {
     width: '46%',
     gap: 2,
+  },
+  // Large text: the numbers take the full width and the sparkline sits under them.
+  keyColumn: {
+    gap: spacing.md,
   },
   spark: {
     flex: 1,
