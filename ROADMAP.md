@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G2.4 (Plans).
+**Current goal:** G2.6 (Progress).
 
 ## How we work
 
@@ -143,15 +143,16 @@ The most important screen.
 - [x] Prescription editor: sets, reps, weight, RPE/RIR, rest, tempo, warm-ups, progression rule.
 - [x] Template browser by category. *Category chips + cards (user's pick). Four templates have full sample workouts; three are listing-only until G3.13.*
 - [x] Exercise picker and custom exercise form (with base-movement link).
-- [ ] The user has reviewed Plans on their iPhone.
+- [x] The user has reviewed Plans on their iPhone.
 
 *Plan and exercise edits save into the in-memory sample data, and the upcoming calendar is rebuilt so Today shows them, until the app restarts.*
 
 ### G2.5 Home 👁
 
-- [ ] Weekly snapshot at the top, then active goals, then recent PRs and form wins, then badges.
-- [ ] Goal creation for all four goal types, with an optional deadline.
-- [ ] Badge detail.
+- [x] Weekly snapshot at the top, then active goals, then recent PRs and form wins, then badges. *Dark hero snapshot, goal bars with pace, one mixed wins feed, earned + next-up badges (user's picks).*
+- [x] Goal creation for all four goal types, with an optional deadline. *Also edit and delete.*
+- [x] Badge detail.
+- [ ] The user has reviewed Home on their iPhone.
 
 ### G2.6 Progress 👁
 

@@ -64,6 +64,8 @@ export interface DataRepository {
   deletePlan(planId: ID): Promise<void>;
   /** Creates or updates a custom exercise. */
   saveExercise(exercise: Exercise): Promise<void>;
+  saveGoal(goal: Goal): Promise<void>;
+  deleteGoal(goalId: ID): Promise<void>;
 }
 
 /** How far ahead the calendar is generated. */
@@ -146,6 +148,15 @@ export function createFakeRepository(data: FakeDataset): DataRepository {
       const existing = data.exercises.some((e) => e.id === exercise.id);
       data.exercises = existing ? data.exercises.map((e) => (e.id === exercise.id ? exercise : e)) : [...data.exercises, exercise];
       exercisesById.set(exercise.id, exercise);
+    },
+    saveGoal: async (goal) => {
+      const existing = data.goals.some((g) => g.id === goal.id);
+      data.goals = existing ? data.goals.map((g) => (g.id === goal.id ? goal : g)) : [...data.goals, goal];
+      // The weekly streak target follows the frequency goal (spec 2.5).
+      if (goal.type === 'frequency') data.streak = deriveStreak(data.sessions, data.today, goal.workoutsPerWeek);
+    },
+    deleteGoal: async (goalId) => {
+      data.goals = data.goals.filter((g) => g.id !== goalId);
     },
   };
 }

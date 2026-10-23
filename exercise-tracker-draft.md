@@ -404,6 +404,20 @@ Sumo deadlifts are excluded because they are hard to read from a side view.
   4. Badges.
 
   The AI chat entry point is added to Home in the chat release.
+- **Home layout:**
+  - **Weekly snapshot:** a **dark hero card** with a ring for workouts done against the weekly target and the 🔥 week streak.
+    - A message says how many workouts remain this week to keep or start the streak.
+    - A Mon–Sun row of status dots shows the week, with today underlined.
+    - Tapping the card opens Today.
+  - **Goals:** each goal has a **progress bar**, current vs target, and days left.
+    - Goals with a deadline also get an **On track / Behind pace** tag. Pace is compared with a straight line from the goal's start to its deadline, with a little slack.
+    - Tapping a goal offers Edit or Delete.
+  - **Recent wins:** **one mixed feed** from the last 3 weeks of PRs (one line per exercise per workout), form improvements of 5° or more, and badges earned. Form wins and badges always make the list; minor PRs are dropped first.
+  - **Badges:** a row of **earned** gold medallions, plus **"Next up"** badges shown dimmed with progress rings. Tapping a badge opens its detail sheet.
+- **Goal form:**
+  - Type: Lift, Frequency, Weight, or Form, each with its own fields and an optional deadline of 4, 8, or 12 weeks.
+  - The goal title is generated automatically.
+  - A frequency goal also sets the weekly streak target.
 - **Goal types:**
   - lift target (X × Y reps, or an e1RM target)
   - frequency (N workouts per week)

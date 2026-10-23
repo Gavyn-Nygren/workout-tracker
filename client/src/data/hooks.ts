@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useRepository } from './DataProvider';
 import type { DateRange } from './repository';
-import type { Exercise, ID, Plan, PlannedBlock, WorkoutSession } from './types';
+import type { Exercise, Goal, ID, Plan, PlannedBlock, WorkoutSession } from './types';
 
 // Writes. Each one refreshes the reads it affects.
 
@@ -49,6 +49,24 @@ export function useSaveExercise() {
   return useMutation({
     mutationFn: (exercise: Exercise) => repo.saveExercise(exercise),
     onSuccess: () => client.invalidateQueries({ queryKey: ['exercises'] }),
+  });
+}
+
+export function useSaveGoal() {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (goal: Goal) => repo.saveGoal(goal),
+    onSuccess: () => Promise.all(['goals', 'streak'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+  });
+}
+
+export function useDeleteGoal() {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (goalId: ID) => repo.deleteGoal(goalId),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['goals'] }),
   });
 }
 

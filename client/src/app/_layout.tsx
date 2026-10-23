@@ -74,6 +74,8 @@ function NavigationRoot() {
           <Stack.Screen name="workout/timer" options={sheet([0.7])} />
           <Stack.Screen name="summary" options={{ presentation: 'modal', headerShown: false }} />
           <Stack.Screen name="plan-picker" options={sheet([0.85, 1])} />
+          <Stack.Screen name="goal" options={{ presentation: 'modal', headerShown: false }} />
+          <Stack.Screen name="badge" options={sheet([0.6])} />
         </Stack>
         <ToastViewport />
       </ToastProvider>
