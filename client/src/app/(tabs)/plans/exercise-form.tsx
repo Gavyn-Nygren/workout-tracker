@@ -7,6 +7,7 @@ import { succeeded, useExercises, useSaveExercise } from '@/data/hooks';
 import type { Equipment, Exercise, MuscleGroup } from '@/data/types';
 import { newId } from '@/lib/id';
 import { EQUIPMENT_LABEL, MUSCLE_LABEL } from '@/features/exercises/ExerciseList';
+import { exerciseMatches } from '@/features/exercises/search';
 import { radius, spacing } from '@/theme/tokens';
 import { readable, useTextScale } from '@/theme/layout';
 
@@ -54,7 +55,13 @@ function ExerciseForm({ exercises, existing }: { exercises: Exercise[]; existing
 
   const builtins = exercises.filter((e) => e.source === 'builtin');
   const base = builtins.find((e) => e.id === baseId);
-  const baseMatches = baseQuery.trim() ? builtins.filter((e) => e.name.toLowerCase().includes(baseQuery.trim().toLowerCase())).slice(0, 6) : [];
+  // Same search as the library; family main movements (e.g. Back Squat) come before their variations.
+  const baseMatches = baseQuery.trim()
+    ? builtins
+        .filter((e) => exerciseMatches(e, baseQuery))
+        .sort((a, b) => Number(Boolean(a.baseMovementId)) - Number(Boolean(b.baseMovementId)) || a.name.localeCompare(b.name))
+        .slice(0, 6)
+    : [];
   const duplicate = exercises.some((e) => e.id !== id && e.name.trim().toLowerCase() === name.trim().toLowerCase());
   const nameError = !name.trim() ? 'Give the exercise a name.' : duplicate ? 'An exercise with this name already exists.' : undefined;
 

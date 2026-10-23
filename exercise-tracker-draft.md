@@ -331,7 +331,11 @@ Every set has exactly one **kind** and any number of **modifiers**.
 
 **Exercise library**
 
-- About **150-250 built-in exercises**, each with a stable ID.
+- **270 built-in exercises** (user's pick: the full gym plus Olympic lifts and strongman), each with a stable ID. They live in `client/src/data/content/exercises.ts`.
+- Names read **"Movement (Equipment)"**, for example "Bench Press (Dumbbell)", so variations sort together (user's pick). Search matches words in any order, plus nicknames ("RDL", "OHP") and gym shorthand ("db", "kb").
+- Variations link to their family's main movement (for example Pause Squat → Back Squat), which drives swap suggestions.
+- Form analysis is flagged only on the verified variations in 2.8.
+- How-to instructions are added later, together with demonstration media (user's pick).
 - Custom exercises are available from day one. Only the name is required; equipment, muscle groups, instructions, and demonstration media/link are optional.
 - A custom exercise can **link to a built-in base movement** (for example "My Safety Bar Squat" → Squat). Linking makes it eligible for form analysis and grouped stats.
 - History is tied to exercise IDs, so **renaming never breaks history**.
@@ -730,7 +734,7 @@ any ──delete──▶ tombstone (stats recalculate)
 - **Tutorial content:** screens and flow.
 - **Onboarding recommendation rules:** the mapping table from onboarding answers to templates.
 - **Form rule library:** the full set of observation and cue templates per movement, with reviewed wording.
-- **Built-in exercise list:** the 150-250 exercises, with equipment, muscle groups, and base-movement mappings.
+- ~~**Built-in exercise list**~~: done in G3.2 (270 exercises). Still to do: how-to instructions and demonstration media.
 
 ### Technical decisions still open
 

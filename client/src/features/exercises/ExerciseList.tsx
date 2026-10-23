@@ -5,36 +5,12 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { Card, Chip, EmptyState, ErrorState, ListRow, SectionHeader, Skeleton, TextField } from '@/components/ui';
 import type { Equipment, Exercise, MuscleGroup } from '@/data/types';
 import { radius, spacing } from '@/theme/tokens';
+import { EQUIPMENT_LABEL, exerciseMatches, MUSCLE_LABEL } from './search';
 
-export const MUSCLE_LABEL: Record<MuscleGroup, string> = {
-  quads: 'Quads',
-  hamstrings: 'Hamstrings',
-  glutes: 'Glutes',
-  adductors: 'Adductors',
-  calves: 'Calves',
-  chest: 'Chest',
-  back: 'Back',
-  lats: 'Lats',
-  traps: 'Traps',
-  shoulders: 'Shoulders',
-  biceps: 'Biceps',
-  triceps: 'Triceps',
-  forearms: 'Forearms',
-  core: 'Core',
-};
+export { EQUIPMENT_LABEL, MUSCLE_LABEL };
 
-const FILTERS: MuscleGroup[] = ['quads', 'hamstrings', 'glutes', 'calves', 'chest', 'back', 'lats', 'shoulders', 'biceps', 'triceps', 'core'];
-
-export const EQUIPMENT_LABEL: Record<Equipment, string> = {
-  barbell: 'Barbell',
-  dumbbell: 'Dumbbell',
-  machine: 'Machine',
-  cable: 'Cable',
-  kettlebell: 'Kettlebell',
-  band: 'Band',
-  bodyweight: 'Bodyweight',
-  other: 'Other',
-};
+/** Every muscle group, in body order, as filter chips. */
+const FILTERS: MuscleGroup[] = ['quads', 'hamstrings', 'glutes', 'adductors', 'calves', 'chest', 'back', 'lats', 'traps', 'shoulders', 'biceps', 'triceps', 'forearms', 'core'];
 
 export const EQUIPMENT_ICON: Record<Equipment, SFSymbol> = {
   barbell: 'figure.strengthtraining.traditional',
@@ -55,12 +31,6 @@ export function exerciseSubtitle(exercise: Exercise): string {
   ]
     .filter(Boolean)
     .join(' · ');
-}
-
-function matches(exercise: Exercise, query: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  return [exercise.name, ...(exercise.aliases ?? [])].some((n) => n.toLowerCase().includes(q));
 }
 
 /** Exercises that make sensible swaps: same base movement or form family, or shared primary muscles. */
@@ -95,7 +65,7 @@ export function ExerciseList({ exercises, onPick, similarTo, groupCustom, access
   const [muscle, setMuscle] = useState<MuscleGroup | null>(null);
 
   const sorted = useMemo(() => [...exercises].sort((a, b) => a.name.localeCompare(b.name)), [exercises]);
-  const filtered = sorted.filter((e) => e.id !== similarTo?.id && matches(e, query) && (!muscle || e.primaryMuscles.includes(muscle)));
+  const filtered = sorted.filter((e) => e.id !== similarTo?.id && exerciseMatches(e, query) && (!muscle || e.primaryMuscles.includes(muscle)));
 
   const groups: [string, Exercise[]][] = [];
   if (similarTo) {

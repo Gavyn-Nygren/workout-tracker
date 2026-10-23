@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G3.2 (exercise library content).
+**Current goal:** G3.3 (plans engine).
 
 ## How we work
 
@@ -251,8 +251,8 @@ Everything works on one phone, offline, with no server.
 
 ### G3.2 Exercise library content
 
-- [ ] 150-250 built-in exercises with stable IDs, equipment, muscle groups, and base-movement mappings.
-- [ ] Custom exercises.
+- [x] 150-250 built-in exercises with stable IDs, equipment, muscle groups, and base-movement mappings. *270, covering the full gym plus Olympic lifts and strongman, with "Movement (Equipment)" names and word-order-free search (user's picks). How-to text comes later with demo media.*
+- [x] Custom exercises. *Saved in the database. Linking to a built-in uses the same search, with main movements listed first.*
 
 ### G3.3 Plans engine
 
