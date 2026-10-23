@@ -1,0 +1,221 @@
+import { router } from 'expo-router';
+import { useMemo } from 'react';
+import { ActionSheetIOS, Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { Button, EmptyState, ToastViewport, useToast } from '@/components/ui';
+import { usePreferences } from '@/data/hooks';
+import { defaultPreferences } from '@/data/preferences';
+import type { LoggedSet, SessionExercise } from '@/data/types';
+import { useHaptics } from '@/hooks/useHaptics';
+import { plural } from '@/lib/format';
+import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
+import { BlockCard } from '@/features/workout/BlockCard';
+import { ExerciseSection } from '@/features/workout/ExerciseSection';
+import { RestTimerBar } from '@/features/workout/RestTimerBar';
+import { WorkoutHeader } from '@/features/workout/WorkoutHeader';
+import { lastEntryFor, previousSets } from '@/features/workout/history';
+import { useAppTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
+
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+/** The active workout (roadmap G2.2), presented as a sheet that can be swiped down to minimize. */
+export default function ActiveWorkoutScreen() {
+  const { colors, scheme } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const toast = useToast();
+  const haptics = useHaptics();
+  const preferences = usePreferences().data ?? defaultPreferences;
+  const { workout, counts, prSetIds, exercisesById, history, dispatch, completeSet, uncompleteSet, rest, end } = useActiveWorkout();
+
+  // Last time's sets per exercise, for the PREVIOUS column.
+  const lastByExercise = useMemo(() => {
+    const map = new Map<string, SessionExercise | undefined>();
+    for (const block of workout?.session.blocks ?? []) {
+      for (const entry of block.exercises) {
+        if (!map.has(entry.exerciseId)) map.set(entry.exerciseId, lastEntryFor(entry.exerciseId, history));
+      }
+    }
+    return map;
+  }, [workout?.session.blocks, history]);
+
+  if (!workout) {
+    return (
+      <View style={[styles.empty, { backgroundColor: colors.background }]}>
+        <EmptyState
+          icon="dumbbell"
+          title="No workout in progress"
+          message="Start one from Today and it'll show up here."
+          actionLabel="Back to Today"
+          onAction={() => router.back()}
+        />
+      </View>
+    );
+  }
+
+  const { session } = workout;
+  let groupIndex = 0;
+
+  const toggleSet = (entry: SessionExercise, set: LoggedSet) => {
+    if (set.completedAt) {
+      uncompleteSet(entry.id, set.id);
+      return;
+    }
+    const missingLoad = set.kind !== 'timed_hold' && !exercisesById.get(entry.exerciseId)?.isBodyweight && set.loadKg === undefined;
+    const missingReps = set.kind === 'timed_hold' ? !set.durationSec : !set.reps;
+    if (missingLoad || missingReps) {
+      // Spec 2.6: every logged set needs weight and reps.
+      haptics.warning();
+      toast.show({ message: set.kind === 'timed_hold' ? 'Enter the hold time first.' : 'Enter weight and reps first.', tone: 'warning' });
+      return;
+    }
+    completeSet(entry.id, set.id);
+  };
+
+  const openMenu = (entry: SessionExercise) => {
+    const name = exercisesById.get(entry.exerciseId)?.name ?? 'Exercise';
+    const options = ['Swap exercise', entry.notes ? 'Edit note' : 'Add note', entry.skipped ? 'Unskip exercise' : 'Skip exercise', 'Reorder exercises', 'Remove exercise', 'Cancel'];
+    ActionSheetIOS.showActionSheetWithOptions(
+      { title: name, options, destructiveButtonIndex: 4, cancelButtonIndex: 5, userInterfaceStyle: scheme },
+      (index) => {
+        if (index === 0) router.push({ pathname: '/workout/picker', params: { mode: 'swap', entry: entry.id } });
+        if (index === 1) {
+          Alert.prompt(`Note for ${name}`, 'Shown above the sets next time too.', (text) => dispatch({ type: 'setNotes', entryId: entry.id, notes: text.trim() }), 'plain-text', entry.notes);
+        }
+        if (index === 2) dispatch({ type: 'toggleSkip', entryId: entry.id });
+        if (index === 3) router.push('/workout/reorder');
+        if (index === 4) {
+          Alert.alert(`Remove ${name}?`, 'Its sets in this workout will be deleted.', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Remove', style: 'destructive', onPress: () => dispatch({ type: 'removeExercise', entryId: entry.id }) },
+          ]);
+        }
+      },
+    );
+  };
+
+  const finish = () => {
+    const remaining = counts.total - counts.done;
+    const close = () => {
+      haptics.success();
+      end();
+      router.back();
+      toast.show({ message: `${session.name} saved. The summary screen arrives in G2.3.`, tone: 'success' });
+    };
+    if (counts.done === 0) {
+      Alert.alert('No sets logged yet', 'Complete at least one set to save this workout, or discard it.', [
+        { text: 'Keep going', style: 'cancel' },
+        { text: 'Discard workout', style: 'destructive', onPress: discard },
+      ]);
+    } else if (remaining > 0) {
+      Alert.alert('Finish as partial?', `${plural(remaining, 'set')} not logged. They'll be left out, and the workout will be saved as partial.`, [
+        { text: 'Keep going', style: 'cancel' },
+        { text: 'Finish as partial', onPress: close },
+      ]);
+    } else {
+      Alert.alert('Finish workout?', `All ${plural(counts.total, 'set')} logged.`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Finish', onPress: close },
+      ]);
+    }
+  };
+
+  function discard() {
+    end();
+    router.back();
+    toast.show({ message: 'Workout discarded.' });
+  }
+
+  return (
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <WorkoutHeader title={session.name} startedAt={session.startedAt} counts={counts} onMinimize={() => router.back()} onFinish={finish} />
+
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + (rest ? 120 : spacing.huge) }]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        automaticallyAdjustKeyboardInsets
+      >
+        {session.blocks.map((block) => {
+          const grouped = block.type === 'superset' || block.type === 'circuit';
+          const letter = grouped ? LETTERS[groupIndex++ % LETTERS.length] : '';
+          return (
+            <BlockCard
+              key={block.id}
+              block={block}
+              letter={letter}
+              renderExercise={(entry, label) => (
+                <ExerciseSection
+                  entry={entry}
+                  exercise={exercisesById.get(entry.exerciseId)}
+                  label={label}
+                  previous={previousSets(entry, lastByExercise.get(entry.exerciseId))}
+                  units={preferences.units}
+                  effortScale={preferences.effortScale}
+                  prSetIds={prSetIds}
+                  onChangeSet={(setId, patch) => dispatch({ type: 'updateSet', entryId: entry.id, setId, patch })}
+                  onToggleSet={(set) => toggleSet(entry, set)}
+                  onOpenSet={(setId) => router.push({ pathname: '/workout/set', params: { entry: entry.id, set: setId } })}
+                  onAddSet={() => dispatch({ type: 'addSet', entryId: entry.id })}
+                  onOpenMenu={() => openMenu(entry)}
+                  onCamera={() => toast.show({ message: 'Recording a set arrives in G2.7.' })}
+                  onUnskip={() => dispatch({ type: 'toggleSkip', entryId: entry.id })}
+                />
+              )}
+            />
+          );
+        })}
+
+        <View style={styles.footer}>
+          <Button title="Add exercise" variant="secondary" icon="plus" fullWidth onPress={() => router.push({ pathname: '/workout/picker', params: { mode: 'add' } })} />
+          <View style={styles.footerRow}>
+            <Button title="Reorder" variant="ghost" size="sm" icon="arrow.up.arrow.down" onPress={() => router.push('/workout/reorder')} />
+            <Button title="Rest timer" variant="ghost" size="sm" icon="timer" onPress={() => router.push('/workout/timer')} />
+            <Button
+              title="Discard"
+              variant="ghost"
+              size="sm"
+              icon="trash"
+              onPress={() =>
+                Alert.alert('Discard this workout?', 'Everything logged in it will be deleted.', [
+                  { text: 'Keep it', style: 'cancel' },
+                  { text: 'Discard', style: 'destructive', onPress: discard },
+                ])
+              }
+            />
+          </View>
+        </View>
+      </ScrollView>
+
+      <RestTimerBar onExpand={() => router.push('/workout/timer')} />
+      {/* This sheet sits above the root view, so it needs its own toast host (clear of the rest bar). */}
+      <ToastViewport bottomOffset={rest ? 96 : spacing.lg} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
+  content: {
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  footer: {
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  empty: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+});

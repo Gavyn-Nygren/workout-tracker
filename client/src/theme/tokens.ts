@@ -44,6 +44,8 @@ export type ThemeColors = {
   // `*Fill` is for icons, badges, and fills; `*Text` is for text on the theme's surfaces.
   successFill: string;
   successText: string;
+  /** Soft green row tint for completed sets; text and secondary text stay readable on it. */
+  successSubtle: string;
   /** Amber is faint on white (1.8:1), so on light surfaces put a dark glyph inside it or use warningText. */
   warningFill: string;
   warningText: string;
@@ -95,6 +97,7 @@ export const colors: Record<ColorScheme, ThemeColors> = {
     chromeBorder: '#0B0F14',
     successFill: '#0CA30C',
     successText: '#006300', // 7.5:1 on card
+    successSubtle: '#E2F4E2', // text 16.7:1, secondary text 5.2:1
     warningFill: '#FAB219',
     warningText: '#8A5A00', // 5.9:1 on card
     errorFill: '#D03B3B',
@@ -120,6 +123,7 @@ export const colors: Record<ColorScheme, ThemeColors> = {
     chromeBorder: '#262B33',
     successFill: '#0CA30C',
     successText: '#0CA30C', // 5.2:1 on card
+    successSubtle: '#15331C', // text 12.9:1, secondary text 5.5:1
     warningFill: '#FAB219',
     warningText: '#FAB219', // 9.5:1 on card
     errorFill: '#E66767',

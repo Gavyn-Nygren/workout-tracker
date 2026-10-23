@@ -1,7 +1,8 @@
-import { Tabs } from 'expo-router/js-tabs';
+import { BottomTabBar, Tabs } from 'expo-router/js-tabs';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
 import type { ColorValue } from 'react-native';
 
+import { MiniBar } from '@/features/workout/MiniBar';
 import { useAppTheme } from '@/theme/ThemeProvider';
 
 function tabIcon(outline: SFSymbol, filled: SFSymbol) {
@@ -15,6 +16,13 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      // The in-progress workout bar sits directly above the tab bar while the workout is minimized.
+      tabBar={(props) => (
+        <>
+          <MiniBar />
+          <BottomTabBar {...props} />
+        </>
+      )}
       screenOptions={{
         headerStyle: { backgroundColor: colors.chrome },
         headerTintColor: colors.onChrome,

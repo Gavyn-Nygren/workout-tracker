@@ -1,6 +1,6 @@
-import { useNavigation } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { useLayoutEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Card, EmptyState, SectionHeader, Skeleton, useToast } from '@/components/ui';
 import type { ISODate } from '@/data/types';
@@ -12,6 +12,7 @@ import { WeekStrip } from '@/features/today/WeekStrip';
 import { WorkoutCard } from '@/features/today/WorkoutCard';
 import { WorkoutPager } from '@/features/today/WorkoutPager';
 import { latestMissed, summarizeSession, type Agenda, type DayItem } from '@/features/today/agenda';
+import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
 import { formatMonthDay, formatShortDate, formatWeekday } from '@/lib/format';
 import { spacing } from '@/theme/tokens';
 
@@ -34,9 +35,21 @@ export default function TodayScreen() {
   const navigation = useNavigation();
   const toast = useToast();
   const { today, range, agenda, exercisesById, records, units, isLoading, error, retry } = useAgenda();
+  const active = useActiveWorkout();
   const [selected, setSelected] = useState<ISODate>(today);
 
-  const items = agenda.get(selected) ?? [];
+  // The workout in progress shows as "In progress" with a Resume button.
+  const activeSession = active.workout?.session;
+  const items = useMemo(
+    () =>
+      (agenda.get(selected) ?? []).map((item) =>
+        activeSession &&
+        ((item.occurrence && activeSession.occurrenceId === item.occurrence.id) || (active.workout?.mode === 'reopen' && item.session?.id === activeSession.id))
+          ? { ...item, status: 'in_progress' as const }
+          : item,
+      ),
+    [agenda, selected, activeSession, active.workout?.mode],
+  );
   const missed = useMemo(() => latestMissed(agenda, today), [agenda, today]);
   const coming = useMemo(() => upcoming(agenda, selected < today ? today : selected, 3), [agenda, selected, today]);
 
@@ -44,8 +57,29 @@ export default function TodayScreen() {
     navigation.setOptions({ headerTitle: isLoading ? 'TODAY' : headerTitle(selected, items) });
   }, [navigation, selected, items, isLoading]);
 
-  // Actions open screens built in later goals; until then, say so.
   const comingSoon = (what: string, goal: string) => () => toast.show({ message: `${what} arrives in ${goal}.` });
+
+  /** Only one workout runs at a time; offer to resume or discard the current one first. */
+  const begin = (item: DayItem, start: () => void) => {
+    if (item.status === 'in_progress' || !activeSession) {
+      if (item.status !== 'in_progress') start();
+      router.push('/workout');
+      return;
+    }
+    Alert.alert(`${activeSession.name} is still in progress`, 'Finish or discard it before starting another workout.', [
+      { text: `Resume ${activeSession.name}`, onPress: () => router.push('/workout') },
+      {
+        text: 'Discard it and start',
+        style: 'destructive',
+        onPress: () => {
+          active.end();
+          start();
+          router.push('/workout');
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
 
   if (error) {
     return (
@@ -101,9 +135,9 @@ export default function TodayScreen() {
                   summary={item.session && item.session.status === 'completed' ? summarizeSession(item.session, exercisesById, records) : undefined}
                   exercisesById={exercisesById}
                   units={units}
-                  onStart={comingSoon('The workout screen', 'G2.2')}
-                  onReopen={comingSoon('Reopening workouts', 'G2.2')}
-                  onRepeat={comingSoon('Repeating workouts', 'G2.2')}
+                  onStart={() => begin(item, () => active.startFromItem(item, { index, total: items.length }))}
+                  onReopen={() => item.session && begin(item, () => active.reopen(item.session!, { index, total: items.length }))}
+                  onRepeat={() => item.session && begin({ ...item, status: 'planned' }, () => active.repeat(item, item.session!))}
                   onViewSummary={comingSoon('The workout summary', 'G2.3')}
                 />
               )}

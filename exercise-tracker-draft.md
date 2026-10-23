@@ -227,10 +227,21 @@ Every set has exactly one **kind** and any number of **modifiers**.
 
 - **Pre-fill:** weight and reps start filled with the plan target, or the progression rule's suggestion. Last session's values appear alongside in muted text. One tap confirms.
 - **Changes during a workout:** users can add or remove exercises and sets, reorder exercises by dragging, and swap an exercise for an alternative (suggested from the same base movement or muscle group). When the workout finishes, the app offers to **save those changes back to the plan**.
+- **Active workout screen layout:**
+  - **Opening and minimizing:** it opens as a **full-height sheet**. Swiping it down minimizes it to a **mini bar above the tab bar** showing the name, elapsed time, sets done, and rest remaining; tapping the bar brings the workout back.
+  - **Header:** a dark header with minimize, the workout name, elapsed time, sets done out of the total, a thin progress bar, and Finish.
+  - **Sets table:** each exercise is a card with a dense set table: SET / PREVIOUS / weight / REPS / check. Tapping a PREVIOUS value copies it into the set.
+  - **Completed sets:** the row turns **soft green** and the check fills green.
+  - **Set detail sheet:** tapping the set number opens a sheet for set type, modifiers, **RPE/RIR**, tempo, partial reps, notes, and deleting the set. Logged extras show as small tags under the row.
+  - **Supersets and circuits:** they share one card, with a header explaining the rest and labels such as A1 and A2.
+  - **Exercise menu:** the ⋯ menu offers swap, note, skip, reorder, and remove. Exercises with form analysis also get a camera button.
+  - **Finishing:** finishing with unlogged sets asks before saving the workout as partial. A set can't be completed without weight and reps.
+- **New PRs:** a set that beats the exercise's previous best weight or e1RM shows the gold PR badge with a success haptic as soon as it's completed.
 
 **Rest timer**
 
 - Marking a set complete starts its rest timer automatically. The user can pause, extend, skip, or adjust it.
+- **In the app:** a **bar docked at the bottom** of the workout shows the countdown with −15 s, +15 s, and Skip, plus a draining progress line. Tapping the bar opens a larger timer sheet with pause/resume and presets. When rest ends, there's a strong haptic and a brief "Rest over" bar.
 - The timer runs as a **Live Activity** on the lock screen and Dynamic Island.
 - **Default rest when the plan sets none:** compound 3:00, isolation 1:30, warm-up 1:00. Defaults can be edited in Settings and per exercise, and the app remembers the last value used for each exercise.
 - **Supersets and circuits:** completing one exercise moves straight to the next with no timer (an optional short transition is allowed). The round's rest timer starts after the last exercise in the round.

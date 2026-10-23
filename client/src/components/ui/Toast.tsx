@@ -20,7 +20,13 @@ type ToastOptions = {
 
 type ToastState = ToastOptions & { id: number };
 
-const ToastContext = createContext<((options: ToastOptions) => void) | null>(null);
+type ToastContextValue = {
+  show: (options: ToastOptions) => void;
+  current: ToastState | null;
+  clear: (id: number) => void;
+};
+
+const ToastContext = createContext<ToastContextValue | null>(null);
 
 const DEFAULT_ICON: Record<ToastTone, SFSymbol | undefined> = {
   neutral: undefined,
@@ -33,26 +39,35 @@ const DEFAULT_ICON: Record<ToastTone, SFSymbol | undefined> = {
 /** Space reserved above the bottom safe area so toasts clear the tab bar. */
 const TAB_BAR_CLEARANCE = 56;
 
-/** Short confirmation that floats above the tab bar, on the dark chrome so it reads in both themes. */
+/**
+ * Holds the current toast. Render a <ToastViewport /> in the root layout and inside each native
+ * sheet: iOS draws sheets above the root view, so a root-only toast would hide behind them.
+ */
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toast, setToast] = useState<ToastState | null>(null);
+  const [current, setCurrent] = useState<ToastState | null>(null);
   const counter = useRef(0);
 
   const show = useCallback((options: ToastOptions) => {
     counter.current += 1;
-    setToast({ ...options, id: counter.current });
+    setCurrent({ ...options, id: counter.current });
     AccessibilityInfo.announceForAccessibility(options.message);
   }, []);
+  const clear = useCallback((id: number) => setCurrent((c) => (c?.id === id ? null : c)), []);
+  const value = useMemo(() => ({ show, current, clear }), [show, current, clear]);
 
-  return (
-    <ToastContext.Provider value={show}>
-      {children}
-      {toast && <ToastView key={toast.id} toast={toast} onDone={() => setToast((current) => (current?.id === toast.id ? null : current))} />}
-    </ToastContext.Provider>
-  );
+  return <ToastContext.Provider value={value}>{children}</ToastContext.Provider>;
 }
 
-function ToastView({ toast, onDone }: { toast: ToastState; onDone: () => void }) {
+/** Where toasts appear. `bottomOffset` is the space kept clear above the bottom safe area. */
+export function ToastViewport({ bottomOffset = TAB_BAR_CLEARANCE }: { bottomOffset?: number }) {
+  const context = useContext(ToastContext);
+  if (!context?.current) return null;
+  const toast = context.current;
+  return <ToastView key={toast.id} toast={toast} bottomOffset={bottomOffset} onDone={() => context.clear(toast.id)} />;
+}
+
+/** Short confirmation on the dark chrome, so it reads in both themes. */
+function ToastView({ toast, bottomOffset, onDone }: { toast: ToastState; bottomOffset: number; onDone: () => void }) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
@@ -83,7 +98,7 @@ function ToastView({ toast, onDone }: { toast: ToastState; onDone: () => void })
   }, [progress, reducedMotion, toast.durationMs]);
 
   return (
-    <View pointerEvents="none" style={[styles.host, { bottom: insets.bottom + TAB_BAR_CLEARANCE }]}>
+    <View pointerEvents="none" style={[styles.host, { bottom: insets.bottom + bottomOffset }]}>
       <Animated.View
         accessibilityLiveRegion="polite"
         style={[
@@ -106,8 +121,9 @@ function ToastView({ toast, onDone }: { toast: ToastState; onDone: () => void })
 }
 
 export function useToast() {
-  const show = useContext(ToastContext);
-  if (!show) throw new Error('useToast must be used inside ToastProvider');
+  const context = useContext(ToastContext);
+  if (!context) throw new Error('useToast must be used inside ToastProvider');
+  const { show } = context;
   return useMemo(() => ({ show }), [show]);
 }
 

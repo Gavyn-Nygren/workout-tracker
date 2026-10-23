@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G2.1 (Today screen).
+**Current goal:** G2.2 (active workout screen).
 
 ## How we work
 
@@ -108,20 +108,24 @@ Screens are listed in priority order. Each one includes its empty, loading, and 
 - [x] Today's workout card(s). *Dark hero cards (user's pick).*
 - [x] `Start Workout 1/3` with a switcher between workouts. *Swipeable cards with page dots (user's pick).*
 - [x] States for a rest day, a missed workout (with the "push plan forward?" prompt), a completed workout (reopen/repeat), and a partial workout. *Also skipped, late, and repeated workouts. Start, Reopen, Repeat, and the push-forward shift are visual only until G2.2/G3.7.*
-- [ ] The user has reviewed Today on their iPhone.
+- [x] The user has reviewed Today on their iPhone.
 
 ### G2.2 Active workout 👁
 
 The most important screen.
 
-- [ ] Dense table rows: set, previous, weight, reps, and a complete check.
-- [ ] Pre-filled targets, with "last time" values in muted text.
-- [ ] Set kind and modifier selectors, RPE/RIR, tempo, notes.
-- [ ] Rest timer bar and sheet: pause, extend, skip, adjust.
-- [ ] Superset and circuit grouping.
-- [ ] Add, remove, reorder (drag), and swap exercises.
-- [ ] Skip an exercise, and finish as partial.
-- [ ] A camera button on the exercise header (opens the mock flow from G2.7).
+- [x] Dense table rows: set, previous, weight, reps, and a complete check. *Completed rows turn green (user's pick).*
+- [x] Pre-filled targets, with "last time" values in muted text.
+- [x] Set kind and modifier selectors, RPE/RIR, tempo, notes. *In the set detail sheet (user's pick).*
+- [x] Rest timer bar and sheet: pause, extend, skip, adjust. *Bottom bar (user's pick); also shown in the mini bar.*
+- [x] Superset and circuit grouping.
+- [x] Add, remove, reorder (drag), and swap exercises.
+- [x] Skip an exercise, and finish as partial.
+- [x] A camera button on the exercise header (opens the mock flow from G2.7). *Shows a note until G2.7.*
+- [x] Opens as a sheet that minimizes to a mini bar above the tabs (user's pick).
+- [ ] The user has reviewed the workout screen on their iPhone.
+
+*The workout lives in memory only: it survives minimizing and switching tabs, but not closing the app, and finishing doesn't save it to history yet. Saving comes with G3.4.*
 
 ### G2.3 Workout summary 👁
 

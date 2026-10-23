@@ -14,5 +14,5 @@ export { SetTag, setTagLabel, type SetTagValue } from './SetTag';
 export { Skeleton } from './Skeleton';
 export { Stepper } from './Stepper';
 export { TextField } from './TextField';
-export { ToastProvider, useToast, type ToastTone } from './Toast';
+export { ToastProvider, ToastViewport, useToast, type ToastTone } from './Toast';
 export { Toggle } from './Toggle';
