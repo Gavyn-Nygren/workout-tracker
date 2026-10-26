@@ -1,4 +1,5 @@
 import type { Exercise, LoggedSet, PlannedExercise, PlanWorkout, Preferences, RepTarget, WorkoutSession } from '@/data/types';
+import { kindForExercise, loadField, roundingIncrementFor } from '@/data/logging';
 import { roundLoadKg } from '@/data/units';
 import { newId } from '@/lib/id';
 import type { DayItem } from '../today/agenda';
@@ -24,15 +25,15 @@ function range(target: RepTarget | undefined): { min: number; max: number } | un
  * Reps start from last time's reps for that set, kept inside the target range.
  */
 function prefillSets(planned: PlannedExercise, exercise: Exercise | undefined, input: BuildInput): LoggedSet[] {
-  const { units, roundingIncrements } = input.preferences;
-  const increment = (exercise?.equipment && roundingIncrements[exercise.equipment]) || 5;
+  const { units } = input.preferences;
+  const increment = roundingIncrementFor(exercise?.equipment, input.preferences);
   const round = (kg: number) => roundLoadKg(kg, units, increment);
-  const isBodyweight = exercise?.isBodyweight ?? false;
 
   const last = lastEntryFor(planned.exerciseId, input.history);
   const lastWorking = (last?.sets ?? []).filter((s) => s.completedAt && (s.kind === 'normal' || s.kind === 'assisted'));
   const lastDrop = last?.sets.find((s) => s.kind === 'drop' && s.completedAt);
-  const loadOf = (s: LoggedSet) => (isBodyweight ? (s.addedLoadKg ?? 0) : (s.loadKg ?? 0));
+  // Each set's weight lives in its own field: load, load added to bodyweight, or assistance.
+  const loadOf = (s: LoggedSet) => s[loadField(exercise, s.kind)] ?? 0;
 
   let baseKg = lastWorking.length ? Math.max(...lastWorking.map(loadOf)) : 0;
   const rule = planned.progression;
@@ -43,21 +44,20 @@ function prefillSets(planned: PlannedExercise, exercise: Exercise | undefined, i
 
   let workingIndex = 0;
   return planned.sets.map((target) => {
-    const set: LoggedSet = { id: newId('set'), kind: target.kind, modifiers: [...target.modifiers], target, tempo: target.tempo };
+    const kind = kindForExercise(target.kind, exercise);
+    const set: LoggedSet = { id: newId('set'), kind, modifiers: [...target.modifiers], target, tempo: target.tempo };
     const reps = range(target.targetReps);
+    const field = loadField(exercise, kind);
+    const withLoad = (kg: number | undefined): LoggedSet => ({ ...set, [field]: kg !== undefined && kg > 0 ? kg : undefined });
 
-    if (target.kind === 'warmup') return { ...set, loadKg: target.targetLoadKg ?? round(baseKg * 0.5), reps: reps?.max };
-    if (target.kind === 'timed_hold') return { ...set, durationSec: target.targetDurationSec };
-    if (target.kind === 'drop') {
-      return { ...set, loadKg: lastDrop?.loadKg ?? round(baseKg * 0.7), reps: reps?.max };
-    }
+    if (kind === 'timed_hold') return { ...set, durationSec: target.targetDurationSec };
+    // Bodyweight warm-ups start with no added weight; others at about half the working weight.
+    if (kind === 'warmup') return { ...withLoad(field === 'loadKg' ? (target.targetLoadKg ?? round(baseKg * 0.5)) : undefined), reps: reps?.max };
+    if (kind === 'drop') return { ...withLoad(lastDrop?.[field] ?? round(baseKg * 0.7)), reps: reps?.max };
 
     const lastReps = lastWorking[workingIndex++]?.reps;
     const prefilledReps = reps ? Math.min(reps.max, Math.max(reps.min, lastReps ?? reps.min)) : lastReps;
-    const loadKg = target.targetLoadKg ?? baseKg;
-    return isBodyweight
-      ? { ...set, addedLoadKg: loadKg > 0 ? loadKg : undefined, reps: prefilledReps }
-      : { ...set, loadKg: loadKg > 0 ? loadKg : undefined, reps: prefilledReps };
+    return { ...withLoad(target.targetLoadKg ?? baseKg), reps: prefilledReps };
   });
 }
 

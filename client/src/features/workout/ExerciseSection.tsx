@@ -117,7 +117,7 @@ export function ExerciseSection(props: Props) {
               </AppText>
             )}
             <AppText {...head} style={[styles.headCell, { width: cols.load, textAlign: 'center' }]}>
-              {exercise?.isBodyweight ? `+${unitLabel(units).toUpperCase()}` : unitLabel(units).toUpperCase()}
+              {exercise?.isBodyweight ? `${entry.sets.length && entry.sets.every((s) => s.kind === 'assisted') ? '−' : '+'}${unitLabel(units).toUpperCase()}` : unitLabel(units).toUpperCase()}
             </AppText>
             <AppText {...head} style={[styles.headCell, { width: cols.reps, textAlign: 'center' }]}>
               {entry.sets.some((s) => s.kind === 'timed_hold') ? 'SEC' : 'REPS'}

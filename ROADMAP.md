@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G3.5 (logging rules).
+**Current goal:** G3.6 (calculations).
 
 ## How we work
 
@@ -267,11 +267,11 @@ Everything works on one phone, offline, with no server.
 
 ### G3.5 Logging rules
 
-- [ ] Set kinds and modifiers.
-- [ ] Single effort value shown as RPE or RIR.
-- [ ] Pre-fill logic.
-- [ ] Per-equipment and custom rounding.
-- [ ] Bodyweight snapshot on each set, effective load (added, assisted, override), and the ask-once prompt for missing bodyweight.
+- [x] Set kinds and modifiers. *Assisted sets now log assistance ("−LB"), and tempo is validated and normalized.*
+- [x] Single effort value shown as RPE or RIR.
+- [x] Pre-fill logic. *Plan target, else last time's top weight rounded to the equipment, with reps from last time kept inside the range.*
+- [x] Per-equipment and custom rounding. *Fixed: metric rounding of equipment without its own increment, and the missing kettlebell default.*
+- [x] Bodyweight snapshot on each set, effective load (added, assisted, override), and the ask-once prompt for missing bodyweight. *The override is "Counted load" in the set sheet.*
 
 ### G3.6 Calculations
 

@@ -43,7 +43,10 @@ type ContextValue = {
   /** Picks up an unfinished workout that's saved but not the one open (e.g. left over from earlier). */
   continueSession: (session: WorkoutSession, position?: Position) => void;
   repeat: (item: DayItem, source: WorkoutSession) => void;
-  completeSet: (entryId: string, setId: string) => void;
+  /** `bodyweightKg` overrides the latest weigh-in, e.g. one just entered at the prompt. */
+  completeSet: (entryId: string, setId: string, bodyweightKg?: number) => void;
+  /** The most recent weigh-in, used as the bodyweight snapshot on completed sets. */
+  latestBodyweightKg: number | undefined;
   uncompleteSet: (entryId: string, setId: string) => void;
   startRest: (durationSec: number, label: string) => void;
   adjustRest: (deltaSec: number) => void;
@@ -201,7 +204,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
   );
 
   const completeSet = useCallback(
-    (entryId: string, setId: string) => {
+    (entryId: string, setId: string, bodyweightOverrideKg?: number) => {
       if (!workout) return;
       const found = locate(workout.session, entryId);
       const set = found?.entry.sets.find((s) => s.id === setId);
@@ -209,7 +212,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       const exercise = exercisesById.get(found.entry.exerciseId);
 
       haptics.tap();
-      const bodyweightKg = exercise?.isBodyweight ? latestBodyweightKg : undefined;
+      const bodyweightKg = exercise?.isBodyweight ? (bodyweightOverrideKg ?? latestBodyweightKg) : undefined;
       dispatch({ type: 'completeSet', entryId, setId, completedAt: new Date().toISOString(), bodyweightKg });
 
       const completed: LoggedSet = { ...set, completedAt: 'now', bodyweightSnapshotKg: bodyweightKg ?? set.bodyweightSnapshotKg };
@@ -271,6 +274,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
         });
       },
       completeSet,
+      latestBodyweightKg,
       uncompleteSet: (entryId, setId) => {
         const entry = workout ? locate(workout.session, entryId)?.entry : undefined;
         const set = entry?.sets.find((s) => s.id === setId);
@@ -335,7 +339,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
         return finished;
       },
     }),
-    [workout, rest, restJustEnded, prSetIds, exercisesById, history, preferences, completeSet, startRest, saveSession, deleteSession, cancelAutosave],
+    [workout, rest, restJustEnded, prSetIds, exercisesById, history, preferences, completeSet, latestBodyweightKg, startRest, saveSession, deleteSession, cancelAutosave],
   );
 
   return <Context.Provider value={value}>{children}</Context.Provider>;

@@ -3,6 +3,7 @@ import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText, Icon, NumberField, PRBadge, SetTag, setTagLabel } from '@/components/ui';
 import type { Exercise, LoggedSet, UnitSystem } from '@/data/types';
+import { effortLabel, loadField } from '@/data/logging';
 import { kgToLb, lbToKg } from '@/data/units';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { formatLoadValue, plural } from '@/lib/format';
@@ -62,6 +63,7 @@ const fromDisplay = (value: number | undefined, units: UnitSystem) =>
 
 function previousLabel(prev: LoggedSet, exercise: Exercise | undefined, units: UnitSystem): string {
   if (prev.kind === 'timed_hold') return `${prev.durationSec ?? 0} s`;
+  if (exercise?.isBodyweight && prev.kind === 'assisted') return prev.assistanceKg ? `−${formatLoadValue(prev.assistanceKg, units)} × ${prev.reps ?? 0}` : `${prev.reps ?? 0} reps`;
   if (exercise?.isBodyweight) return prev.addedLoadKg ? `+${formatLoadValue(prev.addedLoadKg, units)} × ${prev.reps ?? 0}` : `${prev.reps ?? 0} reps`;
   return `${formatLoadValue(prev.loadKg ?? 0, units)} × ${prev.reps ?? 0}`;
 }
@@ -72,6 +74,7 @@ const unitWord = (units: UnitSystem) => (units === 'imperial' ? 'pounds' : 'kilo
 function spokenPrevious(prev: LoggedSet, exercise: Exercise | undefined, units: UnitSystem): string {
   if (prev.kind === 'timed_hold') return plural(prev.durationSec ?? 0, 'second');
   const reps = plural(prev.reps ?? 0, 'rep');
+  if (exercise?.isBodyweight && prev.kind === 'assisted') return prev.assistanceKg ? `${formatLoadValue(prev.assistanceKg, units)} ${unitWord(units)} of assistance, ${reps}` : reps;
   if (exercise?.isBodyweight) return prev.addedLoadKg ? `plus ${formatLoadValue(prev.addedLoadKg, units)} ${unitWord(units)}, ${reps}` : reps;
   return `${formatLoadValue(prev.loadKg ?? 0, units)} ${unitWord(units)}, ${reps}`;
 }
@@ -83,11 +86,14 @@ export function SetRow({ set, number, previous, exercise, exerciseName, units, e
   const done = Boolean(set.completedAt);
   const isHold = set.kind === 'timed_hold';
   const isBodyweight = exercise?.isBodyweight ?? false;
-  const loadKey = isBodyweight ? 'addedLoadKg' : 'loadKg';
-  const load = toDisplay(isBodyweight ? set.addedLoadKg : set.loadKg, units);
+  // Plain load, load added to bodyweight, or (assisted sets) assistance subtracted from it.
+  const loadKey = loadField(exercise, set.kind);
+  const assisted = loadKey === 'assistanceKg';
+  const load = toDisplay(set[loadKey], units);
+  const loadWord = assisted ? 'assistance' : isBodyweight ? 'added weight' : 'weight';
 
   const meta: string[] = [];
-  if (set.rir !== undefined) meta.push(effortScale === 'rpe' ? `RPE ${10 - set.rir}` : `RIR ${set.rir}`);
+  if (set.rir !== undefined) meta.push(effortLabel(set.rir, effortScale));
   if (set.tempo) meta.push(`Tempo ${set.tempo}`);
   if (set.partialReps) meta.push(`+${set.partialReps} partials`);
   if (set.notes) meta.push(set.notes);
@@ -99,12 +105,12 @@ export function SetRow({ set, number, previous, exercise, exerciseName, units, e
   const kindSuffix = set.kind !== 'normal' && set.kind !== 'warmup' ? `, ${setTagLabel(set.kind)}` : '';
   const logged = isHold
     ? [set.durationSec ? plural(set.durationSec, 'second') : undefined]
-    : [load ? `${isBodyweight ? 'plus ' : ''}${load} ${unitWord(units)}` : undefined, set.reps ? plural(set.reps, 'rep') : undefined];
+    : [load ? (assisted ? `${load} ${unitWord(units)} of assistance` : `${isBodyweight ? 'plus ' : ''}${load} ${unitWord(units)}`) : undefined, set.reps ? plural(set.reps, 'rep') : undefined];
   const checkLabel = [exerciseName, `${name.toLowerCase()}${kindSuffix}`, ...logged].filter(Boolean).join(', ');
 
   const copyPrevious = () =>
     previous &&
-    onChange(isHold ? { durationSec: previous.durationSec } : { [loadKey]: isBodyweight ? previous.addedLoadKg : previous.loadKg, reps: previous.reps });
+    onChange(isHold ? { durationSec: previous.durationSec } : { [loadKey]: previous[loadField(exercise, previous.kind)], reps: previous.reps });
   const previousA11y = previous ? `Last time ${spokenPrevious(previous, exercise, units)}. Copy into this set` : undefined;
 
   // Completing a set: the check pops and the green tint fades in (user's pick). Un-completing is instant.
@@ -170,7 +176,7 @@ export function SetRow({ set, number, previous, exercise, exerciseName, units, e
         <View style={{ width: cols.load }}>
           {!isHold && (
             <NumberField
-              label={`${name} ${isBodyweight ? 'added weight' : 'weight'} in ${unitWord(units)}`}
+              label={`${name} ${loadWord} in ${unitWord(units)}`}
               value={load}
               onChange={(v) => onChange({ [loadKey]: fromDisplay(v, units) })}
               decimal

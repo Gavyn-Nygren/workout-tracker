@@ -9,6 +9,7 @@ import type { MissBehavior, PlannedExercise, ProgressionRule, RepTarget, SetKind
 import { kgToLb, lbToKg } from '@/data/units';
 import { plural, unitLabel } from '@/lib/format';
 import { updatePlanned } from '@/features/plans/planEdits';
+import { TempoField } from '@/features/plans/TempoField';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing, tabularNums, typography } from '@/theme/tokens';
 import { DENSE_TEXT_MAX, readable, READABLE_MAX, useTextScale } from '@/theme/layout';
@@ -275,7 +276,7 @@ export default function PrescriptionScreen() {
               <AppText variant="footnote" tone="secondary">
                 Leave on Auto to start from last time’s weight plus the progression rule.
               </AppText>
-              <TextField label="Tempo" value={sharedTempo} onChangeText={(t) => editWorking({ tempo: t || undefined })} placeholder="e.g. 3-1-1-0" autoCapitalize="characters" hint="Down, pause, up, pause in seconds. X means explosive." />
+              <TempoField value={sharedTempo || undefined} onChange={(tempo) => editWorking({ tempo })} />
             </View>
           </Card>
         </View>

@@ -20,6 +20,8 @@ type Extra = {
   secondary?: MuscleGroup[];
   base?: string;
   bw?: boolean;
+  /** Logged as assistance subtracted from bodyweight. */
+  assisted?: boolean;
   form?: FormMovementFamily;
   aliases?: string[];
 };
@@ -38,6 +40,7 @@ function x(id: string, name: string, equipment: Equipment, category: Exercise['c
     primaryMuscles,
     secondaryMuscles: extra.secondary,
     isBodyweight: extra.bw ?? false,
+    isAssisted: extra.assisted,
     formAnalysis: extra.form,
     aliases: extra.aliases,
     createdAt: STAMP,
@@ -218,7 +221,7 @@ export const BUILTIN_EXERCISES: Exercise[] = [
   x('ex_diamond_push_up', 'Diamond Push-Up', 'bodyweight', C, ['triceps', 'chest'], { bw: true, base: PUSH_UP, aliases: ['Close-Grip Push-Up'] }),
   x('ex_deficit_push_up', 'Deficit Push-Up', 'bodyweight', C, ['chest', 'triceps'], { bw: true, base: PUSH_UP }),
   x(DIP, 'Dip', 'bodyweight', C, ['chest', 'triceps'], { secondary: ['shoulders'], bw: true, aliases: ['Dips', 'Parallel Bar Dip'] }),
-  x('ex_assisted_dip', 'Assisted Dip (Machine)', 'machine', C, ['chest', 'triceps'], { bw: true, base: DIP }),
+  x('ex_assisted_dip', 'Assisted Dip (Machine)', 'machine', C, ['chest', 'triceps'], { bw: true, assisted: true, base: DIP }),
   x('ex_bench_dip', 'Bench Dip', 'bodyweight', C, ['triceps'], { secondary: ['chest'], bw: true, base: DIP }),
   x('ex_seated_dip_machine', 'Seated Dip (Machine)', 'machine', C, ['triceps', 'chest'], { base: DIP }),
 
@@ -294,8 +297,8 @@ export const BUILTIN_EXERCISES: Exercise[] = [
   x('ex_chin_up', 'Chin-Up', 'bodyweight', C, ['lats', 'biceps'], { bw: true, base: PULL_UP }),
   x('ex_neutral_grip_pull_up', 'Neutral-Grip Pull-Up', 'bodyweight', C, ['lats', 'biceps'], { bw: true, base: PULL_UP }),
   x('ex_wide_grip_pull_up', 'Wide-Grip Pull-Up', 'bodyweight', C, ['lats'], { secondary: ['biceps'], bw: true, base: PULL_UP }),
-  x('ex_assisted_pull_up', 'Assisted Pull-Up (Machine)', 'machine', C, ['lats', 'biceps'], { bw: true, base: PULL_UP }),
-  x('ex_band_assisted_pull_up', 'Assisted Pull-Up (Band)', 'band', C, ['lats', 'biceps'], { bw: true, base: PULL_UP }),
+  x('ex_assisted_pull_up', 'Assisted Pull-Up (Machine)', 'machine', C, ['lats', 'biceps'], { bw: true, assisted: true, base: PULL_UP }),
+  x('ex_band_assisted_pull_up', 'Assisted Pull-Up (Band)', 'band', C, ['lats', 'biceps'], { bw: true, assisted: true, base: PULL_UP }),
   x('ex_muscle_up', 'Muscle-Up', 'bodyweight', C, ['lats', 'chest', 'triceps'], { bw: true, base: PULL_UP }),
   x(PULLDOWN, 'Lat Pulldown (Cable)', 'cable', C, ['lats'], { secondary: ['biceps', 'back'] }),
   x('ex_close_grip_pulldown', 'Close-Grip Lat Pulldown (Cable)', 'cable', C, ['lats', 'biceps'], { base: PULLDOWN }),

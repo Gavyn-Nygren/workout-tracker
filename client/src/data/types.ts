@@ -63,6 +63,8 @@ export type Exercise = Timestamps & {
   category: 'compound' | 'isolation';
   /** Effective load = bodyweight snapshot + added load (or minus assistance). */
   isBodyweight: boolean;
+  /** Sets log assistance subtracted from bodyweight by default (assisted pull-up and dip machines). */
+  isAssisted?: boolean;
   formAnalysis?: FormMovementFamily;
   aliases?: string[];
   instructions?: string;

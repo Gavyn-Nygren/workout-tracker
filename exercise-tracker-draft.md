@@ -283,7 +283,7 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 - A planned workout can include target sets/reps, suggested weight, RPE/RIR, rest duration, tempo, notes, and warm-up guidance. Sets and reps are the primary fields.
 - **Warm-up sets can be planned** as well as logged.
 - Supersets, circuits, and warm-up blocks are supported.
-- **Tempo** uses 4-digit eccentric-pause-concentric-pause notation (for example `3-1-1-0`), with `X` meaning explosive. A tooltip explains the format.
+- **Tempo** uses 4-digit eccentric-pause-concentric-pause notation (for example `3-1-1-0`), with `X` meaning explosive. A tooltip explains the format. Typing "3110" or "3 1 1 0" saves "3-1-1-0"; anything else isn't saved and the field explains why.
 
 **Set model**
 
@@ -294,7 +294,8 @@ Every set has exactly one **kind** and any number of **modifiers**.
 | Kind | normal, warm-up, drop, timed hold, assisted |
 | Modifiers | AMRAP, to failure, shortened partials, lengthened partials |
 
-- Every set requires weight and reps. A timed hold records duration instead of reps.
+- Every set requires weight and reps. A timed hold records duration instead of reps. Bodyweight sets only need reps (added weight defaults to none).
+- Assisted sets log **assistance** (shown as "−LB"), and assisted machines (pull-up, dip) start their sets as assisted.
 - Optional fields: effort, rest time, tempo, notes, and partial-rep count.
 - **Effort** is stored as one internal value (RIR = 10 − RPE) and shown as RPE or RIR according to the user's Settings choice.
 
@@ -329,7 +330,7 @@ Every set has exactly one **kind** and any number of **modifiers**.
 
 **Rounding**
 
-- Suggested weights round to **per-equipment increments**. Defaults: barbell 5 lb / 2.5 kg, dumbbell 5 lb / 2 kg, machine 5 lb / 2.5 kg.
+- Suggested weights round to **per-equipment increments**. Defaults: barbell 5 lb / 2.5 kg, dumbbell 5 lb / 2 kg, machine 5 lb / 2.5 kg, cable 5 lb / 2.5 kg, kettlebell 5 lb / 4 kg. Equipment without its own increment (added bodyweight load, bands, other implements) uses the barbell increment.
 - Users can set **custom increments**, for example for microplates.
 - Logged weights accept decimals.
 
@@ -347,10 +348,11 @@ Every set has exactly one **kind** and any number of **modifiers**.
 **Bodyweight and effective load**
 
 - Bodyweight is entered manually.
+- The set sheet's **Counted load** shows what a bodyweight set counts as and lets the user override it.
 - For bodyweight movements, the user logs reps plus any added load.
 - Effective load = the most recent bodyweight + added load. Assisted sets use bodyweight − assistance. Users can override the calculated load.
 - The **bodyweight value used is saved with each set** when it is completed, so later bodyweight edits never rewrite history.
-- If no bodyweight has been entered, the app **asks once** when a bodyweight exercise is logged. If the user skips, the set records reps + added load only and is left out of effective-load volume. It is **not back-filled** later.
+- If no bodyweight has been entered, the app **asks once** (ever, not per workout) when a bodyweight exercise is logged. If the user skips, the set records reps + added load only and is left out of effective-load volume. It is **not back-filled** later.
 
 ### 2.7 Calculations and records
 

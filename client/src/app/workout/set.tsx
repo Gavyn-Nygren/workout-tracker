@@ -2,13 +2,16 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppText, Button, Chip, NotFoundState, SectionHeader, Stepper, TextField, setTagLabel } from '@/components/ui';
+import { AppText, Button, Chip, NotFoundState, NumberField, SectionHeader, Stepper, TextField, setTagLabel } from '@/components/ui';
+import { effectiveLoadKg } from '@/data/calculations';
 import { usePreferences } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import type { LoggedSet, SessionExercise, SetKind, SetModifier } from '@/data/types';
 import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
 import { setName, setNumber } from '@/features/workout/workoutReducer';
-import { plural } from '@/lib/format';
+import { TempoField } from '@/features/plans/TempoField';
+import { kgToLb, lbToKg } from '@/data/units';
+import { formatLoad, plural, unitLabel } from '@/lib/format';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 
@@ -25,7 +28,7 @@ export default function SetDetailSheet() {
   const { workout, exercisesById, dispatch } = useActiveWorkout();
   const preferences = usePreferences();
   // If preferences fail to load, the default scale is fine for editing a set.
-  const effortScale = (preferences.data ?? defaultPreferences).effortScale;
+  const { effortScale, units } = preferences.data ?? defaultPreferences;
   // Holds a deleted set on screen while the sheet closes, so "not found" doesn't flash.
   const [closing, setClosing] = useState<{ entry: SessionExercise; set: LoggedSet } | null>(null);
 
@@ -42,6 +45,10 @@ export default function SetDetailSheet() {
   // Numbered like the set table, where warm-ups count separately.
   const title = setName(set.kind, setNumber(entry.sets, set));
   const update = (patch: Partial<LoggedSet>) => dispatch({ type: 'updateSet', entryId: entry.id, setId: set.id, patch });
+  const toDisplay = (kg: number | undefined) => (kg === undefined ? undefined : Math.round((units === 'imperial' ? kgToLb(kg) : kg) * 100) / 100);
+  const fromDisplay = (value: number) => (units === 'imperial' ? lbToKg(value) : value);
+  // What the set counts as without an override (known once the set is done and has its bodyweight).
+  const autoLoad = exercise ? effectiveLoadKg({ ...set, effectiveLoadOverrideKg: undefined }, exercise) : undefined;
 
   return (
     <ScrollView
@@ -98,14 +105,26 @@ export default function SetDetailSheet() {
         </>
       )}
 
-      <TextField
-        label="Tempo"
-        value={set.tempo ?? ''}
-        onChangeText={(tempo) => update({ tempo: tempo || undefined })}
-        placeholder="e.g. 3-1-1-0"
-        hint="Down, pause, up, pause in seconds. Use X for explosive."
-        autoCapitalize="characters"
-      />
+      {exercise?.isBodyweight && set.kind !== 'timed_hold' && (
+        <View style={styles.section}>
+          <SectionHeader title="Counted load" />
+          <NumberField
+            label="Counted load"
+            value={toDisplay(set.effectiveLoadOverrideKg)}
+            onChange={(v) => update({ effectiveLoadOverrideKg: v === undefined || v <= 0 ? undefined : fromDisplay(v) })}
+            unit={unitLabel(units)}
+            decimal
+            placeholder="Auto"
+            width={120}
+          />
+          <AppText variant="footnote" tone="secondary">
+            {set.kind === 'assisted' ? 'Bodyweight minus assistance' : 'Bodyweight plus added weight'}
+            {autoLoad !== undefined ? ` (${formatLoad(autoLoad, units)})` : ''} counts toward volume and records. Enter a number to count a different load instead.
+          </AppText>
+        </View>
+      )}
+
+      <TempoField value={set.tempo} onChange={(tempo) => update({ tempo })} />
       <TextField label="Notes" value={set.notes ?? ''} onChangeText={(notes) => update({ notes: notes || undefined })} placeholder="Optional" />
 
       <View style={styles.footer}>
@@ -140,6 +159,9 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     paddingTop: spacing.xxl,
     gap: spacing.md,
+  },
+  section: {
+    gap: spacing.sm,
   },
   header: {
     gap: spacing.xs,
