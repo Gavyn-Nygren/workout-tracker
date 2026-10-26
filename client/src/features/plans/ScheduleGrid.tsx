@@ -2,12 +2,16 @@ import { Fragment } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText, Icon } from '@/components/ui';
-import { daysBetween, isoWeekday } from '@/data/dates';
+import { isoWeekday } from '@/data/dates';
+import { usePreferences } from '@/data/hooks';
+import { defaultPreferences } from '@/data/preferences';
 import { weekPattern } from '@/data/schedule';
-import type { ISODate, PlanSchedule, PlanWorkout, Weekday } from '@/data/types';
+import type { ISODate, PlanSchedule, PlanShift, PlanWorkout, Weekday } from '@/data/types';
+import { WEEKDAY_LETTER, WEEKDAY_LONG, weekdayOrder } from '@/lib/format';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
-import { ALL_WEEKDAYS, abbreviate, WEEKDAY_LETTER, WEEKDAY_LONG } from './describe';
+import { abbreviate } from './describe';
+import { currentRotatingStep } from './position';
 
 type Props = {
   schedule: PlanSchedule;
@@ -15,19 +19,23 @@ type Props = {
   /** Highlights today's column (weekly/fixed) or step (rotating) when the plan has started. */
   today?: ISODate;
   startDate?: ISODate;
+  /** This plan's pushes forward, so a rotating cycle's highlighted step matches Today. */
+  shifts?: readonly PlanShift[];
   onPressDay?: (weekday: Weekday) => void;
 };
 
 /**
  * The plan's schedule at a glance (user's pick: week grid). Weekly and fixed plans show seven day
- * columns with workout chips; rotating plans show the cycle as a row of steps.
+ * columns with workout chips, starting on the user's week start; rotating plans show the cycle as
+ * a row of steps.
  */
-export function ScheduleGrid({ schedule, workouts, today, startDate, onPressDay }: Props) {
+export function ScheduleGrid({ schedule, workouts, today, startDate, shifts, onPressDay }: Props) {
   const { colors } = useAppTheme();
+  const weekStartsOn = usePreferences().data?.weekStartsOn ?? defaultPreferences.weekStartsOn;
   const names = new Map(workouts.map((w) => [w.id, w.name]));
 
   if (schedule.type === 'rotating') {
-    const step = today && startDate && schedule.sequence.length ? daysBetween(startDate, today) % schedule.sequence.length : -1;
+    const step = today && startDate ? currentRotatingStep(schedule, startDate, today, shifts) : undefined;
     return (
       <View
         style={styles.cycle}
@@ -62,7 +70,7 @@ export function ScheduleGrid({ schedule, workouts, today, startDate, onPressDay 
 
   return (
     <View style={styles.week}>
-      {ALL_WEEKDAYS.map((weekday) => {
+      {weekdayOrder(weekStartsOn).map((weekday) => {
         const ids = pattern[weekday];
         const isToday = weekday === todayWeekday;
         const label = `${WEEKDAY_LONG[weekday]}: ${ids.length ? ids.map((id) => names.get(id)).join(', ') : 'rest'}${isToday ? ', today' : ''}`;

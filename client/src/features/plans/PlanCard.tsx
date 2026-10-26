@@ -1,27 +1,17 @@
 import { StyleSheet, View } from 'react-native';
 
 import { AppText, Card, Icon, PressableScale } from '@/components/ui';
-import { addDays } from '@/data/dates';
-import { programWeek, workoutsOn } from '@/data/schedule';
-import type { ISODate, Plan } from '@/data/types';
+import { usePlanShifts } from '@/data/hooks';
+import type { ISODate, Plan, PlanShift } from '@/data/types';
 import { formatLongDate, formatShortDate } from '@/lib/format';
 import { DENSE_TEXT_MAX, useTextScale } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { describeSchedule } from './describe';
+import { currentProgramWeek, nextWorkout, shiftsOf } from './position';
 import { ScheduleGrid } from './ScheduleGrid';
 
-/** The next scheduled workout from `today` within two weeks. */
-export function nextWorkout(plan: Plan, today: ISODate): { date: ISODate; name: string } | undefined {
-  if (plan.status !== 'active') return undefined;
-  for (let i = 0; i < 14; i++) {
-    const date = addDays(today, i);
-    const [id] = workoutsOn(plan.schedule, plan.startDate, date);
-    const workout = id ? plan.workouts.find((w) => w.id === id) : undefined;
-    if (workout) return { date, name: workout.name };
-  }
-  return undefined;
-}
+const NO_SHIFTS: PlanShift[] = [];
 
 export function StatusPill({ status }: { status: Plan['status'] }) {
   const { colors } = useAppTheme();
@@ -40,8 +30,10 @@ export function StatusPill({ status }: { status: Plan['status'] }) {
 export function PlanCard({ plan, today, onPress }: { plan: Plan; today: ISODate; onPress: () => void }) {
   const { colors } = useAppTheme();
   const { large } = useTextScale();
-  const next = nextWorkout(plan, today);
-  const week = programWeek(plan, today);
+  // After a push forward, "Next", the week and the cycle step follow the moved workouts, like Today.
+  const shifts = shiftsOf(plan.id, usePlanShifts().data ?? NO_SHIFTS);
+  const next = nextWorkout(plan, today, shifts);
+  const week = currentProgramWeek(plan, today, shifts);
   const spoken = [
     `${plan.name}, ${plan.status}`,
     `${describeSchedule(plan.schedule)}${week ? `, week ${week}` : ''}`,
@@ -64,7 +56,7 @@ export function PlanCard({ plan, today, onPress }: { plan: Plan; today: ISODate;
             </View>
             <StatusPill status={plan.status} />
           </View>
-          <ScheduleGrid schedule={plan.schedule} workouts={plan.workouts} today={plan.status === 'active' ? today : undefined} startDate={plan.startDate} />
+          <ScheduleGrid schedule={plan.schedule} workouts={plan.workouts} today={plan.status === 'active' ? today : undefined} startDate={plan.startDate} shifts={shifts} />
           {next && (
             <View style={styles.next}>
               <Icon name="calendar" color={colors.accentText} size={14} />

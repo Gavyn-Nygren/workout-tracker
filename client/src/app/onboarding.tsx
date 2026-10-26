@@ -15,7 +15,7 @@ import { newId } from '@/lib/id';
 import { authStore, completeOnboarding } from '@/features/auth/authStore';
 import { onboardingAnswers, type Answers } from '@/features/onboarding/answers';
 import { recommendTemplates, type Goal } from '@/features/onboarding/recommend';
-import { nextMonday, planFromTemplate } from '@/features/plans/planEdits';
+import { nextWeekStart, planFromTemplate } from '@/features/plans/planEdits';
 import { templateMeta } from '@/features/plans/TemplateCard';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
@@ -66,7 +66,9 @@ export default function OnboardingScreen() {
   // added later from Profile. The setup questions that follow are all optional.
   const [phase, setPhase] = useState<'weight' | 'questions' | 'recommend' | 'tour'>('weight');
   const [weight, setWeight] = useState<number>();
-  const units = usePreferences().data?.units ?? 'imperial';
+  const preferences = usePreferences().data;
+  const units = preferences?.units ?? 'imperial';
+  const weekStartsOn = preferences?.weekStartsOn ?? 1;
   const [answers, setAnswers] = useState<Answers>(onboardingAnswers.get());
   const set = (patch: Partial<Answers>) => setAnswers((a) => ({ ...a, ...patch }));
   // Each step's heading. Only one shows at a time, so one ref covers them all.
@@ -108,12 +110,13 @@ export default function OnboardingScreen() {
   const startTemplate = (templateId: string) => {
     const template = templates?.find((t) => t.id === templateId);
     if (!template) return;
-    const monday = nextMonday(today);
+    // "Today or next Monday" (spec 2.5), or next Sunday when weeks start on Sunday.
+    const weekStart = nextWeekStart(today, weekStartsOn);
     ActionSheetIOS.showActionSheetWithOptions(
-      { title: `Start ${template.name}`, options: ['Start today', `Start ${formatShortDate(monday)}`, 'Cancel'], cancelButtonIndex: 2, userInterfaceStyle: scheme },
+      { title: `Start ${template.name}`, options: ['Start today', `Start ${formatShortDate(weekStart)}`, 'Cancel'], cancelButtonIndex: 2, userInterfaceStyle: scheme },
       async (i) => {
         if (i > 1) return;
-        if (!(await succeeded(savePlan.mutateAsync(planFromTemplate(template, i === 0 ? today : monday))))) return;
+        if (!(await succeeded(savePlan.mutateAsync(planFromTemplate(template, i === 0 ? today : weekStart))))) return;
         toast.show({ message: `${template.name} is in your plans.`, tone: 'success' });
         setPhase('tour');
       },

@@ -4,21 +4,8 @@ import { defaultPreferences } from '../preferences';
 import { deriveBadges, deriveStreak } from '../progress';
 import { derivePersonalRecords } from '../records';
 import { SCHEDULE_AHEAD_DAYS, type DataRepository, type DateRange } from '../repository';
-import { scheduleOccurrences } from '../schedule';
-import type {
-  BodyweightEntry,
-  Exercise,
-  FormReport,
-  Goal,
-  ID,
-  ISODate,
-  LoggedSet,
-  Plan,
-  Preferences,
-  Recording,
-  ScheduledOccurrence,
-  WorkoutSession,
-} from '../types';
+import { planShiftFor, scheduleOccurrences, shiftCovers, shiftedDate } from '../schedule';
+import type { BodyweightEntry, Exercise, FormReport, Goal, ID, ISODate, LoggedSet, Plan, PlanShift, Preferences, Recording, ScheduledOccurrence, WorkoutSession } from '../types';
 import { insertRowIfMissing, joinSessions, nowISO, putRow, readAll, readAllSync, readOne, readOneSync, splitSession, tombstone } from './rows';
 import type { SqlDb, SqlValue } from './sql';
 
@@ -77,7 +64,7 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
     if (scheduledThrough === day) return;
     db.withTransactionSync(() => {
       for (const plan of readAllSync<Plan>(db, 'plans', "status = 'active'")) {
-        for (const occ of scheduleOccurrences(plan, day, addDays(day, SCHEDULE_AHEAD_DAYS))) {
+        for (const occ of scheduleOccurrences(plan, day, addDays(day, SCHEDULE_AHEAD_DAYS), shiftsFor(plan.id))) {
           insertRowIfMissing(db, 'occurrences', occ.id, occ, occurrenceColumns(occ));
         }
       }
@@ -117,11 +104,37 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
     const frequency = goals.filter((g) => g.type === 'frequency').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
     return frequency?.type === 'frequency' ? frequency.workoutsPerWeek : DEFAULT_WEEKLY_TARGET;
   };
-  const getStreak = async () => deriveStreak(await allSessions(), today(), await weeklyTarget());
+  const preferencesSync = (): Preferences => {
+    const stored = readOneSync<Preferences>(db, 'preferences', PREFERENCES_ID);
+    return stored ? { ...defaultPreferences, ...stored } : defaultPreferences;
+  };
+  const getStreak = async () => deriveStreak(await allSessions(), today(), await weeklyTarget(), preferencesSync().weekStartsOn);
+
+  /** A plan's pushes forward that haven't been undone. */
+  const shiftsFor = (planId: ID) => readAllSync<PlanShift>(db, 'plan_shifts', 'plan_id = ?', [planId]);
+
+  /**
+   * Puts a plan's unstarted workouts on their dates after its pushes (spec 2.5). Started workouts
+   * stay where they were done. Used after a push and after undoing one.
+   */
+  const placeUnstarted = (planId: ID) => {
+    const shifts = shiftsFor(planId);
+    for (const occ of readAllSync<ScheduledOccurrence>(db, 'occurrences', 'plan_id = ? AND session_id IS NULL', [planId])) {
+      const original = occ.shiftedFromDate ?? occ.scheduledDate;
+      const scheduledDate = shiftedDate(original, shifts, occ.id);
+      if (scheduledDate === occ.scheduledDate) continue;
+      const { shiftedFromDate: _, ...rest } = occ;
+      const placed: ScheduledOccurrence = scheduledDate === original ? { ...rest, scheduledDate } : { ...rest, scheduledDate, shiftedFromDate: original };
+      putRow(db, 'occurrences', occ.id, placed, occurrenceColumns(placed));
+    }
+  };
 
   /** Future occurrences of a plan that haven't been started. Past ones and started ones are history. */
   const unstartedFuture = (planId: ID) =>
-    db.getAllSync<{ id: string }>('SELECT id FROM occurrences WHERE plan_id = ? AND scheduled_date >= ? AND session_id IS NULL AND deleted_at IS NULL', [planId, today()]);
+    db.getAllSync<{ id: string; scheduled_date: string; shifted_from: string | null }>(
+      "SELECT id, scheduled_date, json_extract(data, '$.shiftedFromDate') AS shifted_from FROM occurrences WHERE plan_id = ? AND scheduled_date >= ? AND session_id IS NULL AND deleted_at IS NULL",
+      [planId, today()],
+    );
 
   /**
    * Every plan change goes through here: the new version is stored (and kept, so workouts
@@ -132,12 +145,23 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
     putRow(db, 'plans', plan.id, plan, { status: plan.status });
     insertRowIfMissing(db, 'plan_versions', `${plan.id}@${plan.version}`, plan, { plan_id: plan.id, version: plan.version });
     const day = today();
-    const upcoming = scheduleOccurrences(plan, day, addDays(day, SCHEDULE_AHEAD_DAYS));
+    const shifts = shiftsFor(plan.id);
+    // Pushes can move workouts past the usual 4 weeks ahead, and an earlier save may have stored
+    // some that far out: rebuild as far as either reaches, so none is dropped without a check.
+    const reach = shifts.reduce((sum, s) => sum + Math.max(0, s.days), 0);
+    const future = unstartedFuture(plan.id);
+    let horizon = addDays(day, SCHEDULE_AHEAD_DAYS + reach);
+    for (const { scheduled_date } of future) if (scheduled_date > horizon) horizon = scheduled_date;
+    const upcoming = scheduleOccurrences(plan, day, horizon, shifts);
     const wanted = new Set(upcoming.map((o) => o.id));
-    for (const { id } of unstartedFuture(plan.id)) if (!wanted.has(id)) tombstone(db, 'occurrences', id);
+    // A missed workout the user pushed forward is still that missed workout: like a missed one on
+    // its day, an edit never deletes it, even if the plan no longer has its original day.
+    const pushedMiss = (from: string | null) => plan.status === 'active' && from !== null && from < day;
+    for (const { id, shifted_from } of future) if (!wanted.has(id) && !pushedMiss(shifted_from)) tombstone(db, 'occurrences', id);
     for (const occ of upcoming) {
       const current = readOneSync<ScheduledOccurrence>(db, 'occurrences', occ.id);
-      if (current?.sessionId) continue;
+      // Started workouts stay where they were done, and past ones on their day: an edit only rebuilds the future.
+      if (current?.sessionId || (current && current.scheduledDate < day)) continue;
       putRow(db, 'occurrences', occ.id, occ, occurrenceColumns(occ));
     }
   };
@@ -163,6 +187,7 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
     listPlans: () => readAll<Plan>(db, 'plans'),
     getPlan: (id) => readOne<Plan>(db, 'plans', id),
     listPlanVersions: () => readAll<Plan>(db, 'plan_versions', undefined, [], 'plan_id, version'),
+    listPlanShifts: async () => (await readAll<PlanShift>(db, 'plan_shifts')).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
     listTemplates: async () => starterTemplates,
     listOccurrences: (range: DateRange) => {
       ensureSchedule();
@@ -224,6 +249,8 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
         if (occ?.sessionId === sessionId) {
           const freed: ScheduledOccurrence = { ...occ, sessionId: undefined };
           putRow(db, 'occurrences', occ.id, freed, occurrenceColumns(freed));
+          // An undo while it was started may have changed where it belongs.
+          placeUnstarted(occ.planId);
         }
       }),
 
@@ -246,6 +273,37 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
         // Workouts that were never started go, past (missed) ones included; logged history stays.
         const unstarted = db.getAllSync<{ id: string }>('SELECT id FROM occurrences WHERE plan_id = ? AND session_id IS NULL AND deleted_at IS NULL', [planId]);
         for (const { id } of unstarted) tombstone(db, 'occurrences', id);
+        for (const shift of shiftsFor(planId)) tombstone(db, 'plan_shifts', shift.id);
+      }),
+
+    pushPlanForward: (occurrenceId, shiftId) =>
+      write(() => {
+        const occurrence = readOneSync<ScheduledOccurrence>(db, 'occurrences', occurrenceId);
+        const plan = occurrence ? readOneSync<Plan>(db, 'plans', occurrence.planId) : undefined;
+        if (!occurrence || !plan) throw new Error('That workout is no longer scheduled');
+        const planned = planShiftFor({ id: shiftId, plan, occurrence, today: today(), weekStartsOn: preferencesSync().weekStartsOn, now: nowISO() });
+        if (!planned) throw new Error('Only a missed workout can be pushed forward');
+        // Workouts in range that were already started stay where they are, now and later.
+        const keptIds = readAllSync<ScheduledOccurrence>(db, 'occurrences', 'plan_id = ? AND session_id IS NOT NULL', [plan.id])
+          .filter((o) => shiftCovers(planned, o.shiftedFromDate ?? o.scheduledDate))
+          .map((o) => o.id);
+        // The plan's other unstarted workouts on the missed day move with it, wherever the plan first put them.
+        const alongIds = readAllSync<ScheduledOccurrence>(db, 'occurrences', 'plan_id = ? AND session_id IS NULL AND scheduled_date = ?', [plan.id, occurrence.scheduledDate])
+          .filter((o) => o.id !== occurrence.id && !shiftCovers(planned, o.shiftedFromDate ?? o.scheduledDate))
+          .map((o) => o.id);
+        const shift: PlanShift = { ...planned, ...(keptIds.length ? { keptIds } : {}), ...(alongIds.length ? { alongIds } : {}) };
+        putRow(db, 'plan_shifts', shift.id, shift, { plan_id: plan.id });
+        placeUnstarted(plan.id);
+      }),
+
+    undoPlanShift: (shiftId) =>
+      write(() => {
+        const shift = readOneSync<PlanShift>(db, 'plan_shifts', shiftId);
+        if (!shift) return;
+        tombstone(db, 'plan_shifts', shift.id);
+        placeUnstarted(shift.planId);
+        // Workouts moved back leave room at the end of the 4 weeks ahead; the next read fills it.
+        scheduledThrough = null;
       }),
 
     saveExercise: (exercise) =>

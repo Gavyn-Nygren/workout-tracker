@@ -172,6 +172,31 @@ export type Plan = Timestamps & {
   workouts: PlanWorkout[];
 };
 
+/**
+ * A "push forward" after a missed workout (spec 2.5). The plan's workouts originally scheduled
+ * from `fromDate` (through `untilDate`, if set) move `days` later; started ones stay where they
+ * were done. Weekly plans stop at the end of the week the missed workout lands in, so the next
+ * week is back on the usual days (user's pick); programs and rotating cycles shift for good.
+ * Undoing a push deletes it, and the workouts move back.
+ */
+export type PlanShift = Timestamps & {
+  id: ID;
+  planId: ID;
+  /** The missed workout that was pushed to the day of the push. */
+  occurrenceId: ID;
+  /** The pushed workout's original (unshifted) date. Dates here are always original ones. */
+  fromDate: ISODate;
+  untilDate?: ISODate;
+  days: number;
+  /**
+   * Workouts in the push's range that were already started or done when it was made. They stayed
+   * where they were, and the push never moves them, even if their session is later deleted.
+   */
+  keptIds?: ID[];
+  /** The plan's other unstarted workouts on the missed day when it was pushed; they move with it. */
+  alongIds?: ID[];
+};
+
 /** One scheduled instance of a plan workout on the calendar. */
 export type ScheduledOccurrence = {
   id: ID;
@@ -179,7 +204,7 @@ export type ScheduledOccurrence = {
   planVersion: number;
   planWorkoutId: ID;
   scheduledDate: ISODate;
-  /** Set when a calendar shift moved this occurrence; enables undo. */
+  /** The date the plan originally put it on, when a push forward moved it (spec 2.5). */
   shiftedFromDate?: ISODate;
   /** The session that fulfilled this occurrence, if any. */
   sessionId?: ID;

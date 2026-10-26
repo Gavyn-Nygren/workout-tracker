@@ -1,6 +1,6 @@
 import type { SFSymbol } from 'expo-symbols';
 
-import { addDays } from '@/data/dates';
+import { addDays, localDateOf } from '@/data/dates';
 import type { EarnedBadge, Exercise, FormReport, ISODate, Joint, PersonalRecord, PRType, StreakRecord, UnitSystem } from '@/data/types';
 import { formatAddedLoad, formatLoad, plural } from '@/lib/format';
 import { reportAngle } from './goals';
@@ -84,7 +84,7 @@ export function buildWins(input: {
   for (const reports of byExercise.values()) {
     reports.forEach((report, i) => {
       const previous = reports[i - 1];
-      const date = report.createdAt.slice(0, 10);
+      const date = localDateOf(report.createdAt);
       if (!previous || date < since) return;
       // Whole degrees, as shown in the report.
       const nowRaw = reportAngle(report, report.primaryJoint);

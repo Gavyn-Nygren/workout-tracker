@@ -5,11 +5,11 @@ import { AccessibilityInfo, ScrollView, StyleSheet, View, type ViewInstance } fr
 
 import { AppText, Button, Card, Chip, Icon, PressableScale, SectionHeader, SegmentedControl, Stepper, TextField } from '@/components/ui';
 import { useToday } from '@/data/DataProvider';
-import { succeeded, useSavePlan } from '@/data/hooks';
+import { succeeded, usePreferences, useSavePlan } from '@/data/hooks';
+import { defaultPreferences } from '@/data/preferences';
 import type { PlanSchedule, Weekday } from '@/data/types';
-import { formatShortDate, plural } from '@/lib/format';
-import { ALL_WEEKDAYS, WEEKDAY_LONG, WEEKDAY_SHORT } from '@/features/plans/describe';
-import { newPlan, nextMonday } from '@/features/plans/planEdits';
+import { formatLongDate, formatShortDate, plural, WEEKDAY_LONG, WEEKDAY_SHORT, weekdayOrder } from '@/lib/format';
+import { newPlan, nextWeekStart } from '@/features/plans/planEdits';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { readable, useTextScale } from '@/theme/layout';
@@ -28,10 +28,11 @@ export default function NewPlanScreen() {
   const { large } = useTextScale();
   const today = useToday();
   const savePlan = useSavePlan();
+  const weekStartsOn = usePreferences().data?.weekStartsOn ?? defaultPreferences.weekStartsOn;
   const [step, setStep] = useState(1);
   const [type, setType] = useState<PlanType>('weekly');
   const [name, setName] = useState('');
-  const [start, setStart] = useState<'today' | 'monday'>('today');
+  const [start, setStart] = useState<'today' | 'weekStart'>('today');
   const [weekdays, setWeekdays] = useState<Weekday[]>([1, 3, 5]);
   const [weeks, setWeeks] = useState(8);
   const [cycle, setCycle] = useState<('workout' | 'rest')[]>(['workout', 'workout', 'rest']);
@@ -48,12 +49,14 @@ export default function NewPlanScreen() {
     return () => clearTimeout(t);
   }, [step]);
 
-  const startDate = start === 'today' ? today : nextMonday(today);
+  // "Today or next Monday" (spec 2.5), or next Sunday when weeks start on Sunday.
+  const weekStart = nextWeekStart(today, weekStartsOn);
+  const startDate = start === 'today' ? today : weekStart;
   const canContinue = step === 1 || (step === 2 ? name.trim().length > 0 : type === 'rotating' ? cycle.includes('workout') : weekdays.length > 0);
 
   const create = async () => {
     if (savePlan.isPending) return;
-    const plan = newPlan({ name, startDate, type, weekdays, weeks, cycle });
+    const plan = newPlan({ name, startDate, type, weekdays, weeks, cycle, weekStartsOn });
     if (!(await succeeded(savePlan.mutateAsync(plan)))) return;
     router.replace({ pathname: '/plans/plan', params: { id: plan.id } });
   };
@@ -109,7 +112,7 @@ export default function NewPlanScreen() {
             label="Start date"
             options={[
               { value: 'today', label: 'Today' },
-              { value: 'monday', label: formatShortDate(nextMonday(today)) },
+              { value: 'weekStart', label: formatShortDate(weekStart), accessibilityLabel: formatLongDate(weekStart) },
             ]}
             value={start}
             onChange={setStart}
@@ -124,7 +127,7 @@ export default function NewPlanScreen() {
             You'll get one workout per day to fill in. Rename or reassign them later.
           </AppText>
           <View style={styles.wrap}>
-            {ALL_WEEKDAYS.map((d) => (
+            {weekdayOrder(weekStartsOn).map((d) => (
               <Chip
                 key={d}
                 label={WEEKDAY_SHORT[d]}

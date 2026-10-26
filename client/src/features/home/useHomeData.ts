@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 
-import { addDays, startOfWeek } from '@/data/dates';
-import { useBadges, useBodyweight, useFormReports, useGoals, usePersonalRecords, useSessions, useStreak } from '@/data/hooks';
+import { useBadges, useBodyweight, useFormReports, useGoals, usePersonalRecords, usePreferences, useSessions, useStreak } from '@/data/hooks';
+import { defaultPreferences } from '@/data/preferences';
+import { weekDates } from '@/lib/format';
 import { useAgenda } from '../today/useAgenda';
 import { nextBadges } from './badges';
 import { goalProgress } from './goals';
@@ -26,13 +27,9 @@ export function useHomeData() {
     queries.forEach((q) => q.error && q.refetch());
   };
 
-  const week = useMemo(() => {
-    const monday = startOfWeek(today);
-    return Array.from({ length: 7 }, (_, i) => {
-      const date = addDays(monday, i);
-      return { date, items: agenda.get(date) ?? [] };
-    });
-  }, [agenda, today]);
+  // The same week the streak counts (both follow the week-start setting).
+  const weekStartsOn = usePreferences().data?.weekStartsOn ?? defaultPreferences.weekStartsOn;
+  const week = useMemo(() => weekDates(today, weekStartsOn).map((date) => ({ date, items: agenda.get(date) ?? [] })), [agenda, today, weekStartsOn]);
 
   const goalsWithProgress = useMemo(
     () =>

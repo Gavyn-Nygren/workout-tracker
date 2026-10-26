@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G3.7 (calendar rules).
+**Current goal:** G3.8 (rest timer).
 
 ## How we work
 
@@ -107,7 +107,7 @@ Screens are listed in priority order. Each one includes its empty, loading, and 
 - [x] Calendar wheel for browsing past and future dates. *Week strip with status dots (user's pick).*
 - [x] Today's workout card(s). *Dark hero cards (user's pick).*
 - [x] `Start Workout 1/3` with a switcher between workouts. *Swipeable cards with page dots (user's pick).*
-- [x] States for a rest day, a missed workout (with the "push plan forward?" prompt), a completed workout (reopen/repeat), and a partial workout. *Also skipped, late, and repeated workouts. Start, Reopen, Repeat, and the push-forward shift are visual only until G2.2/G3.7.*
+- [x] States for a rest day, a missed workout (with the "push plan forward?" prompt), a completed workout (reopen/repeat), and a partial workout. *Also skipped, late, and repeated workouts. Start, Reopen, Repeat, and the push-forward shift now work (G2.2, G3.7).*
 - [x] The user has reviewed Today on their iPhone.
 
 ### G2.2 Active workout 👁
@@ -196,7 +196,7 @@ Load the `dataviz` skill before building any charts.
 - [x] Data export, and delete account with the 7-day grace explanation. *CSV and JSON export really work through the share sheet; deletion is a preview until G5.4.*
 - [x] The user has reviewed Profile on their iPhone.
 
-*Week-start (Monday or Sunday) isn't a setting yet; it's decided with the calendar rules in G3.7. Settings changes reset when the app restarts, like the rest of the sample data.*
+*Week start (Monday or Sunday) is a setting under Units & logging (G3.7). Settings changes reset when the app restarts, like the rest of the sample data.*
 
 ### G2.9 Auth, onboarding, tutorial 👁
 
@@ -296,10 +296,21 @@ Everything works on one phone, offline, with no server.
 
 ### G3.7 Calendar rules
 
-- [ ] Attribute workouts to their completion date.
-- [ ] Missed-workout prompt, push-forward shift, and one-tap undo.
-- [ ] Multi-workout days.
-- [ ] Decide time zone and week-start handling. *From the G3.6 audit: `weekStartsOn` exists in preferences but nothing reads it yet. Thread it into the streak, the Home week row, and the week strip together.*
+- [x] Attribute workouts to their completion date.
+  - *History, records, streaks, Home's week, and the report use the local date the workout was finished, including a workout finished after midnight or done on a different day than planned.*
+- [x] Missed-workout prompt, push-forward shift, and one-tap undo.
+  - *Today asks about the latest missed workout of the past week, together with anything else the plan missed that day. "Push forward" moves them to today and the later workouts by the same number of days. "Keep schedule" hides the question for those workouts.*
+  - *Weekly plans move only within the current week, so next week is as usual. Programs and rotating cycles move everything later (user's pick).*
+  - *Workouts already started or done never move. A workout already in progress when the push was made stays put even if it's later discarded.*
+  - *Undo stays on the banner until the end of the day, or until the moved workout is started (user's pick).*
+  - *Pushes are stored with the plan (a new `plan_shifts` table), so they survive plan edits and the calendar filling in ahead. A plan edit never deletes a pushed workout. A moved workout says "Moved from …" for a week after the push.*
+- [x] Multi-workout days.
+  - *Workouts from different plans, or two on one day after a push, show as swipeable cards, and the pager moves to the workout a push just brought to today.*
+- [x] Decide time zone and week-start handling.
+  - *Calendar dates are the phone's local dates and don't move when you travel. Completion times are stored in UTC and shown in local time. Day math is safe across daylight saving changes.*
+  - *Week start is Monday by default, with a Sunday option under Units & logging (user's pick). The streak, Home's week, the week strip, and the plan week grids all follow it.*
+
+**Done when:** pushes, undo, week start, and date handling have automated tests. *Done: 384 tests, covering every plan type, more than one plan, doubled-up days, edits after a push, Sunday weeks, completion dates, and streaks. Also fixed: the test typecheck wasn't checking the test files.*
 
 ### G3.8 Rest timer
 

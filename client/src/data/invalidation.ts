@@ -10,6 +10,7 @@ export type QueryRoot =
   | 'exercises'
   | 'plans'
   | 'planVersions'
+  | 'planShifts'
   | 'templates'
   | 'occurrences'
   | 'sessions'
@@ -21,8 +22,11 @@ export type QueryRoot =
   | 'formReports'
   | 'recordings';
 
+/** How a repository write is named; every other method is a read. */
+export const WRITE_NAME = /^(save|delete|update|push|undo)/;
+
 /** Every repository write. A new write fails the typecheck until it has an entry below. */
-export type Mutation = Extract<keyof DataRepository, `save${string}` | `delete${string}` | `update${string}`>;
+export type Mutation = Extract<keyof DataRepository, `save${string}` | `delete${string}` | `update${string}` | `push${string}` | `undo${string}`>;
 
 /** Reads derived from logged workouts: records, streak weeks, and badges. */
 const DERIVED_FROM_WORKOUTS = ['personalRecords', 'streak', 'badges'] as const satisfies readonly QueryRoot[];
@@ -40,7 +44,10 @@ export const INVALIDATES: Record<Mutation, readonly QueryRoot[]> = {
   deleteSession: ['sessions', 'occurrences', ...DERIVED_FROM_WORKOUTS, 'formReports', 'recordings'],
   updatePlanWorkout: PLAN_READS,
   savePlan: PLAN_READS,
-  deletePlan: PLAN_READS,
+  deletePlan: [...PLAN_READS, 'planShifts'],
+  // A push forward (and its undo) moves the plan's unstarted workouts.
+  pushPlanForward: ['occurrences', 'planShifts'],
+  undoPlanShift: ['occurrences', 'planShifts'],
   // Records read the exercise's bodyweight setting, and badges count its volume.
   saveExercise: ['exercises', ...DERIVED_FROM_WORKOUTS],
   saveGoal: GOAL_READS,
@@ -51,7 +58,8 @@ export const INVALIDATES: Record<Mutation, readonly QueryRoot[]> = {
   deleteRecordingVideo: ['formReports', 'recordings'],
   // The set loses its link to the recording, and the first analysis earns a badge.
   deleteFormReport: ['formReports', 'recordings', 'sessions', 'badges'],
-  savePreferences: ['preferences'],
+  // The week-start setting decides which workouts share a streak week.
+  savePreferences: ['preferences', 'streak', 'badges'],
 };
 
 /** The slice of TanStack Query's client used here, so tests can pass a stand-in. */

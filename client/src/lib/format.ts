@@ -1,6 +1,30 @@
-import { fromISODate } from '@/data/dates';
-import type { ISODate, RepTarget, UnitSystem } from '@/data/types';
+import { addDays, fromISODate, startOfWeek } from '@/data/dates';
+import type { ISODate, RepTarget, UnitSystem, Weekday } from '@/data/types';
 import { kgToLb } from '@/data/units';
+
+// Weekdays are ISO numbers everywhere (1 = Mon … 7 = Sun), in stored data too. Only the order
+// they're shown in follows the week-start setting.
+export const WEEKDAY_LETTER: Record<Weekday, string> = { 1: 'M', 2: 'T', 3: 'W', 4: 'T', 5: 'F', 6: 'S', 7: 'S' };
+export const WEEKDAY_SHORT: Record<Weekday, string> = { 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun' };
+/** Full names for VoiceOver, which can read "Mon" or "M" oddly. */
+export const WEEKDAY_LONG: Record<Weekday, string> = { 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday', 7: 'Sunday' };
+
+/** The seven weekdays in display order: Monday weeks give 1 … 7, Sunday weeks give 7, 1 … 6. */
+export function weekdayOrder(weekStartsOn: Weekday = 1): Weekday[] {
+  return Array.from({ length: 7 }, (_, i) => (((weekStartsOn - 1 + i) % 7) + 1) as Weekday);
+}
+
+/** Sorts weekdays into display order for the week start. */
+export function sortWeekdays(days: readonly Weekday[], weekStartsOn: Weekday = 1): Weekday[] {
+  const position = (d: Weekday) => (d - weekStartsOn + 7) % 7;
+  return [...days].sort((a, b) => position(a) - position(b));
+}
+
+/** The seven dates of the week containing `date`, first day first. It's the week the streak counts. */
+export function weekDates(date: ISODate, weekStartsOn: Weekday = 1): ISODate[] {
+  const first = startOfWeek(date, weekStartsOn);
+  return Array.from({ length: 7 }, (_, i) => addDays(first, i));
+}
 
 const weekdayLong = new Intl.DateTimeFormat('en-US', { weekday: 'long' });
 const weekdayShort = new Intl.DateTimeFormat('en-US', { weekday: 'short' });

@@ -11,7 +11,7 @@ import { readable, useTextScale } from '@/theme/layout';
 
 const ROUNDED: Equipment[] = ['barbell', 'dumbbell', 'machine', 'cable', 'kettlebell'];
 
-/** Units, effort scale, and weight rounding (spec 2.4 and 2.6). */
+/** Units, week start, effort scale, and weight rounding (spec 2.4 and 2.6). */
 export default function UnitsScreen() {
   const { colors } = useAppTheme();
   const { preferences, update } = useSettings();
@@ -34,6 +34,22 @@ export default function UnitsScreen() {
         />
         <AppText variant="footnote" tone="secondary" style={styles.hint}>
           Everything you've logged converts automatically. Rounding resets to the defaults for the new unit.
+        </AppText>
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader title="Week starts on" />
+        <SegmentedControl
+          label="Week starts on"
+          options={[
+            { value: '1', label: 'Monday' },
+            { value: '7', label: 'Sunday' },
+          ]}
+          value={preferences.weekStartsOn === 7 ? '7' : '1'}
+          onChange={(day) => update({ weekStartsOn: day === '7' ? 7 : 1 })}
+        />
+        <AppText variant="footnote" tone="secondary" style={styles.hint}>
+          Your weekly streak, the week on Home, and the calendar strip on Today all start on this day. Plans list their days in this order too.
         </AppText>
       </View>
 

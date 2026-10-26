@@ -99,13 +99,19 @@ export function buildAgenda(input: {
   return agenda;
 }
 
-/** The most recent missed workout in the past week, for the "push plan forward?" prompt. */
-export function latestMissed(agenda: Agenda, today: ISODate): DayItem | undefined {
+/** How far back a missed workout can still be pushed forward from Today. */
+export const MISSED_LOOKBACK_DAYS = 7;
+
+/**
+ * The most recent missed workout in the past week, for the "push plan forward?" prompt (see
+ * missed.ts). `include` narrows the candidates. On a tie, the first in agenda order wins.
+ */
+export function latestMissed(agenda: Agenda, today: ISODate, include: (item: DayItem) => boolean = () => true): DayItem | undefined {
   let latest: DayItem | undefined;
   for (const [date, items] of agenda) {
-    if (date >= today || daysBetween(date, today) > 7) continue;
+    if (date >= today || daysBetween(date, today) > MISSED_LOOKBACK_DAYS) continue;
     for (const item of items) {
-      if (item.status === 'missed' && (!latest || item.date > latest.date)) latest = item;
+      if (item.status === 'missed' && (!latest || item.date > latest.date) && include(item)) latest = item;
     }
   }
   return latest;

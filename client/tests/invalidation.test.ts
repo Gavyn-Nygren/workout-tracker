@@ -4,7 +4,7 @@ import { describe, test } from 'node:test';
 import { addDays } from '../src/data/dates';
 import { migrate } from '../src/data/db/schema';
 import { createSqliteRepository } from '../src/data/db/sqliteRepository';
-import { DATE_DEPENDENT, INVALIDATES, invalidateAfter, msUntilTomorrow, staleOnForeground, type Invalidator, type Mutation, type QueryRoot } from '../src/data/invalidation';
+import { DATE_DEPENDENT, INVALIDATES, WRITE_NAME, invalidateAfter, msUntilTomorrow, staleOnForeground, type Invalidator, type Mutation, type QueryRoot } from '../src/data/invalidation';
 import { openTestDatabase } from './support/nodeSqlite';
 
 const TODAY = '2026-10-21';
@@ -18,7 +18,7 @@ describe('what each write refreshes', () => {
     const db = openTestDatabase();
     migrate(db);
     const repo = createSqliteRepository(db, { today: () => TODAY });
-    const repoWrites = Object.keys(repo).filter((name) => /^(save|delete|update)/.test(name));
+    const repoWrites = Object.keys(repo).filter((name) => WRITE_NAME.test(name));
     assert.deepEqual([...repoWrites].sort(), [...writes].sort());
     for (const mutation of writes) assert.ok(INVALIDATES[mutation].length > 0, mutation);
   });

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Card, ListRow, SectionHeader, useToast } from '@/components/ui';
+import { todayISO } from '@/data/dates';
 import { useBodyweight, useExercises, useFormReports, useGoals, usePlans, useSessions } from '@/data/hooks';
 import { everythingJson, workoutsCsv } from '@/features/settings/exportData';
 import { shareText } from '@/features/settings/shareFile';
@@ -29,8 +30,8 @@ export default function DataAccountScreen() {
   const loadFailed = !ready && all.some((q) => q.error);
   const [busy, setBusy] = useState<'csv' | 'json' | null>(null);
 
-  const stamp = new Date().toISOString().slice(0, 10);
   const run = async (kind: 'csv' | 'json') => {
+    const stamp = todayISO();
     if (!ready) {
       if (loadFailed) {
         all.forEach((q) => q.error && q.refetch());

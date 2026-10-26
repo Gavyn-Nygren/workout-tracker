@@ -4,6 +4,7 @@ import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, useWindowDimensio
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText, Button, Card, Icon, Stepper, useToast } from '@/components/ui';
+import { localDateOf } from '@/data/dates';
 import { useExercises, useFormReports } from '@/data/hooks';
 import { useHaptics } from '@/hooks/useHaptics';
 import { formatClock, spokenDuration } from '@/hooks/useNow';
@@ -245,7 +246,7 @@ function Recorder() {
               {previous && (
                 <View style={styles.stepRow}>
                   <Icon name="arrow.left.arrow.right" color={colors.accentText} size={16} />
-                  <AppText variant="subhead" style={styles.flex}>{`Compared with ${formatShortDate(previous.createdAt.slice(0, 10))}`}</AppText>
+                  <AppText variant="subhead" style={styles.flex}>{`Compared with ${formatShortDate(localDateOf(previous.createdAt))}`}</AppText>
                 </View>
               )}
             </View>

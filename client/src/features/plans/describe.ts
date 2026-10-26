@@ -1,12 +1,11 @@
 import { trainingDays, weekdaysByWorkout } from '@/data/schedule';
 import type { Exercise, Plan, PlannedExercise, PlanSchedule, PlanWorkout, ProgressionRule, StarterTemplate, UnitSystem, Weekday } from '@/data/types';
-import { formatLoad, formatRepTarget, plural } from '@/lib/format';
+import { formatLoad, formatRepTarget, plural, sortWeekdays, WEEKDAY_LONG, WEEKDAY_SHORT } from '@/lib/format';
 import { formatClock, spokenDuration } from '@/hooks/useNow';
 
-export const WEEKDAY_SHORT: Record<Weekday, string> = { 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun' };
-export const WEEKDAY_LETTER: Record<Weekday, string> = { 1: 'M', 2: 'T', 3: 'W', 4: 'T', 5: 'F', 6: 'S', 7: 'S' };
-/** Full names for VoiceOver, which can read "Mon" or "M" oddly. */
-export const WEEKDAY_LONG: Record<Weekday, string> = { 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday', 7: 'Sunday' };
+// The weekday names live in lib/format with the week-order helpers; re-exported for existing imports.
+export { WEEKDAY_LETTER, WEEKDAY_LONG, WEEKDAY_SHORT } from '@/lib/format';
+/** ISO order (Monday first). For display order, use weekdayOrder(weekStartsOn) from lib/format. */
 export const ALL_WEEKDAYS: Weekday[] = [1, 2, 3, 4, 5, 6, 7];
 
 export const PLAN_TYPE_LABEL: Record<PlanSchedule['type'], string> = { weekly: 'Weekly', fixed: 'Fixed-length', rotating: 'Rotating' };
@@ -31,9 +30,12 @@ export function describeSchedule(schedule: PlanSchedule): string {
   return schedule.type === 'fixed' ? `${schedule.weeks} weeks · ${base}` : `Weekly · ${base}`;
 }
 
-/** "Mon, Thu" for weekly/fixed plans ("Monday, Thursday" when `long`); empty for rotating ones. */
-export function workoutDays(plan: Plan | StarterTemplate, workoutId: string, long = false): string {
-  const days = weekdaysByWorkout(plan.schedule).get(workoutId) ?? [];
+/**
+ * "Mon, Thu" for weekly/fixed plans ("Monday, Thursday" when `long`), in the week-start's order;
+ * empty for rotating ones.
+ */
+export function workoutDays(plan: Plan | StarterTemplate, workoutId: string, long = false, weekStartsOn: Weekday = 1): string {
+  const days = sortWeekdays(weekdaysByWorkout(plan.schedule).get(workoutId) ?? [], weekStartsOn);
   return days.map((d) => (long ? WEEKDAY_LONG : WEEKDAY_SHORT)[d]).join(', ');
 }
 

@@ -3,12 +3,12 @@ import { useCallback, useState } from 'react';
 import { ActionSheetIOS, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Card, EmptyState, ErrorState, Icon, NotFoundState, ScreenSkeleton, SectionHeader, Stepper } from '@/components/ui';
-import { usePlan, useSavePlan } from '@/data/hooks';
+import { usePlan, usePreferences, useSavePlan } from '@/data/hooks';
+import { defaultPreferences } from '@/data/preferences';
 import { weekPattern } from '@/data/schedule';
 import type { Plan, Weekday } from '@/data/types';
 import { ReorderList } from '@/features/workout/ReorderList';
-import { plural } from '@/lib/format';
-import { ALL_WEEKDAYS, WEEKDAY_LONG, WEEKDAY_SHORT } from '@/features/plans/describe';
+import { plural, WEEKDAY_LONG, WEEKDAY_SHORT, weekdayOrder } from '@/lib/format';
 import { setProgramWeeks, setSequence, toggleWeekday } from '@/features/plans/planEdits';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
@@ -50,6 +50,7 @@ export default function ScheduleScreen() {
 function WeekEditor({ plan, save }: { plan: Plan; save: (p: Plan) => void }) {
   const { colors, scheme } = useAppTheme();
   const { large } = useTextScale();
+  const weekStartsOn = usePreferences().data?.weekStartsOn ?? defaultPreferences.weekStartsOn;
   const pattern = weekPattern(plan.schedule);
   const names = new Map(plan.workouts.map((w) => [w.id, w.name]));
 
@@ -88,7 +89,7 @@ function WeekEditor({ plan, save }: { plan: Plan; save: (p: Plan) => void }) {
       )}
       <SectionHeader title="Days" />
       <Card padding="none">
-        {ALL_WEEKDAYS.map((weekday, i) => {
+        {weekdayOrder(weekStartsOn).map((weekday, i) => {
           const border = i > 0 && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth };
           const rest = !pattern[weekday].length;
           const label = (

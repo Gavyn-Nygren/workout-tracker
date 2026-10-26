@@ -3,15 +3,15 @@ import { FlatList, Pressable, StyleSheet, useWindowDimensions, View } from 'reac
 
 import { AppText, Icon } from '@/components/ui';
 import { addDays, daysBetween, isoWeekday, startOfWeek } from '@/data/dates';
+import { usePreferences } from '@/data/hooks';
+import { defaultPreferences } from '@/data/preferences';
 import type { ISODate } from '@/data/types';
 import { useHaptics } from '@/hooks/useHaptics';
-import { formatLongDate, formatMonthYear, plural } from '@/lib/format';
+import { formatLongDate, formatMonthYear, plural, WEEKDAY_LETTER, weekDates } from '@/lib/format';
 import { DENSE_TEXT_MAX } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import type { Agenda, DayItem, DayItemStatus } from './agenda';
-
-const LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 type Props = {
   agenda: Agenda;
@@ -37,8 +37,9 @@ function describeDay(items: DayItem[]): string {
 }
 
 /**
- * Seven days at a time; swipe for other weeks. Dots: filled = done, ring = planned or missed.
- * Pages size to the strip's own width (not the window), so it fits an iPad dashboard.
+ * Seven days at a time, starting on the user's week start; swipe for other weeks. Dots: filled =
+ * done, ring = planned or missed. Pages size to the strip's own width (not the window), so it fits
+ * an iPad dashboard.
  */
 export function WeekStrip({ agenda, today, selected, onSelect, range }: Props) {
   // Phones span the window, so that guess is exact; on iPad the measured width replaces it.
@@ -48,15 +49,23 @@ export function WeekStrip({ agenda, today, selected, onSelect, range }: Props) {
   const haptics = useHaptics();
   const { colors } = useAppTheme();
   const list = useRef<FlatList<ISODate>>(null);
+  const weekStartsOn = usePreferences().data?.weekStartsOn ?? defaultPreferences.weekStartsOn;
 
   const weeks = useMemo(() => {
     const result: ISODate[] = [];
-    for (let w = startOfWeek(range.from); w <= range.to; w = addDays(w, 7)) result.push(w);
+    for (let w = startOfWeek(range.from, weekStartsOn); w <= range.to; w = addDays(w, 7)) result.push(w);
     return result;
-  }, [range.from, range.to]);
+  }, [range.from, range.to, weekStartsOn]);
 
-  const selectedWeek = weeks.indexOf(startOfWeek(selected));
+  const selectedWeek = weeks.indexOf(startOfWeek(selected, weekStartsOn));
   const [visibleWeek, setVisibleWeek] = useState(selectedWeek);
+
+  // A new week start regroups the pages: show the selected day's week again (the list remounts).
+  const [pagedBy, setPagedBy] = useState(weekStartsOn);
+  if (pagedBy !== weekStartsOn) {
+    setPagedBy(weekStartsOn);
+    setVisibleWeek(selectedWeek);
+  }
 
   // Keep the visible page in step when the selection jumps (Today button, chevrons).
   useEffect(() => {
@@ -69,7 +78,8 @@ export function WeekStrip({ agenda, today, selected, onSelect, range }: Props) {
 
   const goToWeek = (index: number) => {
     if (index < 0 || index >= weeks.length) return;
-    const offset = isoWeekday(selected) - 1;
+    // Keep the same weekday: Wednesday stays Wednesday in the next week.
+    const offset = daysBetween(startOfWeek(selected, weekStartsOn), selected);
     const date = addDays(weeks[index], offset);
     const clamped = date < range.from ? range.from : date > range.to ? range.to : date;
     setVisibleWeek(index);
@@ -113,8 +123,8 @@ export function WeekStrip({ agenda, today, selected, onSelect, range }: Props) {
       </View>
 
       <FlatList
-        // Remount on resize (rotation, Split View) so paging lines up with the new width.
-        key={width}
+        // Remount on resize (rotation, Split View) or a new week start so paging lines up again.
+        key={`${width}-${weekStartsOn}`}
         ref={list}
         data={weeks}
         keyExtractor={(w) => w}
@@ -129,24 +139,21 @@ export function WeekStrip({ agenda, today, selected, onSelect, range }: Props) {
         }}
         renderItem={({ item: weekStart }) => (
           <View style={[styles.week, { width }]}>
-            {LETTERS.map((letter, i) => {
-              const date = addDays(weekStart, i);
-              return (
-                <DayCell
-                  key={date}
-                  letter={letter}
-                  date={date}
-                  items={agenda.get(date) ?? []}
-                  isToday={date === today}
-                  isSelected={date === selected}
-                  disabled={daysBetween(range.from, date) < 0 || daysBetween(date, range.to) < 0}
-                  onPress={() => {
-                    haptics.selection();
-                    onSelect(date);
-                  }}
-                />
-              );
-            })}
+            {weekDates(weekStart, weekStartsOn).map((date) => (
+              <DayCell
+                key={date}
+                letter={WEEKDAY_LETTER[isoWeekday(date)]}
+                date={date}
+                items={agenda.get(date) ?? []}
+                isToday={date === today}
+                isSelected={date === selected}
+                disabled={daysBetween(range.from, date) < 0 || daysBetween(date, range.to) < 0}
+                onPress={() => {
+                  haptics.selection();
+                  onSelect(date);
+                }}
+              />
+            ))}
           </View>
         )}
       />

@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { AppText, Button, Card, EmptyState, ErrorState, Icon, ListRow, NotFoundState, PRBadge, ScreenSkeleton, SectionHeader } from '@/components/ui';
 import { useExercises, useFormReports, usePersonalRecords, useSessions } from '@/data/hooks';
 import { signedAddedKg, usesBodyweight } from '@/data/calculations';
+import { localDateOf } from '@/data/dates';
 import { deriveRecordBests, exerciseBests, type RecordBest } from '@/data/records';
 import type { LoggedSet, PRType } from '@/data/types';
 import { spokenDuration } from '@/hooks/useNow';
@@ -161,7 +162,7 @@ export default function ExerciseHistoryScreen() {
                 return (
                   <ListRow
                     key={r.id}
-                    title={formatShortDate(r.createdAt.slice(0, 10))}
+                    title={formatShortDate(localDateOf(r.createdAt))}
                     subtitle={`${angle !== undefined ? `${Math.round(angle)}° average ${r.primaryJoint} angle` : 'Analyzed'} · ${r.detectedReps} reps${r.hasReplay ? '' : ' · video deleted'}`}
                     icon={r.hasReplay ? 'video.fill' : 'video.slash'}
                     onPress={() => router.push({ pathname: '/form/report', params: { id: r.id } })}

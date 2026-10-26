@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { WRITE_NAME } from './invalidation';
 
 import type { DataRepository } from './repository';
 
@@ -35,7 +36,7 @@ export const devFaults = {
     ),
 };
 
-const isWrite = (name: string) => /^(save|delete|update)/.test(name);
+const isWrite = (name: string) => WRITE_NAME.test(name);
 
 /** Wraps every repository call with the current dev faults. */
 export function withDevFaults(repo: DataRepository): DataRepository {

@@ -6,13 +6,13 @@ import { ErrorState, SectionHeader, Skeleton, useToast } from '@/components/ui';
 import { useDeleteSession, useSaveSession } from '@/data/hooks';
 import type { ISODate } from '@/data/types';
 import { ComingUp } from '@/features/today/ComingUp';
-import { MissedBanner } from '@/features/today/MissedBanner';
+import { MissedBanner, useMissedBanner } from '@/features/today/MissedBanner';
 import { RestDayCard } from '@/features/today/RestDayCard';
 import { useAgenda } from '@/features/today/useAgenda';
 import { WeekStrip } from '@/features/today/WeekStrip';
 import { WorkoutCard } from '@/features/today/WorkoutCard';
 import { WorkoutPager } from '@/features/today/WorkoutPager';
-import { latestMissed, summarizeSession, type Agenda, type DayItem } from '@/features/today/agenda';
+import { summarizeSession, type Agenda, type DayItem } from '@/features/today/agenda';
 import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
 import { formatMonthDay, formatShortDate, formatWeekday } from '@/lib/format';
 import { newId } from '@/lib/id';
@@ -96,7 +96,8 @@ export default function TodayScreen() {
       ),
     [agenda, selected, activeSession, active.workout?.mode],
   );
-  const missed = useMemo(() => latestMissed(agenda, today), [agenda, today]);
+  // The "push plan forward?" prompt, or its Undo after a push (spec 2.5).
+  const missedBanner = useMissedBanner(agenda, today, activeSession?.occurrenceId);
   const coming = useMemo(() => upcoming(agenda, selected < today ? today : selected, 3), [agenda, selected, today]);
 
   useLayoutEffect(() => {
@@ -154,9 +155,9 @@ export default function TodayScreen() {
           leftFlex={1.4}
           left={
             <>
-              {selected === today && missed && (
+              {selected === today && missedBanner && (
                 <View style={styles.gutter}>
-                  <MissedBanner key={missed.key} missed={missed} today={today} onView={() => setSelected(missed.date)} />
+                  <MissedBanner state={missedBanner} today={today} onView={setSelected} />
                 </View>
               )}
 
@@ -166,8 +167,12 @@ export default function TodayScreen() {
 
               {items.length ? (
                 <WorkoutPager
-                  key={selected}
+                  // A push or its undo adds or removes a workout: start over on the first page so
+                  // the pager never points past the end.
+                  key={`${selected}:${items.length}`}
                   items={items}
+                  // After a push, the workout it moved to today, so it's the card in view.
+                  focusKey={selected === today && missedBanner?.kind === 'pushed' ? missedBanner.items[0]?.key : undefined}
                   renderCard={(item, index) => (
                     <WorkoutCard
                       item={item}

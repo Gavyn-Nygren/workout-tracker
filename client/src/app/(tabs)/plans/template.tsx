@@ -3,10 +3,11 @@ import { ActionSheetIOS, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Card, EmptyState, ErrorState, Icon, NotFoundState, ScreenSkeleton, SectionHeader, useToast } from '@/components/ui';
 import { useToday } from '@/data/DataProvider';
-import { succeeded, useExercises, useSavePlan, useTemplates } from '@/data/hooks';
+import { succeeded, useExercises, usePreferences, useSavePlan, useTemplates } from '@/data/hooks';
+import { defaultPreferences } from '@/data/preferences';
 import { formatShortDate } from '@/lib/format';
 import { CATEGORY_LABEL, describeSchedule, exerciseName, PLAN_TYPE_LABEL, prescriptionSummary, spokenPrescription, workoutDays } from '@/features/plans/describe';
-import { nextMonday, planFromTemplate } from '@/features/plans/planEdits';
+import { nextWeekStart, planFromTemplate } from '@/features/plans/planEdits';
 import { ScheduleGrid } from '@/features/plans/ScheduleGrid';
 import { templateMeta } from '@/features/plans/TemplateCard';
 import { EQUIPMENT_LABEL } from '@/features/exercises/ExerciseList';
@@ -24,6 +25,7 @@ export default function TemplateScreen() {
   const templatesQuery = useTemplates();
   const exercisesQuery = useExercises();
   const savePlan = useSavePlan();
+  const weekStartsOn = usePreferences().data?.weekStartsOn ?? defaultPreferences.weekStartsOn;
 
   const failed = [templatesQuery, exercisesQuery].filter((q) => q.error);
   if (failed.length) return <ErrorState fill title="Couldn't load this template" onRetry={() => failed.forEach((q) => q.refetch())} />;
@@ -34,7 +36,8 @@ export default function TemplateScreen() {
   const exercisesById = new Map((exercisesQuery.data ?? []).map((e) => [e.id, e]));
 
   const ready = template.workouts.length > 0;
-  const monday = nextMonday(today);
+  // "Today or next Monday" (spec 2.5), or next Sunday when weeks start on Sunday.
+  const weekStart = nextWeekStart(today, weekStartsOn);
 
   const use = () => {
     if (savePlan.isPending) return;
@@ -42,13 +45,13 @@ export default function TemplateScreen() {
       {
         title: `Start ${template.name}`,
         message: 'It becomes your own plan. Changing it later never affects the template.',
-        options: ['Start today', `Start ${formatShortDate(monday)}`, 'Cancel'],
+        options: ['Start today', `Start ${formatShortDate(weekStart)}`, 'Cancel'],
         cancelButtonIndex: 2,
         userInterfaceStyle: scheme,
       },
       async (i) => {
         if (i > 1) return;
-        const plan = planFromTemplate(template, i === 0 ? today : monday);
+        const plan = planFromTemplate(template, i === 0 ? today : weekStart);
         if (!(await succeeded(savePlan.mutateAsync(plan)))) return;
         router.replace({ pathname: '/plans/plan', params: { id: plan.id } });
         toast.show({ message: `${template.name} added to your plans.`, tone: 'success' });
@@ -96,7 +99,7 @@ export default function TemplateScreen() {
 
             {template.workouts.map((w) => (
               <View key={w.id} style={styles.section}>
-                <SectionHeader title={[w.name, workoutDays(template, w.id)].filter(Boolean).join(' · ')} />
+                <SectionHeader title={[w.name, workoutDays(template, w.id, false, weekStartsOn)].filter(Boolean).join(' · ')} />
                 <Card padding="none">
                   {w.blocks.flatMap((b) =>
                     b.exercises.map((pe, i) => {

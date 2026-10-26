@@ -4,17 +4,20 @@ import { ActionSheetIOS, Alert, Pressable, ScrollView, StyleSheet, View } from '
 
 import { AppText, Button, Card, EmptyState, ErrorState, Icon, ListRow, NotFoundState, ScreenSkeleton, SectionHeader, useToast } from '@/components/ui';
 import { useToday } from '@/data/DataProvider';
-import { succeeded, useDeletePlan, usePlan, useSavePlan, useTemplates } from '@/data/hooks';
-import { programWeek } from '@/data/schedule';
-import type { Plan } from '@/data/types';
+import { succeeded, useDeletePlan, usePlan, usePlanShifts, usePreferences, useSavePlan, useTemplates } from '@/data/hooks';
+import { defaultPreferences } from '@/data/preferences';
+import type { Plan, PlanShift } from '@/data/types';
 import { formatShortDate } from '@/lib/format';
 import { describeSchedule, workoutDays, workoutStats } from '@/features/plans/describe';
 import { StatusPill } from '@/features/plans/PlanCard';
 import { addWorkout } from '@/features/plans/planEdits';
+import { currentProgramWeek, shiftsOf } from '@/features/plans/position';
 import { ScheduleGrid } from '@/features/plans/ScheduleGrid';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { readable, useTextScale } from '@/theme/layout';
+
+const NO_SHIFTS: PlanShift[] = [];
 
 /** One plan: status, schedule week grid, and its workouts. */
 export default function PlanDetailScreen() {
@@ -23,21 +26,25 @@ export default function PlanDetailScreen() {
   const { large } = useTextScale();
   const toast = useToast();
   const today = useToday();
+  const weekStartsOn = usePreferences().data?.weekStartsOn ?? defaultPreferences.weekStartsOn;
   const planQuery = usePlan(id);
   const templatesQuery = useTemplates();
+  const shiftsQuery = usePlanShifts();
   const savePlan = useSavePlan();
   const deletePlan = useDeletePlan();
   // Set while a delete finishes: its refetch finds nothing, and the screen shouldn't flash "Plan not found" on the way out.
   const [deleted, setDeleted] = useState<Plan>();
 
-  const failed = [planQuery, templatesQuery].filter((q) => q.error);
+  const failed = [planQuery, templatesQuery, shiftsQuery].filter((q) => q.error);
   if (failed.length) return <ErrorState fill title="Couldn't load this plan" onRetry={() => failed.forEach((q) => q.refetch())} />;
-  if (planQuery.isPending || templatesQuery.isPending) return <ScreenSkeleton />;
+  if (planQuery.isPending || templatesQuery.isPending || shiftsQuery.isPending) return <ScreenSkeleton />;
   const plan = planQuery.data ?? deleted;
   if (!plan) return <NotFoundState thing="Plan" icon="calendar" />;
 
   const template = templatesQuery.data?.find((t) => t.id === plan.templateId);
-  const week = programWeek(plan, today);
+  // After a push forward, the program week and the cycle step follow the moved workouts, like Today.
+  const shifts = shiftsOf(plan.id, shiftsQuery.data ?? NO_SHIFTS);
+  const week = currentProgramWeek(plan, today, shifts);
 
   const openMenu = () => {
     const pauseLabel = plan.status === 'active' ? 'Pause plan' : 'Resume plan';
@@ -126,7 +133,7 @@ export default function PlanDetailScreen() {
         <View style={styles.section}>
           <SectionHeader title="Schedule" actionLabel="Edit" actionAccessibilityLabel="Edit schedule" onAction={() => router.push({ pathname: '/plans/schedule', params: { plan: plan.id } })} />
           <Card>
-            <ScheduleGrid schedule={plan.schedule} workouts={plan.workouts} today={plan.status === 'active' ? today : undefined} startDate={plan.startDate} />
+            <ScheduleGrid schedule={plan.schedule} workouts={plan.workouts} today={plan.status === 'active' ? today : undefined} startDate={plan.startDate} shifts={shifts} />
           </Card>
         </View>
 
@@ -137,8 +144,8 @@ export default function PlanDetailScreen() {
               <ListRow
                 key={w.id}
                 title={w.name}
-                subtitle={[workoutDays(plan, w.id), workoutStats(w)].filter(Boolean).join('  ·  ')}
-                accessibilityLabel={[w.name, workoutDays(plan, w.id, true), workoutStats(w, true)].filter(Boolean).join(', ')}
+                subtitle={[workoutDays(plan, w.id, false, weekStartsOn), workoutStats(w)].filter(Boolean).join('  ·  ')}
+                accessibilityLabel={[w.name, workoutDays(plan, w.id, true, weekStartsOn), workoutStats(w, true)].filter(Boolean).join(', ')}
                 icon={/core|abs/i.test(w.name) ? 'figure.core.training' : 'dumbbell'}
                 onPress={() => router.push({ pathname: '/plans/workout', params: { plan: plan.id, workout: w.id } })}
                 separator={i < plan.workouts.length - 1}

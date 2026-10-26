@@ -196,6 +196,32 @@ export function usePlan(id: ID) {
   });
 }
 
+/** Pushes forward that haven't been undone (spec 2.5). */
+export function usePlanShifts() {
+  const repo = useRepository();
+  return useQuery({ queryKey: ['planShifts'], queryFn: () => repo.listPlanShifts() });
+}
+
+export function usePushPlanForward() {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorMessage: "Couldn't move your plan. Try again." },
+    mutationFn: ({ occurrenceId, shiftId }: { occurrenceId: ID; shiftId: ID }) => repo.pushPlanForward(occurrenceId, shiftId),
+    onSuccess: () => invalidateAfter(client, 'pushPlanForward'),
+  });
+}
+
+export function useUndoPlanShift() {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorMessage: "Couldn't undo the move. Try again." },
+    mutationFn: (shiftId: ID) => repo.undoPlanShift(shiftId),
+    onSuccess: () => invalidateAfter(client, 'undoPlanShift'),
+  });
+}
+
 export function usePlanVersions() {
   const repo = useRepository();
   return useQuery({ queryKey: ['planVersions'], queryFn: () => repo.listPlanVersions() });

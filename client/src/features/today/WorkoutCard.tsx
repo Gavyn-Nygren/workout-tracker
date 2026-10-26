@@ -2,7 +2,9 @@ import type { SFSymbol } from 'expo-symbols';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Icon, PRBadge, type TextTone } from '@/components/ui';
+import { usePlanShifts } from '@/data/hooks';
 import type { Exercise, ISODate, UnitSystem } from '@/data/types';
+import { movedFromDate } from '@/features/plans/position';
 import { spokenDuration } from '@/hooks/useNow';
 import { formatDuration, formatLoadValue, formatShortDate, plural, unitLabel } from '@/lib/format';
 import { useTextScale } from '@/theme/layout';
@@ -125,7 +127,7 @@ function CardBody({
         <AppText variant="largeTitle" numberOfLines={3} accessibilityRole="header">
           {item.name}
         </AppText>
-        <MetaLine item={item} summary={summary} />
+        <MetaLine item={item} summary={summary} today={today} />
       </View>
 
       <View style={styles.lines}>
@@ -197,7 +199,8 @@ function toneColor(tone: TextTone) {
   ];
 }
 
-function MetaLine({ item, summary }: { item: DayItem; summary?: SessionSummary }) {
+function MetaLine({ item, summary, today }: { item: DayItem; summary?: SessionSummary; today: ISODate }) {
+  const shifts = usePlanShifts().data ?? [];
   const parts: string[] = [];
   const spoken: string[] = [];
   const add = (text: string, words = text) => {
@@ -205,6 +208,10 @@ function MetaLine({ item, summary }: { item: DayItem; summary?: SessionSummary }
     spoken.push(words);
   };
   if (item.status === 'missed') add(`Scheduled ${formatShortDate(item.date)}`);
+  // A push forward moved it here from the date the plan first gave it (spec 2.5). Shown for a week
+  // after the push, so a program's later workouts don't all say it for good.
+  const movedFrom = movedFromDate(item.occurrence, shifts, today);
+  if (movedFrom) add(`Moved from ${formatShortDate(movedFrom)}`);
   if (item.completedOn) add(`Done ${formatShortDate(item.completedOn)}`);
   if (item.extra === 'repeat') add('Repeated workout');
   if (item.extra === 'late' && item.scheduledFor) add(`Scheduled ${formatShortDate(item.scheduledFor)}`);

@@ -3,5 +3,7 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["**/*.ts", "../src/**/*.ts", "../src/**/*.tsx", "../expo-env.d.ts"]
+  "include": ["**/*.ts", "../src/**/*.ts", "../src/**/*.tsx", "../expo-env.d.ts"],
+  // The app config excludes tests/; without this the test files would inherit that and never be checked.
+  "exclude": ["../node_modules"]
 }

@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LineChart } from '@/components/charts/LineChart';
 import { AppText, Button, Card, Chip, EmptyState, ErrorState, Icon, NotFoundState, ScreenSkeleton, ScreenState, SectionHeader, ToastViewport, useToast } from '@/components/ui';
+import { localDateOf } from '@/data/dates';
 import { succeeded, useDeleteFormReport, useDeleteRecordingVideo, useExercises, useFormReport, useFormReports, usePreferences, useSessions } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import type { FormReport, Joint, Observation } from '@/data/types';
@@ -102,7 +103,7 @@ export default function FormReportScreen() {
   const setIndex = sessionEntry?.sets.findIndex((s) => s.id === report.setId) ?? -1;
   const set = sessionEntry?.sets[setIndex];
   const joint = report.primaryJoint;
-  const date = report.createdAt.slice(0, 10);
+  const date = localDateOf(report.createdAt);
 
   // Compare the angles as displayed (whole degrees) so the text always matches the numbers shown.
   const rawAngle = reportAngle(report, joint);
@@ -119,7 +120,7 @@ export default function FormReportScreen() {
   const trend = [...(reports ?? [])]
     .filter((r) => r.status === 'ready' && r.exerciseId === report.exerciseId)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    .map((r) => ({ date: r.createdAt.slice(0, 10), value: reportAngle(r, joint) ?? 0 }));
+    .map((r) => ({ date: localDateOf(r.createdAt), value: reportAngle(r, joint) ?? 0 }));
 
   const confirmDeleteVideo = () =>
     Alert.alert('Delete the video?', 'The replay is removed from this phone. Angles, reps, charts, and trends are kept.', [
@@ -232,8 +233,8 @@ export default function FormReportScreen() {
               <Change
                 text={
                   Math.abs(improvement) < 5
-                    ? `Within 5° of ${formatShortDate(comparison.createdAt.slice(0, 10))}: no meaningful change`
-                    : `${Math.round(Math.abs(improvement))}° ${improvement > 0 ? (joint === 'ankle' ? 'higher' : 'deeper') : joint === 'ankle' ? 'lower' : 'shallower'} than ${formatShortDate(comparison.createdAt.slice(0, 10))}`
+                    ? `Within 5° of ${formatShortDate(localDateOf(comparison.createdAt))}: no meaningful change`
+                    : `${Math.round(Math.abs(improvement))}° ${improvement > 0 ? (joint === 'ankle' ? 'higher' : 'deeper') : joint === 'ankle' ? 'lower' : 'shallower'} than ${formatShortDate(localDateOf(comparison.createdAt))}`
                 }
                 delta={Math.abs(improvement) < 5 ? 0 : improvement}
               />
@@ -257,18 +258,18 @@ export default function FormReportScreen() {
           {earlier.length ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
               {earlier.slice(0, 2).map((r) => (
-                <Chip key={r.id} label={formatShortDate(r.createdAt.slice(0, 10))} role="radio" selected={comparison?.id === r.id} onPress={() => setCompareId(r.id)} />
+                <Chip key={r.id} label={formatShortDate(localDateOf(r.createdAt))} role="radio" selected={comparison?.id === r.id} onPress={() => setCompareId(r.id)} />
               ))}
               {earlier.length > 2 && (
                 <Chip
                   label="Older…"
                   // Opens a menu rather than selecting, so it reads as a button that names the current pick.
                   role="button"
-                  accessibilityLabel={`Compare with an older recording${comparison && earlier.indexOf(comparison) >= 2 ? `, now ${formatShortDate(comparison.createdAt.slice(0, 10))}` : ''}`}
+                  accessibilityLabel={`Compare with an older recording${comparison && earlier.indexOf(comparison) >= 2 ? `, now ${formatShortDate(localDateOf(comparison.createdAt))}` : ''}`}
                   selected={!!comparison && earlier.indexOf(comparison) >= 2}
                   onPress={() =>
                     ActionSheetIOS.showActionSheetWithOptions(
-                      { title: 'Compare with', options: [...earlier.slice(2).map((r) => formatShortDate(r.createdAt.slice(0, 10))), 'Cancel'], cancelButtonIndex: earlier.length - 2, userInterfaceStyle: scheme },
+                      { title: 'Compare with', options: [...earlier.slice(2).map((r) => formatShortDate(localDateOf(r.createdAt))), 'Cancel'], cancelButtonIndex: earlier.length - 2, userInterfaceStyle: scheme },
                       (i) => i < earlier.length - 2 && setCompareId(earlier[i + 2].id),
                     )
                   }
@@ -292,12 +293,12 @@ export default function FormReportScreen() {
               <RepDotChart
                 joint={joint}
                 current={{ label: formatShortDate(date), color: colors.chartCompare[0], reps: report.reps }}
-                comparison={comparison ? { label: formatShortDate(comparison.createdAt.slice(0, 10)), color: colors.chartCompare[1], reps: comparison.reps } : undefined}
+                comparison={comparison ? { label: formatShortDate(localDateOf(comparison.createdAt)), color: colors.chartCompare[1], reps: comparison.reps } : undefined}
               />
               <Legend
                 items={[
                   { label: `${formatShortDate(date)} (this set)`, color: colors.chartCompare[0], kind: 'dot' },
-                  ...(comparison ? [{ label: formatShortDate(comparison.createdAt.slice(0, 10)), color: colors.chartCompare[1], kind: 'dot' as const }] : []),
+                  ...(comparison ? [{ label: formatShortDate(localDateOf(comparison.createdAt)), color: colors.chartCompare[1], kind: 'dot' as const }] : []),
                 ]}
               />
               <AppText variant="caption" tone="secondary">

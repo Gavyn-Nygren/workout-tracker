@@ -1,28 +1,113 @@
-import { addDays, daysBetween, isoWeekday } from './dates';
-import type { ISODate, Plan, PlanSchedule, ScheduledOccurrence, Weekday } from './types';
+import { addDays, daysBetween, isoWeekday, startOfWeek } from './dates';
+import type { ID, ISODate, Plan, PlanSchedule, PlanShift, ScheduledOccurrence, Weekday } from './types';
+
+/**
+ * Whether a push covers a workout originally on `original`. A weekly push covers the missed day
+ * and the week it was pushed into, nothing in between, so a miss from last week doesn't drag last
+ * week's other days along.
+ */
+export function shiftCovers(shift: PlanShift, original: ISODate, occurrenceId?: ID): boolean {
+  if (occurrenceId && shift.alongIds?.includes(occurrenceId)) return true;
+  if (original < shift.fromDate) return false;
+  if (!shift.untilDate) return true;
+  return original <= shift.untilDate && (original === shift.fromDate || original >= addDays(shift.untilDate, -6));
+}
+
+/**
+ * Where a workout the plan put on `original` lands after the plan's pushes forward, applied in
+ * the order they were made: each push moves the original dates it covers by its days, and pushes
+ * add up. A weekly push never carries a workout past the end of its week; that workout stays on
+ * its day, so the next week is exactly as usual (user's pick). A push never moves a workout it
+ * kept (one already started when it was made), so pass the workout's id when there is one.
+ */
+export function shiftedDate(original: ISODate, shifts: readonly PlanShift[], occurrenceId?: ID): ISODate {
+  let date = original;
+  for (const shift of [...shifts].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
+    if (!shiftCovers(shift, original, occurrenceId)) continue;
+    if (occurrenceId && shift.keptIds?.includes(occurrenceId)) continue;
+    const moved = addDays(date, shift.days);
+    if (shift.untilDate && moved > shift.untilDate) continue;
+    date = moved;
+  }
+  return date;
+}
+
+/** The id a plan's workout gets on its original date. Stable through pushes. */
+export function occurrenceIdFor(planId: ID, original: ISODate, workoutId: ID): ID {
+  return `occ_${planId}_${original}_${workoutId}`;
+}
+
+/**
+ * Where the plan's own pattern has got to by `date`, after its pushes: the latest original date
+ * whose workouts have landed on or before `date`. The Plans tab uses it for a rotating cycle's
+ * current step and a program's current week, so they agree with Today after a push.
+ */
+export function originalDateFor(date: ISODate, shifts: readonly PlanShift[], kept: (original: ISODate) => boolean = () => false): ISODate {
+  const reach = shifts.reduce((sum, s) => sum + Math.max(0, s.days), 0);
+  const floor = addDays(date, -reach);
+  // Days whose workouts a push kept in place are skipped, even past the floor (a kept day can sit
+  // exactly on it). The limit only guards against a malformed predicate.
+  const limit = addDays(floor, -400);
+  for (let original = date; ; original = addDays(original, -1)) {
+    if (kept(original) && original > limit) continue;
+    if (original <= floor || shiftedDate(original, shifts) <= date) return original;
+  }
+}
 
 /**
  * Calendar occurrences a plan produces between two dates (inclusive), for all three plan types
- * (spec 2.5). Paused and archived plans produce nothing. G3.3 hardens this with tests and adds
- * calendar shifts.
+ * (spec 2.5), after its pushes forward. Paused and archived plans produce nothing. Ids come from
+ * the original date, so a pushed workout keeps its id and is never scheduled twice.
  */
-export function scheduleOccurrences(plan: Plan, from: ISODate, to: ISODate): ScheduledOccurrence[] {
+export function scheduleOccurrences(plan: Plan, from: ISODate, to: ISODate, shifts: readonly PlanShift[] = []): ScheduledOccurrence[] {
   if (plan.status !== 'active') return [];
+  const own = shifts.filter((s) => s.planId === plan.id);
+  // Workouts from up to this many days back can be pushed into the range.
+  const reach = own.reduce((sum, s) => sum + Math.max(0, s.days), 0);
+  const scanFrom = addDays(from, -reach);
+  const start = plan.startDate > scanFrom ? plan.startDate : scanFrom;
   const occurrences: ScheduledOccurrence[] = [];
-  const start = plan.startDate > from ? plan.startDate : from;
 
   for (let date = start; date <= to; date = addDays(date, 1)) {
     for (const workoutId of workoutsOn(plan.schedule, plan.startDate, date)) {
+      const id = occurrenceIdFor(plan.id, date, workoutId);
+      const scheduledDate = shiftedDate(date, own, id);
+      if (scheduledDate < from || scheduledDate > to) continue;
       occurrences.push({
-        id: `occ_${plan.id}_${date}_${workoutId}`,
+        id,
         planId: plan.id,
         planVersion: plan.version,
         planWorkoutId: workoutId,
-        scheduledDate: date,
+        scheduledDate,
+        ...(scheduledDate !== date && { shiftedFromDate: date }),
       });
     }
   }
-  return occurrences;
+  return occurrences.sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+}
+
+/**
+ * The push forward for a missed workout (spec 2.5): it moves to `today`, and the plan's later
+ * workouts move the same number of days, keeping their spacing and rest days. A weekly plan only
+ * moves within the week the workout lands in, so the next week is exactly as usual (user's pick):
+ * a workout that would be pushed past that week's end stays on its day. Programs and rotating
+ * cycles move for good, since their order matters. Undefined if there's nothing to
+ * push: the workout isn't in the past, it was started, or the plan is paused or archived.
+ */
+export function planShiftFor(input: { id: ID; plan: Plan; occurrence: ScheduledOccurrence; today: ISODate; weekStartsOn: Weekday; now: string }): PlanShift | undefined {
+  const { plan, occurrence, today } = input;
+  const days = daysBetween(occurrence.scheduledDate, today);
+  if (plan.status !== 'active' || days <= 0 || occurrence.sessionId || occurrence.planId !== plan.id) return undefined;
+  return {
+    id: input.id,
+    planId: plan.id,
+    occurrenceId: occurrence.id,
+    fromDate: occurrence.shiftedFromDate ?? occurrence.scheduledDate,
+    ...(plan.schedule.type === 'weekly' && { untilDate: addDays(startOfWeek(today, input.weekStartsOn), 6) }),
+    days,
+    createdAt: input.now,
+    updatedAt: input.now,
+  };
 }
 
 /** Workout ids a schedule puts on one date. */

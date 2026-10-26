@@ -3,7 +3,7 @@ import { AccessibilityInfo, AppState } from 'react-native';
 
 import { useRepository } from '@/data/DataProvider';
 
-import { toISODate } from '@/data/dates';
+import { completionStamp } from '@/data/dates';
 import { succeeded, useBodyweight, useDeleteSession, useExercises, usePreferences, useSaveSession, useSessions } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import { deriveRecordBests, livePRSetIds, sessionsBefore, type RecordBests } from '@/data/records';
@@ -354,9 +354,8 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
           ...session,
           status: 'completed',
           completion: completionOf(session),
-          // Reopening keeps the original day so history and streaks don't move (spec 2.5).
-          completedAt: reopened && session.completedAt ? session.completedAt : now.toISOString(),
-          completedDate: reopened && session.completedDate ? session.completedDate : toISODate(now),
+          // The local date at Finish; reopening keeps the original moment and day (spec 2.5).
+          ...completionStamp(now, reopened ? session : undefined),
           updatedAt: now.toISOString(),
         };
         // A reopened workout celebrates only records its edits added, not ones it already had.

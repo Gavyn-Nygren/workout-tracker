@@ -8,6 +8,7 @@ import type {
   ISODate,
   PersonalRecord,
   Plan,
+  PlanShift,
   PlannedBlock,
   Preferences,
   Recording,
@@ -36,6 +37,8 @@ export interface DataRepository {
    * so editing a plan never changes a past (missed) workout's prescription (spec 2.5).
    */
   listPlanVersions(): Promise<Plan[]>;
+  /** Every push forward that hasn't been undone, oldest first. */
+  listPlanShifts(): Promise<PlanShift[]>;
   listTemplates(): Promise<StarterTemplate[]>;
   listOccurrences(range: DateRange): Promise<ScheduledOccurrence[]>;
   /** Sessions whose completed (or scheduled, if never completed) date falls in the range. */
@@ -68,6 +71,14 @@ export interface DataRepository {
   savePlan(plan: Plan): Promise<void>;
   /** Deletes a plan and every workout of it that wasn't started. Logged history stays. */
   deletePlan(planId: ID): Promise<void>;
+  /**
+   * Pushes a missed workout's plan forward (spec 2.5): the workout moves to today and the plan's
+   * later workouts move the same number of days (see planShiftFor). `shiftId` names the push, for
+   * undoing it. Fails if the workout isn't missed.
+   */
+  pushPlanForward(occurrenceId: ID, shiftId: ID): Promise<void>;
+  /** Undoes a push: the workouts it moved that haven't been started go back to their dates. */
+  undoPlanShift(shiftId: ID): Promise<void>;
   /** Creates or updates a custom exercise. */
   saveExercise(exercise: Exercise): Promise<void>;
   saveGoal(goal: Goal): Promise<void>;

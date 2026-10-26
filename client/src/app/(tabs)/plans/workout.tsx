@@ -20,7 +20,7 @@ export default function PlanWorkoutScreen() {
   const { large } = useTextScale();
   const planQuery = usePlan(planId);
   const exercisesQuery = useExercises();
-  const units = (usePreferences().data ?? defaultPreferences).units;
+  const { units, weekStartsOn } = usePreferences().data ?? defaultPreferences;
   const savePlan = useSavePlan();
   // Set while a delete saves: the refetched plan no longer has this workout, and the screen shouldn't flash "Workout not found" on the way out.
   const [deleted, setDeleted] = useState<PlanWorkout>();
@@ -74,7 +74,7 @@ export default function PlanWorkoutScreen() {
   const rename = () =>
     Alert.prompt('Rename workout', undefined, (name) => name.trim() && save(updateWorkout(plan, workout.id, (w) => ({ ...w, name: name.trim() }))), 'plain-text', workout.name);
 
-  const days = workoutDays(plan, workout.id);
+  const days = workoutDays(plan, workout.id, false, weekStartsOn);
 
   return (
     <>

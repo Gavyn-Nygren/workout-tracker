@@ -188,7 +188,7 @@ describe('templates', () => {
     assert.ok(scheduled.length > 0 && scheduled.every((id) => ids.has(id)));
     // Editing the plan never reaches the template.
     p.workouts[0].blocks[0].exercises[0].sets[0].targetReps = 99;
-    if (p.workouts[0].blocks[0].exercises[0].progression) (p.workouts[0].blocks[0].exercises[0].progression as { kind: string }).kind = 'changed';
+    if (p.workouts[0].blocks[0].exercises[0].progression) (p.workouts[0].blocks[0].exercises[0].progression as unknown as { kind: string }).kind = 'changed';
     assert.equal(JSON.stringify(template), before);
   });
 });

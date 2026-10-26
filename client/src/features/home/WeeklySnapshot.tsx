@@ -1,9 +1,9 @@
 import { StyleSheet, View } from 'react-native';
 
 import { AppText, Icon, PressableScale, ProgressRing } from '@/components/ui';
-import { daysBetween } from '@/data/dates';
+import { daysBetween, isoWeekday } from '@/data/dates';
 import type { ISODate, StreakState } from '@/data/types';
-import { formatWeekday, plural } from '@/lib/format';
+import { formatWeekday, plural, WEEKDAY_LETTER } from '@/lib/format';
 import { useTextScale } from '@/theme/layout';
 import { SchemeOverride, useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
@@ -11,12 +11,12 @@ import type { DayItem } from '../today/agenda';
 
 type Props = {
   streak: StreakState;
+  /** The streak's current week, first day first (it follows the week-start setting). */
   week: { date: ISODate; items: DayItem[] }[];
   today: ISODate;
   onPress: () => void;
 };
 
-const LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 /** Text inside the ring and under the narrow day columns stops growing here, like WeekStrip. */
 const COMPACT_TEXT_MAX = 1.3;
 
@@ -106,7 +106,7 @@ function Body({ streak, week, today, onPress, outerScheme }: Props & { outerSche
         </View>
 
         <View style={[styles.days, { borderTopColor: colors.border }]}>
-          {days.map(({ date, status }, i) => {
+          {days.map(({ date, status }) => {
             const isToday = date === today;
             const dotStyle = {
               done: { backgroundColor: colors.successFill },
@@ -118,7 +118,7 @@ function Body({ streak, week, today, onPress, outerScheme }: Props & { outerSche
             return (
               <View key={date} style={styles.day}>
                 <AppText variant="caption" weight="700" tone={isToday ? 'accent' : 'secondary'} maxFontSizeMultiplier={COMPACT_TEXT_MAX}>
-                  {LETTERS[i]}
+                  {WEEKDAY_LETTER[isoWeekday(date)]}
                 </AppText>
                 <View style={[styles.dot, dotStyle]} />
                 <View style={[styles.todayBar, { backgroundColor: isToday ? colors.accent : 'transparent' }]} />

@@ -1,7 +1,7 @@
 import { countsAsWorkout, countsForPRs, effectiveLoadKg, setVolumeKg } from './calculations';
-import { addDays, startOfWeek } from './dates';
+import { addDays, localDateOf, startOfWeek } from './dates';
 import { lbToKg } from './units';
-import type { EarnedBadge, Exercise, FormReport, ID, ISODate, StreakRecord, StreakState, WorkoutSession } from './types';
+import type { EarnedBadge, Exercise, FormReport, ID, ISODate, StreakRecord, StreakState, Weekday, WorkoutSession } from './types';
 
 // Streak and badge rules, derived from logged history (refined with the real catalog in G3.10).
 
@@ -18,11 +18,11 @@ function countedWorkouts(sessions: WorkoutSession[]): WorkoutSession[] {
  * target is met, and until the week ends it doesn't break the streak. Also derives the
  * "longest weekly streak" record (spec 2.7) and the day each streak length was first reached.
  */
-export function deriveStreak(sessions: WorkoutSession[], today: ISODate, weeklyTarget: number): StreakState {
+export function deriveStreak(sessions: WorkoutSession[], today: ISODate, weeklyTarget: number, weekStartsOn: Weekday = 1): StreakState {
   const target = Math.max(1, weeklyTarget);
   const perWeek = new Map<ISODate, { count: number; met?: { date: ISODate; sessionId: ID } }>();
   for (const s of countedWorkouts(sessions)) {
-    const week = startOfWeek(s.completedDate!);
+    const week = startOfWeek(s.completedDate!, weekStartsOn);
     const entry = perWeek.get(week) ?? { count: 0 };
     entry.count++;
     // The workout that brought the week to its target is when the week was met.
@@ -30,7 +30,7 @@ export function deriveStreak(sessions: WorkoutSession[], today: ISODate, weeklyT
     perWeek.set(week, entry);
   }
   const met = (week: ISODate) => (perWeek.get(week)?.count ?? 0) >= target;
-  const thisWeek = startOfWeek(today);
+  const thisWeek = startOfWeek(today, weekStartsOn);
   const thisWeekCompleted = perWeek.get(thisWeek)?.count ?? 0;
 
   const milestoneDates: ISODate[] = [];
@@ -103,7 +103,7 @@ export function deriveBadges(sessions: WorkoutSession[], exercisesById: Map<stri
   // Dated by the day the streak first reached 4 weeks, so later workouts don't move it.
   add('streak_4_weeks', 'consistency', '4-Week Streak', 'Hit your weekly target 4 weeks in a row.', streak.milestoneDates[3]);
   const firstAnalysis = formReports.filter((r) => r.status === 'ready').sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
-  add('first_analysis', 'form', 'Camera Ready', 'Analyzed your first set on camera.', firstAnalysis?.createdAt.slice(0, 10));
+  add('first_analysis', 'form', 'Camera Ready', 'Analyzed your first set on camera.', firstAnalysis ? localDateOf(firstAnalysis.createdAt) : undefined);
   return badges;
 }
 

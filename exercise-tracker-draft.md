@@ -246,13 +246,27 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 **Missed workouts**
 
 - A missed workout **stays on its original date** and can still be opened and completed from there.
-- The app then **asks** whether to push the plan forward. If the user accepts, the missed workout and every later workout in that plan move forward by the same number of days, keeping the original spacing and rest days.
-- The shift can be undone in one tap.
+- The app then **asks** whether to push the plan forward, on Today, for the latest missed workout of the past week in an active plan. If the user accepts, the missed workout moves to today and the plan's later workouts move forward by the same number of days, keeping the original spacing and rest days. The plan's other workouts missed that same day are asked about and move with it. Workouts already started or done never move.
+  - **Weekly plans** move only within the week the missed workout lands in (user's pick). A workout that would be pushed past the end of the week stays on its day, so the next week is exactly as usual.
+  - **Fixed-length programs and rotating cycles** move everything later, so a program ends that many days later.
+  - "Keep schedule" hides the question for that workout, and the choice is remembered. The missed workout still opens from its date.
+- The shift can be undone in one tap: after a push, the banner reads "Moved… **Undo**" until the end of that day, or until the moved workout is started (user's pick). Undoing puts the unstarted workouts back on their dates.
+- Pushes are stored with the plan, so they survive plan edits and the calendar filling in ahead. Editing the plan never deletes a workout that was pushed, even if its original weekday is no longer in the schedule. Deleting the plan removes them.
 - Nothing is ever rescheduled automatically.
 
 **Dates and streaks**
 
 - **History, volume, PRs, and streaks use the date a workout was actually completed.** The scheduled date is kept as metadata for adherence.
+- **Weeks start on Monday** by default. Profile → Units & logging switches to Sunday (user's pick), and the weekly streak, Home's week, the Today calendar strip, and the plan week grids all follow it. New plans start "today or at the start of next week".
+
+**Dates and time zones** (G3.7)
+
+- **Two kinds of time.** Calendar dates are local "floating" dates, `YYYY-MM-DD`, with no time zone: scheduled dates, completion dates, weigh-ins, deadlines, plan starts, and push-forward ranges. A Tuesday workout stays on Tuesday wherever you are. Moments (started, completed, created) are UTC timestamps, used for ordering and durations.
+- **The completion date is set when you tap Finish:** the phone's local date at that moment, stored with the workout. A workout that runs past midnight counts on the day it finished. Reopening keeps both the moment and the date. Travel never moves a finished workout.
+- **Dates from timestamps.** A date taken from a timestamp is always the local date of that moment, never the timestamp's first ten characters (the UTC date, which is a day late on an evening in the Americas).
+- **Weeks** are runs of local dates. They start on Monday or Sunday, per the setting. Changing the setting regroups past weeks too.
+- **Daylight saving.** Day math works on calendar dates and never adds 24 hours, so a 23- or 25-hour day can't move a date.
+- **"Today"** is the phone's current local date. It's checked again at midnight and whenever the app comes back to the foreground. After a trip it follows the new time zone. Nothing is rescheduled automatically.
 - **The streak counts consecutive weeks** in which the user completed at least the planned number of workouts, or their weekly frequency goal. Rest days never break it. A **partial workout counts if it has at least one completed working set**; summaries and adherence stats still mark it as partial.
 
 **Session lifecycle**
@@ -788,7 +802,7 @@ any ──delete──▶ tombstone (stats recalculate)
 
 ### Sync, notifications, and edge cases
 
-- Time zones and daylight saving time, for calendar occurrences, the weekly streak boundary (which day a week starts on), quiet hours, and reminders.
+- Time zones and daylight saving time for quiet hours and reminders (G3.12). Calendar dates, the week boundary, and DST for the calendar are decided in 2.5 (G3.7).
 - Which notifications are local and which are remote. The working assumption is that reminders, timer alarms, and the weekly summary are local.
 - Cancelling and rescheduling reminders when a workout is completed, shifted, or skipped.
 - Notification behaviour on days with several workouts.

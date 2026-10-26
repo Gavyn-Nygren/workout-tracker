@@ -1,4 +1,4 @@
-import { addDays, isoWeekday, todayISO } from '@/data/dates';
+import { addDays, startOfWeek, todayISO } from '@/data/dates';
 import { weeklyFromPattern, fixedFromPattern, weekPattern } from '@/data/schedule';
 import type {
   ISODate,
@@ -11,6 +11,7 @@ import type {
   StarterTemplate,
   Weekday,
 } from '@/data/types';
+import { sortWeekdays, WEEKDAY_LONG } from '@/lib/format';
 import { newId } from '@/lib/id';
 
 // Pure edits to a plan. Screens apply one and save the result (the repository rebuilds the
@@ -133,10 +134,13 @@ export function setSequence(plan: Plan, sequence: (string | 'rest')[]): Plan {
   return { ...plan, schedule: { type: 'rotating', sequence } };
 }
 
-/** Next Monday on or after `from` (or `from` itself if it's a Monday). */
-export function nextMonday(from: ISODate = todayISO()): ISODate {
-  const offset = (8 - isoWeekday(from)) % 7;
-  return addDays(from, offset);
+/**
+ * The first day of next week, for "start today or next Monday" (spec 2.5): next Monday, or next
+ * Sunday when weeks start on Sunday. Always after `from`, so on a Monday it's a week later rather
+ * than a second "today".
+ */
+export function nextWeekStart(from: ISODate = todayISO(), weekStartsOn: Weekday = 1): ISODate {
+  return addDays(startOfWeek(from, weekStartsOn), 7);
 }
 
 /** Copies a template into a new plan with fresh ids, so later template changes never touch it. */
@@ -169,7 +173,10 @@ export function planFromTemplate(template: StarterTemplate, startDate: ISODate):
   };
 }
 
-/** A blank plan from the setup steps: one workout per training day, or per cycle step. */
+/**
+ * A blank plan from the setup steps: one workout per training day, or per cycle step. Day
+ * workouts are listed in the week-start's order, so a Sunday week lists Sunday's first.
+ */
 export function newPlan(input: {
   name: string;
   startDate: ISODate;
@@ -177,10 +184,10 @@ export function newPlan(input: {
   weekdays: Weekday[];
   weeks: number;
   cycle: ('workout' | 'rest')[];
+  weekStartsOn?: Weekday;
 }): Plan {
   const now = new Date().toISOString();
   const names = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
-  const dayNames: Record<Weekday, string> = { 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday', 7: 'Sunday' };
   let workouts: PlanWorkout[];
   let schedule: PlanSchedule;
 
@@ -190,8 +197,8 @@ export function newPlan(input: {
     workouts = Array.from({ length: n }, (_, i) => ({ id: newId('pw'), name: `Workout ${names[i] ?? i + 1}`, blocks: [], estimatedMinutes: 45 }));
     schedule = { type: 'rotating', sequence: sequence.map((s) => (s === 'rest' ? s : workouts[Number(s.slice(1))].id)) };
   } else {
-    const days = [...input.weekdays].sort();
-    workouts = days.map((d) => ({ id: newId('pw'), name: dayNames[d], blocks: [], estimatedMinutes: 45 }));
+    const days = sortWeekdays([...new Set(input.weekdays)], input.weekStartsOn);
+    workouts = days.map((d) => ({ id: newId('pw'), name: WEEKDAY_LONG[d], blocks: [], estimatedMinutes: 45 }));
     const pattern = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] } as Record<Weekday, string[]>;
     days.forEach((d, i) => (pattern[d] = [workouts[i].id]));
     schedule = input.type === 'weekly' ? weeklyFromPattern(pattern) : fixedFromPattern(input.weeks, pattern);

@@ -92,6 +92,15 @@ const MIGRATIONS: string[] = [
     SELECT id || '@' || json_extract(data, '$.version'), id, json_extract(data, '$.version'), data, updated_at
     FROM plans WHERE deleted_at IS NULL;
   `,
+  // 3: plan shifts (G3.7). A "push forward" after a missed workout, kept so the plan's later
+  // workouts land on their new dates as the calendar fills in, and so it can be undone.
+  `
+  CREATE TABLE plan_shifts (
+    id TEXT PRIMARY KEY NOT NULL, plan_id TEXT NOT NULL,
+    data TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT
+  );
+  CREATE INDEX plan_shifts_by_plan ON plan_shifts (plan_id);
+  `,
 ];
 
 /** The tables that hold the user's data (everything except bookkeeping). */
@@ -100,6 +109,7 @@ export const USER_TABLES = [
   'custom_exercises',
   'plans',
   'plan_versions',
+  'plan_shifts',
   'occurrences',
   'sessions',
   'logged_sets',
