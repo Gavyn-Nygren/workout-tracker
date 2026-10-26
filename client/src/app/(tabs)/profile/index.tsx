@@ -3,8 +3,9 @@ import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Card, ListRow, SectionHeader, SegmentedControl, useToast } from '@/components/ui';
 import { useDevData } from '@/data/DataProvider';
-import { usePersonalRecords, useSessions, useStreak } from '@/data/hooks';
+import { useBodyweight, usePersonalRecords, useSessions, useStreak } from '@/data/hooks';
 import { formatClock, spokenDuration } from '@/hooks/useNow';
+import { formatLoad } from '@/lib/format';
 import { authStore, resetFirstRun } from '@/features/auth/authStore';
 import { useSettings } from '@/features/settings/useSettings';
 import { useAppTheme, type ThemePreference } from '@/theme/ThemeProvider';
@@ -28,6 +29,9 @@ export default function ProfileScreen() {
   const account = { name: auth.name, method: auth.method === 'apple' ? 'Signed in with Apple' : auth.email ?? 'Signed in with email' };
   const { data: sessions } = useSessions();
   const { data: streak } = useStreak();
+  // Bodyweight can always be added here (it's asked once at first sign-in, never during workouts).
+  const { data: weighIns } = useBodyweight();
+  const latestWeight = weighIns?.length ? [...weighIns].sort((x, y) => x.date.localeCompare(y.date))[weighIns.length - 1] : undefined;
   const { data: records } = usePersonalRecords();
 
   const workouts = (sessions ?? []).filter((s) => s.status === 'completed').length;
@@ -80,6 +84,13 @@ export default function ProfileScreen() {
             <View style={styles.section}>
               <SectionHeader title="Settings" />
               <Card padding="none">
+                <ListRow
+                  title="Bodyweight"
+                  icon="figure.stand"
+                  value={latestWeight ? formatLoad(latestWeight.weightKg, preferences.units) : 'Add'}
+                  accessibilityHint="Logs today's bodyweight"
+                  onPress={() => router.push('/log-weight')}
+                />
                 <ListRow
                   title="Units & logging"
                   icon="scalemass"

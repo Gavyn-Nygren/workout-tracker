@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 
 import { effectiveLoadKg, setE1RM, setVolumeKg } from '../src/data/calculations';
 import { builtinExercises } from '../src/data/content';
-import { effortLabel, kindForExercise, loadField, missingForCompletion, needsBodyweightPrompt, parseTempo, roundingIncrementFor } from '../src/data/logging';
+import { effortLabel, kindForExercise, loadField, missingForCompletion, parseTempo, roundingIncrementFor } from '../src/data/logging';
 import { defaultPreferences, defaultRounding } from '../src/data/preferences';
 import type { LoggedSet, PlannedExercise, WorkoutSession } from '../src/data/types';
 import { kgToLb, lbToKg } from '../src/data/units';
@@ -180,10 +180,4 @@ describe('bodyweight snapshot', () => {
     assert.equal(firstSet(edited).bodyweightSnapshotKg, undefined);
   });
 
-  test('the prompt asks once, only for bodyweight movements with no weigh-in yet', () => {
-    assert.equal(needsBodyweightPrompt(PULL_UP, undefined, false), true);
-    assert.equal(needsBodyweightPrompt(PULL_UP, undefined, true), false, 'already asked');
-    assert.equal(needsBodyweightPrompt(PULL_UP, 80, false), false, 'a weigh-in exists');
-    assert.equal(needsBodyweightPrompt(SQUAT, undefined, false), false, 'not a bodyweight movement');
-  });
 });

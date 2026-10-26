@@ -37,14 +37,6 @@ export function missingForCompletion(set: LoggedSet, exercise: Pick<Exercise, 'i
   return set.reps ? null : 'reps';
 }
 
-/**
- * Whether completing this set should ask for bodyweight first (spec 2.6): only for bodyweight
- * movements, only when none has been entered, and only once.
- */
-export function needsBodyweightPrompt(exercise: Pick<Exercise, 'isBodyweight'> | undefined, latestBodyweightKg: number | undefined, alreadyAsked: boolean): boolean {
-  return Boolean(exercise?.isBodyweight) && latestBodyweightKg === undefined && !alreadyAsked;
-}
-
 /** Effort is stored once, as reps in reserve (RIR = 10 − RPE), and shown on the user's scale. */
 export function effortLabel(rir: number, scale: Preferences['effortScale']): string {
   return scale === 'rpe' ? `RPE ${10 - rir}` : `RIR ${rir}`;

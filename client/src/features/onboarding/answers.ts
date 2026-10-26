@@ -8,7 +8,6 @@ export type Answers = {
   equipment: Equipment[];
   daysPerWeek: number;
   heightIn?: number;
-  bodyweightLb?: number;
   limitations: string[];
   limitationNote: string;
 };

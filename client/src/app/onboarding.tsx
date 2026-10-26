@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText, Button, Card, Chip, EmptyState, ErrorState, Icon, NumberField, PressableScale, Skeleton, Stepper, TextField, useToast } from '@/components/ui';
 import { useRepository } from '@/data/DataProvider';
-import { succeeded, useSaveBodyweight, useSavePlan, useTemplates } from '@/data/hooks';
+import { succeeded, usePreferences, useSaveBodyweight, useSavePlan, useTemplates } from '@/data/hooks';
 import type { Equipment, ExperienceLevel } from '@/data/types';
 import { lbToKg } from '@/data/units';
 import { formatShortDate } from '@/lib/format';
@@ -62,7 +62,11 @@ export default function OnboardingScreen() {
   const saveBodyweight = useSaveBodyweight();
   const name = authStore.use().name;
   const [step, setStep] = useState<number>(-1);
-  const [phase, setPhase] = useState<'questions' | 'recommend' | 'tour'>('questions');
+  // Bodyweight is asked first, right after the first sign-in, and never again (user's call): it's
+  // added later from Profile. The setup questions that follow are all optional.
+  const [phase, setPhase] = useState<'weight' | 'questions' | 'recommend' | 'tour'>('weight');
+  const [weight, setWeight] = useState<number>();
+  const units = usePreferences().data?.units ?? 'imperial';
   const [answers, setAnswers] = useState<Answers>(onboardingAnswers.get());
   const set = (patch: Partial<Answers>) => setAnswers((a) => ({ ...a, ...patch }));
   // Each step's heading. Only one shows at a time, so one ref covers them all.
@@ -84,14 +88,19 @@ export default function OnboardingScreen() {
 
   const finishQuestions = () => {
     onboardingAnswers.set(answers);
-    if (answers.bodyweightLb) {
-      const now = new Date().toISOString();
-      saveBodyweight.mutate({ id: newId('bw'), date: today, weightKg: lbToKg(answers.bodyweightLb), createdAt: now, updatedAt: now });
-    }
     setPhase('recommend');
   };
 
   const next = () => (step < STEPS.length - 1 ? setStep(step + 1) : finishQuestions());
+
+  /** Saves the weigh-in straight away (in the user's units), then moves on to the optional setup. */
+  const saveWeight = () => {
+    if (weight && weight > 0) {
+      const now = new Date().toISOString();
+      saveBodyweight.mutate({ id: newId('bw'), date: today, weightKg: units === 'imperial' ? lbToKg(weight) : weight, createdAt: now, updatedAt: now });
+    }
+    setPhase('questions');
+  };
   const skipAll = () => {
     completeOnboarding();
   };
@@ -126,27 +135,57 @@ export default function OnboardingScreen() {
         ) : (
           <View style={styles.spacer} />
         )}
-        <View
-          style={[styles.track, { backgroundColor: colors.input }]}
-          accessible
-          accessibilityRole="progressbar"
-          accessibilityLabel="Setup progress"
-          accessibilityValue={{ min: 0, max: STEPS.length, now: Math.round(progress * STEPS.length), text: progressText }}
-        >
-          <View style={[styles.fill, { width: `${progress * 100}%`, backgroundColor: colors.accentText }]} />
-        </View>
-        <Pressable onPress={skipAll} accessibilityRole="button" hitSlop={10} style={styles.skip}>
-          {/* Nav-bar control: grows only to the dense cap so the progress track keeps its room. */}
-          <AppText variant="subhead" weight="600" tone="accent" maxFontSizeMultiplier={DENSE_TEXT_MAX}>
-            Skip setup
-          </AppText>
-        </Pressable>
+        {/* The bodyweight question stands on its own, before the setup and its progress. */}
+        {phase !== 'weight' && (
+          <>
+            <View
+              style={[styles.track, { backgroundColor: colors.input }]}
+              accessible
+              accessibilityRole="progressbar"
+              accessibilityLabel="Setup progress"
+              accessibilityValue={{ min: 0, max: STEPS.length, now: Math.round(progress * STEPS.length), text: progressText }}
+            >
+              <View style={[styles.fill, { width: `${progress * 100}%`, backgroundColor: colors.accentText }]} />
+            </View>
+            <Pressable onPress={skipAll} accessibilityRole="button" hitSlop={10} style={styles.skip}>
+              {/* Nav-bar control: grows only to the dense cap so the progress track keeps its room. */}
+              <AppText variant="subhead" weight="600" tone="accent" maxFontSizeMultiplier={DENSE_TEXT_MAX}>
+                Skip setup
+              </AppText>
+            </Pressable>
+          </>
+        )}
       </View>
 
       <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+        {phase === 'weight' && (
+          <Question
+            titleRef={titleRef}
+            title={`Welcome, ${name}. What do you weigh?`}
+            subtitle="Pull-ups, dips, and other bodyweight exercises count your bodyweight in their load. You can update it any time in Profile."
+          >
+            <Card>
+              <View style={large ? styles.stack : styles.inline}>
+                <AppText variant="body" style={!large && styles.flex} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                  Bodyweight
+                </AppText>
+                <NumberField
+                  label={`Bodyweight in ${units === 'imperial' ? 'pounds' : 'kilograms'}`}
+                  value={weight}
+                  onChange={setWeight}
+                  unit={units === 'imperial' ? 'lb' : 'kg'}
+                  decimal
+                  width={110}
+                  placeholder={units === 'imperial' ? '180' : '82'}
+                />
+              </View>
+            </Card>
+          </Question>
+        )}
+
         {phase === 'questions' && step === -1 && (
           <View style={styles.stack}>
-            <Heading titleRef={titleRef} variant="largeTitle" text={`Hi ${name}. Let's set up your training.`} />
+            <Heading titleRef={titleRef} variant="largeTitle" text="Let's set up your training." />
             <AppText variant="body" tone="secondary">
               A few quick questions so we can suggest a plan. Every one is optional, and you can change your answers later.
             </AppText>
@@ -203,7 +242,7 @@ export default function OnboardingScreen() {
         )}
 
         {phase === 'questions' && STEPS[step] === 'body' && (
-          <Question titleRef={titleRef} title="About you" subtitle="Optional. Bodyweight is used to count pull-ups, dips, and other bodyweight exercises. It's never shared.">
+          <Question titleRef={titleRef} title="About you" subtitle="Optional. It's never shared.">
             <Card>
               <View style={styles.stack}>
                 <View style={large ? styles.stack : styles.inline}>
@@ -211,12 +250,6 @@ export default function OnboardingScreen() {
                     Height
                   </AppText>
                   <NumberField label="Height in inches" value={answers.heightIn} onChange={(heightIn) => set({ heightIn })} unit="in" width={100} placeholder="70" />
-                </View>
-                <View style={large ? styles.stack : styles.inline}>
-                  <AppText variant="body" style={!large && styles.flex} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                    Bodyweight
-                  </AppText>
-                  <NumberField label="Bodyweight in pounds" value={answers.bodyweightLb} onChange={(bodyweightLb) => set({ bodyweightLb })} unit="lb" decimal width={100} placeholder="180" />
                 </View>
               </View>
             </Card>
@@ -307,6 +340,18 @@ export default function OnboardingScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
+        {phase === 'weight' &&
+          (large ? (
+            <>
+              <Button title="Continue" onPress={saveWeight} fullWidth />
+              <Button title="Skip" accessibilityLabel="Skip bodyweight" variant="ghost" onPress={() => setPhase('questions')} style={styles.centerSelf} />
+            </>
+          ) : (
+            <View style={styles.row}>
+              <Button title="Skip" accessibilityLabel="Skip bodyweight" variant="ghost" onPress={() => setPhase('questions')} />
+              <Button title="Continue" onPress={saveWeight} style={styles.flex} fullWidth />
+            </View>
+          ))}
         {phase === 'questions' && step === -1 && (
           <>
             <Button title="Get started" fullWidth onPress={() => setStep(0)} />

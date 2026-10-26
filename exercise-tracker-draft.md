@@ -352,7 +352,7 @@ Every set has exactly one **kind** and any number of **modifiers**.
 - For bodyweight movements, the user logs reps plus any added load.
 - Effective load = the most recent bodyweight + added load. Assisted sets use bodyweight − assistance. Users can override the calculated load.
 - The **bodyweight value used is saved with each set** when it is completed, so later bodyweight edits never rewrite history.
-- If no bodyweight has been entered, the app **asks once** (ever, not per workout) when a bodyweight exercise is logged. If the user skips, the set records reps + added load only and is left out of effective-load volume. It is **not back-filled** later.
+- The app **asks for bodyweight right away on first sign-in** (the first screen, before the optional setup questions) and **never asks again** (user's call). Bodyweight can always be added from **Profile → Bodyweight** or Progress. Without a weigh-in, a bodyweight set records reps + added load only and is left out of effective-load volume. It is **not back-filled** later.
 
 ### 2.7 Calculations and records
 

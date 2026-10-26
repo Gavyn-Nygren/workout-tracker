@@ -271,7 +271,7 @@ Everything works on one phone, offline, with no server.
 - [x] Single effort value shown as RPE or RIR.
 - [x] Pre-fill logic. *Plan target, else last time's top weight rounded to the equipment, with reps from last time kept inside the range.*
 - [x] Per-equipment and custom rounding. *Fixed: metric rounding of equipment without its own increment, and the missing kettlebell default.*
-- [x] Bodyweight snapshot on each set, effective load (added, assisted, override), and the ask-once prompt for missing bodyweight. *The override is "Counted load" in the set sheet.*
+- [x] Bodyweight snapshot on each set, effective load (added, assisted, override), and the ask-once prompt for missing bodyweight. *The override is "Counted load" in the set sheet. Bodyweight is asked right away at first sign-in and never again (user's call); Profile → Bodyweight adds one any time.*
 
 ### G3.6 Calculations
 

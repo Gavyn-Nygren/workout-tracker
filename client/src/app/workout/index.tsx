@@ -3,17 +3,14 @@ import { useMemo, useState } from 'react';
 import { AccessibilityInfo, ActionSheetIOS, Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Card, EmptyState, parseNumber, ToastViewport, useToast } from '@/components/ui';
-import { todayISO } from '@/data/dates';
-import { useSaveBodyweight, usePreferences } from '@/data/hooks';
-import { missingForCompletion, needsBodyweightPrompt } from '@/data/logging';
+import { Button, Card, EmptyState, ToastViewport, useToast } from '@/components/ui';
+import { usePreferences } from '@/data/hooks';
+import { missingForCompletion } from '@/data/logging';
 import { defaultPreferences } from '@/data/preferences';
 import type { LoggedSet, SessionExercise } from '@/data/types';
 import { useHaptics } from '@/hooks/useHaptics';
-import { lbToKg } from '@/data/units';
 import { plural } from '@/lib/format';
-import { newId } from '@/lib/id';
-import { bodyweightPromptStore } from '@/features/workout/bodyweightPrompt';
+
 import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
 import { BlockCard } from '@/features/workout/BlockCard';
 import { ExerciseSection } from '@/features/workout/ExerciseSection';
@@ -33,8 +30,7 @@ export default function ActiveWorkoutScreen() {
   const toast = useToast();
   const haptics = useHaptics();
   const preferences = usePreferences().data ?? defaultPreferences;
-  const { workout, counts, prSetIds, exercisesById, history, dispatch, completeSet, uncompleteSet, latestBodyweightKg, rest, skipRest, end, finish: saveWorkout } = useActiveWorkout();
-  const saveBodyweight = useSaveBodyweight();
+  const { workout, counts, prSetIds, exercisesById, history, dispatch, completeSet, uncompleteSet, rest, skipRest, end, finish: saveWorkout } = useActiveWorkout();
   // Space the floating rest bar covers; it grows with the text size, so it's measured.
   const [restBarSpace, setRestBarSpace] = useState(0);
 
@@ -79,37 +75,8 @@ export default function ActiveWorkoutScreen() {
       toast.show({ message: missing === 'duration' ? 'Enter the hold time first.' : missing === 'load' ? 'Enter weight and reps first.' : 'Enter reps first.', tone: 'warning' });
       return;
     }
-    // Bodyweight movements count bodyweight in their load. Without a weigh-in, ask once (spec 2.6);
-    // a skipped answer leaves the set out of load-based stats, and it's never filled in later.
-    if (exercise && needsBodyweightPrompt(exercise, latestBodyweightKg, bodyweightPromptStore.get())) {
-      bodyweightPromptStore.set(true);
-      const unit = preferences.units === 'imperial' ? 'lb' : 'kg';
-      Alert.prompt(
-        'What do you weigh?',
-        `${exercise.name} counts your bodyweight in its load. Enter it once, in ${unit}; you can log changes any time in Progress.`,
-        [
-          { text: 'Skip', style: 'cancel', onPress: () => completeSet(entry.id, set.id) },
-          {
-            text: 'Save',
-            onPress: (text?: string) => {
-              const value = parseNumber(text ?? '', true);
-              if (!value || value <= 0) {
-                completeSet(entry.id, set.id);
-                return;
-              }
-              const weightKg = preferences.units === 'imperial' ? lbToKg(value) : value;
-              const now = new Date().toISOString();
-              saveBodyweight.mutate({ id: newId('bw'), date: todayISO(), weightKg, createdAt: now, updatedAt: now });
-              completeSet(entry.id, set.id, weightKg);
-            },
-          },
-        ],
-        'plain-text',
-        '',
-        'decimal-pad',
-      );
-      return;
-    }
+    // Without a weigh-in, a bodyweight set is logged with reps and added weight only, and stays out
+    // of load-based stats. Bodyweight is asked at first sign-in and added from Profile (spec 2.6).
     completeSet(entry.id, set.id);
   };
 
