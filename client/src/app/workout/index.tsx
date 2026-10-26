@@ -123,10 +123,12 @@ export default function ActiveWorkoutScreen() {
     }
   };
 
+  const reopened = workout?.mode === 'reopen';
+
   function discard() {
     end();
     router.back();
-    toast.show({ message: 'Workout discarded.' });
+    toast.show({ message: reopened ? 'Changes discarded.' : 'Workout discarded.' });
   }
 
   return (
@@ -202,10 +204,14 @@ export default function ActiveWorkoutScreen() {
               size="sm"
               icon="trash"
               onPress={() =>
-                Alert.alert('Discard this workout?', 'Everything logged in it will be deleted.', [
-                  { text: 'Keep it', style: 'cancel' },
-                  { text: 'Discard', style: 'destructive', onPress: discard },
-                ])
+                Alert.alert(
+                  reopened ? 'Discard your changes?' : 'Discard this workout?',
+                  reopened ? 'The workout goes back to how it was before you reopened it.' : 'Everything logged in it will be deleted.',
+                  [
+                    { text: 'Keep it', style: 'cancel' },
+                    { text: 'Discard', style: 'destructive', onPress: discard },
+                  ],
+                )
               }
             />
           </View>

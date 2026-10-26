@@ -257,7 +257,10 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 
 **Session lifecycle**
 
-- Active workouts auto-save and resume where the user left off.
+- Active workouts auto-save and resume where the user left off. Changes are saved half a second after each edit and immediately when the app goes to the background. Reopening the app resumes the workout, including a running rest timer.
+- **Skip** lives in a ⋯ menu on the workout card for planned and missed workouts. The same menu offers **Unskip** (user's pick). "Start anyway" on a skipped workout turns the skip into the workout.
+- **Delete** lives in the workout summary's ⋯ menu, with a confirmation (user's pick). Deleting removes the workout's sets and form recordings, stats recalculate, and its scheduled day goes back to planned or missed.
+- **Discarding** an unfinished workout deletes it. Discarding a *reopened* workout restores it exactly as it was.
 - Exercises can be skipped, and a workout can be completed as partial.
 - **Reopen** resumes the *same* session, for example after an accidental finish or to fix a log. Volume, PRs, and badges recalculate.
 - **Repeat** creates a *new* session with the same exercises. It is linked to the original and counted separately.

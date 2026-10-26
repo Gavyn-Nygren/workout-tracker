@@ -1,25 +1,28 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, AppState } from 'react-native';
+
+import { useRepository } from '@/data/DataProvider';
 
 import { toISODate } from '@/data/dates';
-import { useBodyweight, useExercises, usePreferences, useSaveSession, useSessions } from '@/data/hooks';
+import { useBodyweight, useDeleteSession, useExercises, usePreferences, useSaveSession, useSessions } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import type { Exercise, LoggedSet, SessionBlock, SessionExercise, WorkoutSession } from '@/data/types';
 import { useHaptics } from '@/hooks/useHaptics';
 import { spokenDuration } from '@/hooks/useNow';
+import { createLocalStore } from '@/lib/localStore';
 import type { DayItem } from '../today/agenda';
 import { sessionForReopen, sessionFromPlan } from './buildSession';
 import { completedNewestFirst, computeBests, isNewRecord } from './history';
+import { discardPlan, restoredRest, sessionToResume, type ActiveWorkoutMeta, type RestTimer } from './persistence';
 import { countSets, setName, setNumber, workoutReducer, type ActiveWorkout, type SetCounts, type WorkoutAction } from './workoutReducer';
 
-export type RestTimer = {
-  /** When the countdown reaches zero (ms epoch); ignored while paused. */
-  endsAtMs: number;
-  durationSec: number;
-  /** Set while paused. */
-  pausedRemainingMs?: number;
-  label: string;
-};
+export type { RestTimer } from './persistence';
+
+/** How long edits wait before they're written, so a burst of taps saves once. */
+const AUTOSAVE_DELAY_MS = 500;
+
+/** The phone's note of the unfinished workout, for resuming after the app is closed. */
+const activeWorkoutStore = createLocalStore<ActiveWorkoutMeta | null>('activeWorkout', null);
 
 type Position = { index: number; total: number };
 
@@ -37,6 +40,8 @@ type ContextValue = {
   dispatch: (action: WorkoutAction) => void;
   startFromItem: (item: DayItem, position?: Position) => void;
   reopen: (session: WorkoutSession, position?: Position) => void;
+  /** Picks up an unfinished workout that's saved but not the one open (e.g. left over from earlier). */
+  continueSession: (session: WorkoutSession, position?: Position) => void;
   repeat: (item: DayItem, source: WorkoutSession) => void;
   completeSet: (entryId: string, setId: string) => void;
   uncompleteSet: (entryId: string, setId: string) => void;
@@ -44,7 +49,10 @@ type ContextValue = {
   adjustRest: (deltaSec: number) => void;
   togglePauseRest: () => void;
   skipRest: () => void;
-  /** Discards the in-progress workout without saving. */
+  /**
+   * Discards the unfinished workout: a new one is deleted, a reopened one goes back to how it was
+   * before it was reopened.
+   */
   end: () => void;
   /**
    * Saves the workout as completed: 'full', or 'partial' if any set is unlogged or an exercise was
@@ -63,14 +71,23 @@ function locate(session: WorkoutSession, entryId: string): { block: SessionBlock
   return undefined;
 }
 
-/** Owns the in-progress workout so it survives minimizing the sheet and switching tabs. */
+/**
+ * Owns the in-progress workout so it survives minimizing the sheet and switching tabs, and auto-saves
+ * it so it survives the app closing too (spec 2.5).
+ */
 export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
   const [workout, dispatch] = useReducer(workoutReducer, null);
   const [rest, setRest] = useState<RestTimer | null>(null);
   const [restJustEnded, setRestJustEnded] = useState(false);
   const [prSetIds, setPrSetIds] = useState<ReadonlySet<string>>(new Set());
   const haptics = useHaptics();
+  const repo = useRepository();
   const saveSession = useSaveSession();
+  const deleteSession = useDeleteSession();
+  /** For a reopened workout, the finished version to restore if the reopen is discarded. */
+  const original = useRef<WorkoutSession | undefined>(undefined);
+  const current = useRef<ActiveWorkout | null>(null);
+  current.current = workout;
 
   const sessions = useSessions();
   const exercises = useExercises();
@@ -102,6 +119,66 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       if (endTimer.current) clearTimeout(endTimer.current);
     };
   }, [rest, haptics]);
+
+  // Resume: when the app opens, pick up the workout that was in progress when it closed.
+  const [resumeChecked, setResumeChecked] = useState(false);
+  useEffect(() => {
+    const remembered = activeWorkoutStore.get();
+    let cancelled = false;
+    repo
+      .listSessions()
+      .then((all) => {
+        if (cancelled || current.current) return;
+        const found = sessionToResume(remembered, all);
+        if (!found) return;
+        original.current = found.meta.original;
+        setRest(restoredRest(found.meta.rest, Date.now()));
+        setPrSetIds(new Set(found.meta.prSetIds));
+        dispatch({ type: 'resume', workout: { mode: found.meta.mode, position: found.meta.position, session: found.session } });
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setResumeChecked(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [repo]);
+
+  // Remember what resuming needs (mode, rest timer, PRs). Waits for the resume check, so the note
+  // isn't wiped before it's been read.
+  useEffect(() => {
+    if (!resumeChecked) return;
+    activeWorkoutStore.set(
+      workout
+        ? { sessionId: workout.session.id, mode: workout.mode, position: workout.position, rest, prSetIds: [...prSetIds], original: original.current }
+        : null,
+    );
+  }, [resumeChecked, workout, rest, prSetIds]);
+
+  // Auto-save: the session is written shortly after each change, and right away when the app goes
+  // to the background, so closing it never loses a set.
+  const pendingSave = useRef<{ timer: ReturnType<typeof setTimeout>; session: WorkoutSession } | null>(null);
+  const cancelAutosave = useCallback(() => {
+    if (pendingSave.current) clearTimeout(pendingSave.current.timer);
+    pendingSave.current = null;
+  }, []);
+  const flushAutosave = useCallback(() => {
+    const pending = pendingSave.current;
+    cancelAutosave();
+    if (pending) repo.saveSession(pending.session).catch(() => {});
+  }, [repo, cancelAutosave]);
+  useEffect(() => {
+    if (!workout) return;
+    cancelAutosave();
+    pendingSave.current = { session: workout.session, timer: setTimeout(flushAutosave, AUTOSAVE_DELAY_MS) };
+  }, [workout, cancelAutosave, flushAutosave]);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') flushAutosave();
+    });
+    return () => subscription.remove();
+  }, [flushAutosave]);
 
   const startRest = useCallback((durationSec: number, label: string) => {
     setRestJustEnded(false);
@@ -166,16 +243,28 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       startFromItem: (item, position) => {
         setRest(null);
         setPrSetIds(new Set());
-        dispatch({ type: 'start', workout: { mode: 'new', position, session: sessionFromPlan({ item, history, exercisesById, preferences }) } });
+        original.current = undefined;
+        const session = sessionFromPlan({ item, history, exercisesById, preferences });
+        // "Start anyway" on a skipped workout turns that skip into the workout itself.
+        const skipped = item.session?.status === 'skipped' ? item.session : undefined;
+        dispatch({ type: 'start', workout: { mode: 'new', position, session: skipped ? { ...session, id: skipped.id, createdAt: skipped.createdAt } : session } });
       },
       reopen: (session, position) => {
         setRest(null);
         setPrSetIds(new Set());
+        original.current = session;
         dispatch({ type: 'start', workout: { mode: 'reopen', position, session: sessionForReopen(session) } });
+      },
+      continueSession: (session, position) => {
+        setRest(null);
+        setPrSetIds(new Set());
+        original.current = undefined;
+        dispatch({ type: 'start', workout: { mode: 'new', position, session } });
       },
       repeat: (item, source) => {
         setRest(null);
         setPrSetIds(new Set());
+        original.current = undefined;
         dispatch({
           type: 'start',
           workout: { mode: 'new', session: sessionFromPlan({ item, history, exercisesById, preferences, repeatOf: source }) },
@@ -209,6 +298,12 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
         }),
       skipRest: () => setRest(null),
       end: () => {
+        if (!workout) return;
+        cancelAutosave();
+        const plan = discardPlan({ mode: workout.mode, original: original.current }, workout.session.id);
+        if (plan.kind === 'restore') saveSession.mutate(plan.session);
+        else deleteSession.mutate(plan.sessionId);
+        original.current = undefined;
         setRest(null);
         setRestJustEnded(false);
         setPrSetIds(new Set());
@@ -229,7 +324,10 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
           completedDate: mode === 'reopen' && session.completedDate ? session.completedDate : toISODate(now),
           updatedAt: now.toISOString(),
         };
+        // A pending auto-save mustn't land after this and mark the workout unfinished again.
+        cancelAutosave();
         await saveSession.mutateAsync(finished);
+        original.current = undefined;
         setRest(null);
         setRestJustEnded(false);
         setPrSetIds(new Set());
@@ -237,7 +335,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
         return finished;
       },
     }),
-    [workout, rest, restJustEnded, prSetIds, exercisesById, history, preferences, completeSet, startRest, saveSession],
+    [workout, rest, restJustEnded, prSetIds, exercisesById, history, preferences, completeSet, startRest, saveSession, deleteSession, cancelAutosave],
   );
 
   return <Context.Provider value={value}>{children}</Context.Provider>;

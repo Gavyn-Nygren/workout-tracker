@@ -11,6 +11,8 @@ export type ActiveWorkout = {
 
 export type WorkoutAction =
   | { type: 'start'; workout: ActiveWorkout }
+  /** Picks an unfinished workout back up after the app reopens, unless one was started meanwhile. */
+  | { type: 'resume'; workout: ActiveWorkout }
   | { type: 'end' }
   | { type: 'updateSet'; entryId: string; setId: string; patch: Partial<LoggedSet> }
   | { type: 'completeSet'; entryId: string; setId: string; completedAt: string; bodyweightKg?: number }
@@ -57,6 +59,7 @@ function nextSet(entry: SessionExercise): LoggedSet {
 /** All edits to the in-progress session. Pure, so the rules can be unit-tested (G3.4). */
 export function workoutReducer(state: ActiveWorkout | null, action: WorkoutAction): ActiveWorkout | null {
   if (action.type === 'start') return action.workout;
+  if (action.type === 'resume') return state ?? action.workout;
   if (!state) return null;
   const update = (session: WorkoutSession): ActiveWorkout => ({ ...state, session: { ...session, updatedAt: new Date().toISOString() } });
   const { session } = state;

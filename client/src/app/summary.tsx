@@ -1,10 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef } from 'react';
-import { AccessibilityInfo, ScrollView, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, ActionSheetIOS, Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Confetti, ErrorState, NotFoundState, ScreenSkeleton, ToastViewport } from '@/components/ui';
-import { useExercises, usePlans, usePreferences, useSessions, useUpdatePlanWorkout } from '@/data/hooks';
+import { Button, Confetti, ErrorState, NotFoundState, ScreenSkeleton, ToastViewport, useToast } from '@/components/ui';
+import { succeeded, useDeleteSession, useExercises, usePlans, usePreferences, useSessions, useUpdatePlanWorkout } from '@/data/hooks';
+import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
 import { defaultPreferences } from '@/data/preferences';
 import { diffAgainstPlan } from '@/features/summary/planDiff';
 import { ComparisonCard, ExercisesCard, RecordsCard, SavePlanCard } from '@/features/summary/SummaryCards';
@@ -21,8 +22,11 @@ import { readable } from '@/theme/layout';
  * save changes to the plan) or from Today's "View summary" for any past workout.
  */
 export default function SummaryScreen() {
-  const { colors } = useAppTheme();
+  const { colors, scheme } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const toast = useToast();
+  const active = useActiveWorkout();
+  const deleteSession = useDeleteSession();
   const haptics = useHaptics();
   const { session: sessionId, fresh } = useLocalSearchParams<{ session: string; fresh?: string }>();
   const justFinished = fresh === '1';
@@ -75,7 +79,36 @@ export default function SummaryScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={[styles.padded, readable, { paddingBottom: insets.bottom + spacing.huge }]}>
-        <SummaryHero session={session} planName={plan?.name} summary={summary} units={preferences.units} />
+        <SummaryHero
+          session={session}
+          planName={plan?.name}
+          summary={summary}
+          units={preferences.units}
+          onMenu={() =>
+            ActionSheetIOS.showActionSheetWithOptions(
+              { title: session.name, options: ['Delete workout', 'Cancel'], destructiveButtonIndex: 0, cancelButtonIndex: 1, userInterfaceStyle: scheme },
+              (choice) => {
+                if (choice !== 0) return;
+                if (active.workout?.session.id === session.id) {
+                  Alert.alert('This workout is open', 'Finish or discard it first, then delete it.');
+                  return;
+                }
+                Alert.alert(`Delete ${session.name}?`, 'Its sets, personal records, and form recordings are removed, and your stats recalculate. This can\u2019t be undone.', [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                      // Close first, so the summary doesn't flash "not found" as the workout disappears.
+                      router.back();
+                      if (await succeeded(deleteSession.mutateAsync(session.id))) toast.show({ message: 'Workout deleted.' });
+                    },
+                  },
+                ]);
+              },
+            )
+          }
+        />
         {diff && diff.changes.length > 0 && plan && workout && (
           <SavePlanCard
             workoutName={workout.name}

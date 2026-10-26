@@ -1,5 +1,5 @@
 import type { SFSymbol } from 'expo-symbols';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Icon, PRBadge, type TextTone } from '@/components/ui';
 import { countsForPRs, effectiveLoadKg } from '@/data/calculations';
@@ -23,6 +23,8 @@ type Props = {
   onReopen: () => void;
   onRepeat: () => void;
   onViewSummary: () => void;
+  /** Opens the card's options (Skip / Unskip). Omitted when there are none. */
+  onMenu?: () => void;
 };
 
 const STATUS: Record<DayItemStatus, { label: string; icon: SFSymbol; tone: TextTone }> = {
@@ -58,6 +60,7 @@ function CardBody({
   onReopen,
   onRepeat,
   onViewSummary,
+  onMenu,
   outerScheme,
 }: Props & { outerScheme: 'light' | 'dark' }) {
   const { colors } = useAppTheme();
@@ -93,16 +96,29 @@ function CardBody({
       />
 
       {/* Large text: the status pill wraps under the plan name instead of squeezing it. */}
-      <View style={[styles.topRow, large && styles.wrap]} accessible accessibilityLabel={`${item.plan?.name ?? 'Workout'}, ${status.label}`}>
-        <AppText variant="label" tone="secondary" numberOfLines={2} style={large ? styles.grow : styles.flex}>
-          {item.plan?.name ?? 'Workout'}
-        </AppText>
-        <View style={[styles.statusPill, { backgroundColor: colors.input }]}>
-          <Icon name={status.icon} color={colors[toneColor(status.tone)]} size={13} />
-          <AppText variant="caption" weight="700" tone={status.tone}>
-            {status.label}
+      <View style={styles.topBar}>
+        <View style={[styles.topRow, large && styles.wrap, styles.flex]} accessible accessibilityLabel={`${item.plan?.name ?? 'Workout'}, ${status.label}`}>
+          <AppText variant="label" tone="secondary" numberOfLines={2} style={large ? styles.grow : styles.flex}>
+            {item.plan?.name ?? 'Workout'}
           </AppText>
+          <View style={[styles.statusPill, { backgroundColor: colors.input }]}>
+            <Icon name={status.icon} color={colors[toneColor(status.tone)]} size={13} />
+            <AppText variant="caption" weight="700" tone={status.tone}>
+              {status.label}
+            </AppText>
+          </View>
         </View>
+        {onMenu && (
+          <Pressable
+            onPress={onMenu}
+            accessibilityRole="button"
+            accessibilityLabel={`Options for ${item.name}`}
+            hitSlop={10}
+            style={({ pressed }) => [styles.menu, { backgroundColor: colors.input, opacity: pressed ? 0.7 : 1 }]}
+          >
+            <Icon name="ellipsis" color={colors.onChrome} size={16} weight="bold" />
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.titleBlock}>
@@ -313,6 +329,18 @@ const styles = StyleSheet.create({
     right: -28,
     top: 36,
     opacity: 0.07,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  menu: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   topRow: {
     flexDirection: 'row',

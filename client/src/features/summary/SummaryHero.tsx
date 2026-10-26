@@ -1,4 +1,4 @@
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { AppText, Icon } from '@/components/ui';
 import type { UnitSystem, WorkoutSession } from '@/data/types';
@@ -12,6 +12,8 @@ import type { WorkoutSummary } from './summarize';
 type Props = {
   session: WorkoutSession;
   planName?: string;
+  /** Opens the workout's options (Delete workout). */
+  onMenu?: () => void;
   summary: WorkoutSummary;
   units: UnitSystem;
 };
@@ -26,7 +28,7 @@ export function SummaryHero(props: Props) {
   );
 }
 
-function Body({ session, planName, summary, units, outerScheme }: Props & { outerScheme: 'light' | 'dark' }) {
+function Body({ session, planName, summary, units, onMenu, outerScheme }: Props & { outerScheme: 'light' | 'dark' }) {
   const { colors } = useAppTheme();
   const { fontScale } = useTextScale();
   const partial = session.completion === 'partial';
@@ -47,11 +49,24 @@ function Body({ session, planName, summary, units, outerScheme }: Props & { oute
       ]}
     >
       <Icon name="trophy.fill" color={colors.accent} size={150} weight="regular" style={styles.watermark} />
-      <View style={[styles.pill, { backgroundColor: colors.input }]}>
-        <Icon name={partial ? 'circle.lefthalf.filled' : 'checkmark.circle.fill'} color={partial ? colors.warningFill : colors.successFill} size={14} />
-        <AppText variant="caption" weight="800" tone={partial ? 'warning' : 'success'} maxFontSizeMultiplier={DENSE_TEXT_MAX}>
-          {partial ? 'PARTIAL WORKOUT' : 'WORKOUT COMPLETE'}
-        </AppText>
+      <View style={styles.topBar}>
+        <View style={[styles.pill, { backgroundColor: colors.input }]}>
+          <Icon name={partial ? 'circle.lefthalf.filled' : 'checkmark.circle.fill'} color={partial ? colors.warningFill : colors.successFill} size={14} />
+          <AppText variant="caption" weight="800" tone={partial ? 'warning' : 'success'} maxFontSizeMultiplier={DENSE_TEXT_MAX}>
+            {partial ? 'PARTIAL WORKOUT' : 'WORKOUT COMPLETE'}
+          </AppText>
+        </View>
+        {onMenu && (
+          <Pressable
+            onPress={onMenu}
+            accessibilityRole="button"
+            accessibilityLabel="Workout options"
+            hitSlop={10}
+            style={({ pressed }) => [styles.menu, { backgroundColor: colors.input, opacity: pressed ? 0.7 : 1 }]}
+          >
+            <Icon name="ellipsis" color={colors.onChrome} size={16} weight="bold" />
+          </Pressable>
+        )}
       </View>
       <View style={styles.title}>
         <AppText variant="largeTitle" numberOfLines={3} accessibilityRole="header">
@@ -115,6 +130,19 @@ const styles = StyleSheet.create({
     right: -24,
     top: 18,
     opacity: 0.07,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  menu: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pill: {
     flexDirection: 'row',

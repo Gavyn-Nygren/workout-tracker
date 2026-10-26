@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G3.4 (workout session lifecycle).
+**Current goal:** G3.5 (logging rules).
 
 ## How we work
 
@@ -263,7 +263,7 @@ Everything works on one phone, offline, with no server.
 
 ### G3.4 Workout session lifecycle
 
-- [ ] Start, auto-save/resume, skip, partial, finish, reopen (same session), repeat (new linked session), delete.
+- [x] Start, auto-save/resume, skip, partial, finish, reopen (same session), repeat (new linked session), delete. *Workouts auto-save and resume after the app closes. Skip and Unskip are in the card's ⋯ menu, and Delete is in the summary's ⋯ menu (user's picks). Discarding a reopened workout restores it.*
 
 ### G3.5 Logging rules
 

@@ -1,8 +1,9 @@
 import { router, useNavigation } from 'expo-router';
 import { useLayoutEffect, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { ActionSheetIOS, Alert, ScrollView, StyleSheet, View } from 'react-native';
 
-import { ErrorState, SectionHeader, Skeleton } from '@/components/ui';
+import { ErrorState, SectionHeader, Skeleton, useToast } from '@/components/ui';
+import { useDeleteSession, useSaveSession } from '@/data/hooks';
 import type { ISODate } from '@/data/types';
 import { ComingUp } from '@/features/today/ComingUp';
 import { MissedBanner } from '@/features/today/MissedBanner';
@@ -14,6 +15,8 @@ import { WorkoutPager } from '@/features/today/WorkoutPager';
 import { latestMissed, summarizeSession, type Agenda, type DayItem } from '@/features/today/agenda';
 import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
 import { formatMonthDay, formatShortDate, formatWeekday } from '@/lib/format';
+import { newId } from '@/lib/id';
+import { useAppTheme } from '@/theme/ThemeProvider';
 import { Columns, dashboard } from '@/theme/layout';
 import { radius, spacing } from '@/theme/tokens';
 
@@ -36,6 +39,43 @@ export default function TodayScreen() {
   const navigation = useNavigation();
   const { today, range, agenda, exercisesById, records, units, isLoading, error, retry } = useAgenda();
   const active = useActiveWorkout();
+  const { scheme } = useAppTheme();
+  const toast = useToast();
+  const saveSession = useSaveSession();
+  const deleteSession = useDeleteSession();
+
+  /** The card's ⋯ menu: skip a planned or missed workout, or undo a skip (user's pick). */
+  const menuFor = (item: DayItem) => {
+    const skippable = item.status === 'planned' || item.status === 'missed';
+    if (!item.occurrence || !(skippable || item.status === 'skipped')) return undefined;
+    return () =>
+      ActionSheetIOS.showActionSheetWithOptions(
+        { title: item.name, options: [item.status === 'skipped' ? 'Unskip workout' : 'Skip workout', 'Cancel'], cancelButtonIndex: 1, userInterfaceStyle: scheme },
+        (choice) => {
+          if (choice !== 0 || !item.occurrence) return;
+          if (item.status === 'skipped' && item.session) {
+            deleteSession.mutate(item.session.id, { onSuccess: () => toast.show({ message: `${item.name} is back on your plan.` }) });
+            return;
+          }
+          const now = new Date().toISOString();
+          saveSession.mutate(
+            {
+              id: newId('sess'),
+              name: item.name,
+              occurrenceId: item.occurrence.id,
+              planId: item.plan?.id,
+              planWorkoutId: item.occurrence.planWorkoutId,
+              status: 'skipped',
+              scheduledDate: item.occurrence.scheduledDate,
+              blocks: [],
+              createdAt: now,
+              updatedAt: now,
+            },
+            { onSuccess: () => toast.show({ message: `${item.name} skipped.` }) },
+          );
+        },
+      );
+  };
   const [selected, setSelected] = useState<ISODate>(today);
 
   // The workout in progress shows as "In progress" with a Resume button.
@@ -58,9 +98,17 @@ export default function TodayScreen() {
   }, [navigation, selected, items, isLoading]);
 
   /** Only one workout runs at a time; offer to resume or discard the current one first. */
+  /** Whether this card is the workout currently open (not just one saved as unfinished). */
+  const isOpen = (item: DayItem) =>
+    !!activeSession && (item.session?.id === activeSession.id || (!!item.occurrence && activeSession.occurrenceId === item.occurrence.id));
+
   const begin = (item: DayItem, start: () => void) => {
-    if (item.status === 'in_progress' || !activeSession) {
-      if (item.status !== 'in_progress') start();
+    if (isOpen(item)) {
+      router.push('/workout');
+      return;
+    }
+    if (!activeSession) {
+      start();
       router.push('/workout');
       return;
     }
@@ -122,10 +170,18 @@ export default function TodayScreen() {
                       summary={item.session && item.session.status === 'completed' ? summarizeSession(item.session, exercisesById, records) : undefined}
                       exercisesById={exercisesById}
                       units={units}
-                      onStart={() => begin(item, () => active.startFromItem(item, { index, total: items.length }))}
+                      onStart={() =>
+                        begin(item, () =>
+                          // An unfinished workout saved earlier carries on where it left off; anything else starts fresh.
+                          item.session?.status === 'in_progress'
+                            ? active.continueSession(item.session, { index, total: items.length })
+                            : active.startFromItem(item, { index, total: items.length }),
+                        )
+                      }
                       onReopen={() => item.session && begin(item, () => active.reopen(item.session!, { index, total: items.length }))}
                       onRepeat={() => item.session && begin({ ...item, status: 'planned' }, () => active.repeat(item, item.session!))}
                       onViewSummary={() => item.session && router.push({ pathname: '/summary', params: { session: item.session.id } })}
+                      onMenu={menuFor(item)}
                     />
                   )}
                 />

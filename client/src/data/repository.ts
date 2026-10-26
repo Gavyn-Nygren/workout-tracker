@@ -53,6 +53,12 @@ export interface DataRepository {
   // Writes
   /** Inserts or replaces a session; links it to its scheduled occurrence and recalculates records. */
   saveSession(session: WorkoutSession): Promise<void>;
+  /**
+   * Deletes a workout (spec 3.2: a tombstone, and stats recalculate). Its sets, form recordings, and
+   * reports go with it, and the scheduled workout it belonged to goes back to planned or missed.
+   * Also how a skip is undone and an unfinished workout is discarded.
+   */
+  deleteSession(sessionId: ID): Promise<void>;
   /** Replaces a plan workout's blocks; affects future workouts only, since sessions keep their own copy. */
   updatePlanWorkout(planId: ID, workoutId: ID, blocks: PlannedBlock[]): Promise<void>;
   /**

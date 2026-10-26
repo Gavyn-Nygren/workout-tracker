@@ -196,6 +196,27 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
         }
       }),
 
+    deleteSession: (sessionId) =>
+      write(() => {
+        const session = readOneSync<WorkoutSession>(db, 'sessions', sessionId);
+        if (!session) return;
+        tombstone(db, 'sessions', sessionId);
+        for (const { id } of db.getAllSync<{ id: string }>('SELECT id FROM logged_sets WHERE session_id = ? AND deleted_at IS NULL', [sessionId])) {
+          tombstone(db, 'logged_sets', id);
+        }
+        for (const table of ['form_reports', 'recordings'] as const) {
+          for (const { id } of db.getAllSync<{ id: string }>(`SELECT id FROM ${table} WHERE session_id = ? AND deleted_at IS NULL`, [sessionId])) {
+            tombstone(db, table, id);
+          }
+        }
+        // The scheduled workout is free again: planned if it's still ahead, missed if its day has passed.
+        const occ = session.occurrenceId ? readOneSync<ScheduledOccurrence>(db, 'occurrences', session.occurrenceId) : undefined;
+        if (occ?.sessionId === sessionId) {
+          const freed: ScheduledOccurrence = { ...occ, sessionId: undefined };
+          putRow(db, 'occurrences', occ.id, freed, occurrenceColumns(freed));
+        }
+      }),
+
     updatePlanWorkout: (planId, workoutId, blocks) =>
       write(() => {
         const plan = readOneSync<Plan>(db, 'plans', planId);

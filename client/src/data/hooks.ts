@@ -24,7 +24,20 @@ export function useSaveSession() {
     meta: { errorMessage: "Couldn't save your workout. It's still open, so nothing is lost. Try again." },
     mutationFn: (session: WorkoutSession) => repo.saveSession(session),
     onSuccess: () =>
-      Promise.all(['sessions', 'occurrences', 'personalRecords', 'streak'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+      Promise.all(['sessions', 'occurrences', 'personalRecords', 'streak', 'badges'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+  });
+}
+
+export function useDeleteSession() {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorMessage: "Couldn't delete the workout. Try again." },
+    mutationFn: (sessionId: ID) => repo.deleteSession(sessionId),
+    onSuccess: () =>
+      Promise.all(
+        ['sessions', 'occurrences', 'personalRecords', 'streak', 'badges', 'formReports', 'recordings'].map((key) => client.invalidateQueries({ queryKey: [key] })),
+      ),
   });
 }
 
@@ -124,7 +137,7 @@ export function useDeleteFormReport() {
   return useMutation({
     meta: { errorMessage: "Couldn't delete the report. Try again." },
     mutationFn: (reportId: ID) => repo.deleteFormReport(reportId),
-    onSuccess: () => Promise.all(['formReports', 'recordings', 'sessions'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+    onSuccess: () => Promise.all(['formReports', 'recordings', 'sessions', 'badges'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
   });
 }
 
