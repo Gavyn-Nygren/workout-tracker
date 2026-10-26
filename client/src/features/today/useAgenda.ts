@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 
 import { useRepository } from '@/data/DataProvider';
 import { addDays } from '@/data/dates';
-import { useExercises, useOccurrences, usePersonalRecords, usePlans, usePreferences, useSessions } from '@/data/hooks';
+import { useExercises, useOccurrences, usePersonalRecords, usePlans, usePlanVersions, usePreferences, useSessions } from '@/data/hooks';
 import { buildAgenda, type Agenda } from './agenda';
 
 /** Days of history and future the calendar strip can browse. */
@@ -16,20 +16,21 @@ export function useAgenda() {
   const occurrences = useOccurrences(range);
   const sessions = useSessions();
   const plans = usePlans();
+  const planVersions = usePlanVersions();
   const exercises = useExercises();
   const records = usePersonalRecords();
   const preferences = usePreferences();
 
-  const queries = [occurrences, sessions, plans, exercises, records, preferences];
+  const queries = [occurrences, sessions, plans, planVersions, exercises, records, preferences];
   const isLoading = queries.some((q) => q.isLoading);
   const error = queries.find((q) => q.error)?.error ?? null;
 
   const agenda = useMemo<Agenda>(
     () =>
       occurrences.data && sessions.data && plans.data
-        ? buildAgenda({ occurrences: occurrences.data, sessions: sessions.data, plans: plans.data, today })
+        ? buildAgenda({ occurrences: occurrences.data, sessions: sessions.data, plans: plans.data, planVersions: planVersions.data, today })
         : new Map(),
-    [occurrences.data, sessions.data, plans.data, today],
+    [occurrences.data, sessions.data, plans.data, planVersions.data, today],
   );
   const exercisesById = useMemo(() => new Map((exercises.data ?? []).map((e) => [e.id, e])), [exercises.data]);
 

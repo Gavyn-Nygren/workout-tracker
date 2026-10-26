@@ -184,7 +184,8 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 
 - **Several plans can be active at once.** Their workouts merge on the calendar, which is one way a day ends up with multiple workouts.
 - Templates are **copied** into the user's plans. Later changes to a template never rewrite a user's plan or history.
-- **Editing a plan changes unstarted future workouts only.** Completed history and any workout in progress keep their original prescription.
+- **Editing a plan changes unstarted future workouts only.** Completed history and any workout in progress keep their original prescription. Every saved version of a plan is kept, so a missed workout still opens with the prescription it was scheduled with.
+- Pausing or archiving a plan clears its upcoming workouts; resuming schedules them again from today. Deleting a plan removes every workout of it that wasn't started, missed ones included.
 - Users can start from curated starter templates or build custom plans.
 - Starter templates cover bodybuilding, powerlifting, ATG, CrossFit-style, athletic development, bodyweight, and gym/weighted training. They are **AI-drafted original programs reviewed by the developer**; branded programs are not reproduced.
 

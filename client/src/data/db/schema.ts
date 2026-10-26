@@ -80,6 +80,18 @@ const MIGRATIONS: string[] = [
     op TEXT NOT NULL, at TEXT NOT NULL
   );
   `,
+  // 2: plan versions (G3.3). Each saved version of a plan is kept, so a workout keeps the
+  // prescription it was scheduled with after the plan is edited (spec 2.5).
+  `
+  CREATE TABLE plan_versions (
+    id TEXT PRIMARY KEY NOT NULL, plan_id TEXT NOT NULL, version INTEGER NOT NULL,
+    data TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT
+  );
+  CREATE INDEX plan_versions_by_plan ON plan_versions (plan_id, version);
+  INSERT INTO plan_versions (id, plan_id, version, data, updated_at)
+    SELECT id || '@' || json_extract(data, '$.version'), id, json_extract(data, '$.version'), data, updated_at
+    FROM plans WHERE deleted_at IS NULL;
+  `,
 ];
 
 /** The tables that hold the user's data (everything except bookkeeping). */
@@ -87,6 +99,7 @@ export const USER_TABLES = [
   'preferences',
   'custom_exercises',
   'plans',
+  'plan_versions',
   'occurrences',
   'sessions',
   'logged_sets',
@@ -101,15 +114,16 @@ export const SCHEMA_VERSION = MIGRATIONS.length;
 
 /**
  * Brings the database up to the latest schema. Each migration runs once, in order, inside a
- * transaction; `PRAGMA user_version` records how far the database has got.
+ * transaction; `PRAGMA user_version` records how far the database has got. Tests can stop at an
+ * earlier `target` to check an upgrade.
  */
-export function migrate(db: SqlDb): void {
+export function migrate(db: SqlDb, target = SCHEMA_VERSION): void {
   db.execSync('PRAGMA journal_mode = WAL;');
   const current = db.getFirstSync<{ user_version: number }>('PRAGMA user_version', [])?.user_version ?? 0;
   if (current > SCHEMA_VERSION) {
     throw new Error(`Database schema ${current} is newer than this app (${SCHEMA_VERSION}). Update the app.`);
   }
-  for (let version = current; version < SCHEMA_VERSION; version++) {
+  for (let version = current; version < target; version++) {
     db.withTransactionSync(() => {
       db.execSync(MIGRATIONS[version]);
       db.execSync(`PRAGMA user_version = ${version + 1}`);

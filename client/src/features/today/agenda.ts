@@ -38,9 +38,11 @@ export function buildAgenda(input: {
   occurrences: ScheduledOccurrence[];
   sessions: WorkoutSession[];
   plans: Plan[];
+  /** Saved versions of the plans, so a workout shows the prescription it was scheduled with. */
+  planVersions?: Plan[];
   today: ISODate;
 }): Agenda {
-  const { occurrences, sessions, plans, today } = input;
+  const { occurrences, sessions, plans, planVersions = [], today } = input;
   const agenda: Agenda = new Map();
   const add = (item: DayItem) => {
     const list = agenda.get(item.date);
@@ -48,13 +50,22 @@ export function buildAgenda(input: {
     else agenda.set(item.date, [item]);
   };
   const plansById = new Map(plans.map((p) => [p.id, p]));
+  const versions = new Map(planVersions.map((p) => [`${p.id}@${p.version}`, p]));
+  /** The plan as it was when this workout was scheduled; editing a plan only changes unstarted future workouts. */
+  const planFor = (occurrence: ScheduledOccurrence) => {
+    const current = plansById.get(occurrence.planId);
+    if (!current || current.version === occurrence.planVersion) return current;
+    return versions.get(`${occurrence.planId}@${occurrence.planVersion}`) ?? current;
+  };
   const sessionsById = new Map(sessions.map((s) => [s.id, s]));
   const occurrencesById = new Map(occurrences.map((o) => [o.id, o]));
 
   for (const occurrence of occurrences) {
-    const plan = plansById.get(occurrence.planId);
-    const workout = plan?.workouts.find((w) => w.id === occurrence.planWorkoutId);
     const session = occurrence.sessionId ? sessionsById.get(occurrence.sessionId) : undefined;
+    // A deleted plan's workouts that were never started aren't history; they go with the plan.
+    if (!plansById.has(occurrence.planId) && !session) continue;
+    const plan = planFor(occurrence);
+    const workout = plan?.workouts.find((w) => w.id === occurrence.planWorkoutId);
     add({
       key: occurrence.id,
       date: occurrence.scheduledDate,

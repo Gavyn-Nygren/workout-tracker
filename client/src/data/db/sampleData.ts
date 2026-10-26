@@ -28,7 +28,10 @@ export function loadSampleData(db: SqlDb, today: ISODate): void {
   eraseAllData(db);
   db.withTransactionSync(() => {
     for (const e of data.exercises) if (e.source === 'custom') putRow(db, 'custom_exercises', e.id, e);
-    for (const p of data.plans) putRow(db, 'plans', p.id, p, { status: p.status });
+    for (const p of data.plans) {
+      putRow(db, 'plans', p.id, p, { status: p.status });
+      putRow(db, 'plan_versions', `${p.id}@${p.version}`, p, { plan_id: p.id, version: p.version });
+    }
     for (const o of data.occurrences) putRow(db, 'occurrences', o.id, o, { plan_id: o.planId, scheduled_date: o.scheduledDate, session_id: o.sessionId ?? null });
     for (const s of data.sessions) {
       const { header, sets } = splitSession(s);

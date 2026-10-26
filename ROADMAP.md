@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G3.3 (plans engine).
+**Current goal:** G3.4 (workout session lifecycle).
 
 ## How we work
 
@@ -256,10 +256,10 @@ Everything works on one phone, offline, with no server.
 
 ### G3.3 Plans engine
 
-- [ ] All three plan types generate calendar occurrences.
-- [ ] Multiple active plans.
-- [ ] Plan versioning, with edits applying to future workouts only.
-- [ ] Templates are copied into plans.
+- [x] All three plan types generate calendar occurrences. *Weekly by weekday, fixed-length by program week (ending after the last week), rotating by day whatever the weekday. Paused and archived plans schedule nothing.*
+- [x] Multiple active plans. *Their workouts merge on Today's calendar.*
+- [x] Plan versioning, with edits applying to future workouts only. *Every saved version is kept: missed workouts keep their original prescription, started ones keep their own copy, and unstarted future ones are rebuilt.*
+- [x] Templates are copied into plans. *A deep copy with fresh ids, so template changes never reach a plan.*
 
 ### G3.4 Workout session lifecycle
 

@@ -161,7 +161,8 @@ export function planFromTemplate(template: StarterTemplate, startDate: ISODate):
     workouts: template.workouts.map((w) => ({
       ...w,
       id: mapId(w.id),
-      blocks: w.blocks.map((b) => ({ ...b, id: newId('pb'), exercises: b.exercises.map((e) => ({ ...e, id: newId('pe'), sets: e.sets.map((s) => ({ ...s, modifiers: [...s.modifiers] })) })) })),
+      // A deep copy: the plan shares nothing with the template, so template updates never reach it.
+      blocks: (JSON.parse(JSON.stringify(w.blocks)) as PlannedBlock[]).map((b) => ({ ...b, id: newId('pb'), exercises: b.exercises.map((e) => ({ ...e, id: newId('pe') })) })),
     })),
     createdAt: now,
     updatedAt: now,

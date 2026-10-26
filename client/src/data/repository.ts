@@ -31,6 +31,11 @@ export interface DataRepository {
   getExercise(id: ID): Promise<Exercise | undefined>;
   listPlans(): Promise<Plan[]>;
   getPlan(id: ID): Promise<Plan | undefined>;
+  /**
+   * Every saved version of every plan. A scheduled workout uses the version it was scheduled with,
+   * so editing a plan never changes a past (missed) workout's prescription (spec 2.5).
+   */
+  listPlanVersions(): Promise<Plan[]>;
   listTemplates(): Promise<StarterTemplate[]>;
   listOccurrences(range: DateRange): Promise<ScheduledOccurrence[]>;
   /** Sessions whose completed (or scheduled, if never completed) date falls in the range. */
@@ -55,7 +60,7 @@ export interface DataRepository {
    * future workouts only). Past occurrences and anything already started are left alone.
    */
   savePlan(plan: Plan): Promise<void>;
-  /** Deletes a plan and its unstarted future occurrences. Logged history stays. */
+  /** Deletes a plan and every workout of it that wasn't started. Logged history stays. */
   deletePlan(planId: ID): Promise<void>;
   /** Creates or updates a custom exercise. */
   saveExercise(exercise: Exercise): Promise<void>;

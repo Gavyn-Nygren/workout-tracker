@@ -113,6 +113,25 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
   const unstartedFuture = (planId: ID) =>
     db.getAllSync<{ id: string }>('SELECT id FROM occurrences WHERE plan_id = ? AND scheduled_date >= ? AND session_id IS NULL AND deleted_at IS NULL', [planId, today()]);
 
+  /**
+   * Every plan change goes through here: the new version is stored (and kept, so workouts
+   * scheduled under older versions still show their original prescription), then the plan's
+   * future workouts that haven't started are rebuilt from it (spec 2.5).
+   */
+  const commitPlan = (plan: Plan) => {
+    putRow(db, 'plans', plan.id, plan, { status: plan.status });
+    insertRowIfMissing(db, 'plan_versions', `${plan.id}@${plan.version}`, plan, { plan_id: plan.id, version: plan.version });
+    const day = today();
+    const upcoming = scheduleOccurrences(plan, day, addDays(day, SCHEDULE_AHEAD_DAYS));
+    const wanted = new Set(upcoming.map((o) => o.id));
+    for (const { id } of unstartedFuture(plan.id)) if (!wanted.has(id)) tombstone(db, 'occurrences', id);
+    for (const occ of upcoming) {
+      const current = readOneSync<ScheduledOccurrence>(db, 'occurrences', occ.id);
+      if (current?.sessionId) continue;
+      putRow(db, 'occurrences', occ.id, occ, occurrenceColumns(occ));
+    }
+  };
+
   ensureSchedule();
 
   return {
@@ -133,6 +152,7 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
     getExercise: async (id) => builtinById.get(id) ?? (await readOne<Exercise>(db, 'custom_exercises', id)),
     listPlans: () => readAll<Plan>(db, 'plans'),
     getPlan: (id) => readOne<Plan>(db, 'plans', id),
+    listPlanVersions: () => readAll<Plan>(db, 'plan_versions', undefined, [], 'plan_id, version'),
     listTemplates: async () => starterTemplates,
     listOccurrences: (range: DateRange) => {
       ensureSchedule();
@@ -180,31 +200,21 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
       write(() => {
         const plan = readOneSync<Plan>(db, 'plans', planId);
         if (!plan) throw new Error(`Plan ${planId} not found`);
-        const updated: Plan = { ...plan, version: plan.version + 1, updatedAt: nowISO(), workouts: plan.workouts.map((w) => (w.id === workoutId ? { ...w, blocks } : w)) };
-        putRow(db, 'plans', plan.id, updated, { status: updated.status });
+        commitPlan({ ...plan, version: plan.version + 1, updatedAt: nowISO(), workouts: plan.workouts.map((w) => (w.id === workoutId ? { ...w, blocks } : w)) });
       }),
 
     savePlan: (plan) =>
       write(() => {
         const existing = readOneSync<Plan>(db, 'plans', plan.id);
-        const saved: Plan = { ...plan, version: existing ? existing.version + 1 : plan.version, updatedAt: nowISO() };
-        putRow(db, 'plans', saved.id, saved, { status: saved.status });
-        // Edits change only future workouts that haven't started (spec 2.5).
-        const day = today();
-        const upcoming = scheduleOccurrences(saved, day, addDays(day, SCHEDULE_AHEAD_DAYS));
-        const wanted = new Set(upcoming.map((o) => o.id));
-        for (const { id } of unstartedFuture(saved.id)) if (!wanted.has(id)) tombstone(db, 'occurrences', id);
-        for (const occ of upcoming) {
-          const current = readOneSync<ScheduledOccurrence>(db, 'occurrences', occ.id);
-          if (current?.sessionId) continue;
-          putRow(db, 'occurrences', occ.id, occ, occurrenceColumns(occ));
-        }
+        commitPlan({ ...plan, version: existing ? existing.version + 1 : plan.version, updatedAt: nowISO() });
       }),
 
     deletePlan: (planId) =>
       write(() => {
         tombstone(db, 'plans', planId);
-        for (const { id } of unstartedFuture(planId)) tombstone(db, 'occurrences', id);
+        // Workouts that were never started go, past (missed) ones included; logged history stays.
+        const unstarted = db.getAllSync<{ id: string }>('SELECT id FROM occurrences WHERE plan_id = ? AND session_id IS NULL AND deleted_at IS NULL', [planId]);
+        for (const { id } of unstarted) tombstone(db, 'occurrences', id);
       }),
 
     saveExercise: (exercise) =>

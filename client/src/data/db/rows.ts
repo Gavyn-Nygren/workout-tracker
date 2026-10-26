@@ -7,6 +7,7 @@ const ENTITY: Record<UserTable, string> = {
   preferences: 'preferences',
   custom_exercises: 'exercise',
   plans: 'plan',
+  plan_versions: 'plan_version',
   occurrences: 'occurrence',
   sessions: 'session',
   logged_sets: 'logged_set',

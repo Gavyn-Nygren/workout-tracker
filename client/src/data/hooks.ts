@@ -34,7 +34,7 @@ export function useUpdatePlanWorkout() {
   return useMutation({
     meta: { errorMessage: "Couldn't update your plan. Try again." },
     mutationFn: (input: { planId: ID; workoutId: ID; blocks: PlannedBlock[] }) => repo.updatePlanWorkout(input.planId, input.workoutId, input.blocks),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['plans'] }),
+    onSuccess: () => Promise.all(['plans', 'planVersions', 'occurrences'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
   });
 }
 
@@ -44,7 +44,7 @@ export function useSavePlan() {
   return useMutation({
     meta: { errorMessage: "Couldn't save your plan. Try again." },
     mutationFn: (plan: Plan) => repo.savePlan(plan),
-    onSuccess: () => Promise.all(['plans', 'occurrences'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+    onSuccess: () => Promise.all(['plans', 'planVersions', 'occurrences'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
   });
 }
 
@@ -54,7 +54,7 @@ export function useDeletePlan() {
   return useMutation({
     meta: { errorMessage: "Couldn't delete the plan. Try again." },
     mutationFn: (planId: ID) => repo.deletePlan(planId),
-    onSuccess: () => Promise.all(['plans', 'occurrences'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+    onSuccess: () => Promise.all(['plans', 'planVersions', 'occurrences'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
   });
 }
 
@@ -183,6 +183,11 @@ export function usePlan(id: ID) {
     // Start from the cached list when it has the item, so the screen opens without a loading flash.
     initialData: () => client.getQueryData<Plan[]>(['plans'])?.find((x) => x.id === id),
   });
+}
+
+export function usePlanVersions() {
+  const repo = useRepository();
+  return useQuery({ queryKey: ['planVersions'], queryFn: () => repo.listPlanVersions() });
 }
 
 export function useTemplates() {
