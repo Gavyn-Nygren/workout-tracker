@@ -2,7 +2,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { ActionSheetIOS, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Card, EmptyState, ErrorState, Icon, NotFoundState, ScreenSkeleton, SectionHeader, useToast } from '@/components/ui';
-import { useRepository } from '@/data/DataProvider';
+import { useToday } from '@/data/DataProvider';
 import { succeeded, useExercises, useSavePlan, useTemplates } from '@/data/hooks';
 import { formatShortDate } from '@/lib/format';
 import { CATEGORY_LABEL, describeSchedule, exerciseName, PLAN_TYPE_LABEL, prescriptionSummary, spokenPrescription, workoutDays } from '@/features/plans/describe';
@@ -20,7 +20,7 @@ export default function TemplateScreen() {
   const { colors, scheme } = useAppTheme();
   const { large } = useTextScale();
   const toast = useToast();
-  const today = useRepository().today();
+  const today = useToday();
   const templatesQuery = useTemplates();
   const exercisesQuery = useExercises();
   const savePlan = useSavePlan();

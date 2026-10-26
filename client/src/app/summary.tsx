@@ -18,8 +18,10 @@ import { spacing } from '@/theme/tokens';
 import { readable } from '@/theme/layout';
 
 /**
- * Workout summary (roadmap G2.3). Opened right after Finish (`fresh=1`: celebrate PRs and offer to
- * save changes to the plan) or from Today's "View summary" for any past workout.
+ * Workout summary (roadmap G2.3). Opened right after Finish, from Today's "View summary", or from
+ * history. After finishing a new workout (`fresh=1`) it celebrates PRs and offers to save changes
+ * to the plan. After finishing a reopened one (`reopened=1`) it celebrates only if the edits set new
+ * records (`newRecords` = how many, G3.6) and never offers plan changes.
  */
 export default function SummaryScreen() {
   const { colors, scheme } = useAppTheme();
@@ -28,8 +30,11 @@ export default function SummaryScreen() {
   const active = useActiveWorkout();
   const deleteSession = useDeleteSession();
   const haptics = useHaptics();
-  const { session: sessionId, fresh } = useLocalSearchParams<{ session: string; fresh?: string }>();
-  const justFinished = fresh === '1';
+  const params = useLocalSearchParams<{ session: string; fresh?: string; reopened?: string; newRecords?: string }>();
+  const sessionId = params.session;
+  const reopened = params.reopened === '1';
+  const fresh = params.fresh === '1' && !reopened;
+  const justFinished = fresh || reopened;
 
   const sessions = useSessions();
   const exercises = useExercises();
@@ -46,30 +51,32 @@ export default function SummaryScreen() {
     () => (session && sessions.data ? buildSummary(session, sessions.data, exercisesById) : undefined),
     [session, sessions.data, exercisesById],
   );
-  // Only offer plan updates right after finishing, before the plan has changed underneath it.
+  // Only offer plan updates right after finishing a new workout, before the plan has changed underneath it.
   const diff = useMemo(
-    () => (justFinished && session && workout ? diffAgainstPlan(session, workout, exercisesById) : undefined),
+    () => (fresh && session && workout ? diffAgainstPlan(session, workout, exercisesById) : undefined),
     // The plan changes once the user accepts; keep the original comparison.
-    [justFinished, session, exercisesById, workout?.id],
+    [fresh, session, exercisesById, workout?.id],
   );
 
-  const celebrate = justFinished && preferences.celebrations && (summary?.records.length ?? 0) > 0;
+  // A reopened workout already celebrated its records the first time, so only new ones count.
+  const newRecordCount = reopened ? Number(params.newRecords ?? 0) || 0 : (fresh ? (summary?.records.length ?? 0) : 0);
+  const newRecords = newRecordCount > 0;
+  const celebrate = newRecords && preferences.celebrations;
   useEffect(() => {
     if (celebrate) haptics.success();
   }, [celebrate, haptics]);
 
-  // Confetti and haptics are silent to VoiceOver, so say the result once after a fresh finish.
+  // Confetti and haptics are silent to VoiceOver, so say the result once after finishing.
   // Queued, so it follows the screen's first reading instead of cutting it off.
   const announced = useRef(false);
   useEffect(() => {
     if (!justFinished || !summary || !session || announced.current) return;
     announced.current = true;
-    const records = summary.records.length;
-    AccessibilityInfo.announceForAccessibilityWithOptions(
-      `${session.completion === 'partial' ? 'Partial workout saved.' : 'Workout complete.'}${records ? ` ${plural(records, 'new personal record')}.` : ''}`,
-      { queue: true },
-    );
-  }, [justFinished, summary, session]);
+    const saved = reopened ? 'Changes saved.' : session.completion === 'partial' ? 'Partial workout saved.' : 'Workout complete.';
+    // After a reopen, only the records the edits added are new.
+    const records = newRecords ? ` ${plural(newRecordCount, 'new personal record')}.` : '';
+    AccessibilityInfo.announceForAccessibilityWithOptions(`${saved}${records}`, { queue: true });
+  }, [justFinished, reopened, newRecords, newRecordCount, summary, session]);
 
   const failed = [sessions, exercises].filter((q) => q.error);
   if (failed.length) return <ErrorState fill title="Couldn't load this workout" onRetry={() => failed.forEach((q) => q.refetch())} />;

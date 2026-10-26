@@ -6,7 +6,7 @@ import { AppText, Button, Card, Icon, PRBadge, SectionHeader } from '@/component
 import { succeeded } from '@/data/hooks';
 import type { PersonalRecord, PRType, UnitSystem } from '@/data/types';
 import { spokenDuration } from '@/hooks/useNow';
-import { formatDuration, formatLoad, formatLoadValue, formatShortDate, formatSigned, formatSignedLoad, plural } from '@/lib/format';
+import { formatAddedLoad, formatDuration, formatLoad, formatShortDate, formatSigned, formatSignedLoad, plural, spokenAddedLoad, spokenLoad } from '@/lib/format';
 import { useTextScale } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -22,47 +22,66 @@ const PR_LABEL: Record<PRType, string> = {
 const PR_SPOKEN: Record<PRType, string> = { ...PR_LABEL, e1rm: 'Estimated one-rep max' };
 
 // VoiceOver versions of the numbers below: "1,240 pounds", "up 2 sets", "no change".
-const spokenLoad = (kg: number, units: UnitSystem) => `${formatLoadValue(kg, units)} ${units === 'imperial' ? 'pounds' : 'kilograms'}`;
 function spokenChange(amount: number, unit: (n: number) => string): string {
   if (Math.abs(amount) < 0.01) return 'no change';
   return `${amount > 0 ? 'up' : 'down'} ${unit(Math.abs(amount))}`;
 }
 
+/**
+ * A record's load. Bodyweight lifts' heaviest weight and reps-at-weight records hold what was
+ * added to bodyweight ("+20 lb", "−20 lb" for assistance), not the total.
+ */
+const recordLoad = (record: PersonalRecord, kg: number, units: UnitSystem, bodyweight?: string) =>
+  record.addedLoad ? formatAddedLoad(kg, units, bodyweight) : formatLoad(kg, units);
+const spokenRecordLoad = (record: PersonalRecord, kg: number, units: UnitSystem) => (record.addedLoad ? spokenAddedLoad(kg, units) : spokenLoad(kg, units));
+
 function spokenRecord(record: PersonalRecord, units: UnitSystem): string {
   const previous = record.previousValue;
   switch (record.type) {
     case 'reps_at_weight':
-      return `${plural(record.value, 'rep')} at ${spokenLoad(record.atLoadKg ?? 0, units)}${previous !== undefined ? `, was ${plural(previous, 'rep')}` : ''}`;
+      return `${plural(record.value, 'rep')} at ${spokenRecordLoad(record, record.atLoadKg ?? 0, units)}${previous !== undefined ? `, was ${plural(previous, 'rep')}` : ''}`;
     case 'longest_hold':
       return `${spokenDuration(record.value)}${previous !== undefined ? `, was ${spokenDuration(previous)}` : ''}`;
     default:
-      return `${spokenLoad(record.value, units)}${previous !== undefined ? `, was ${spokenLoad(previous, units)}` : ''}`;
+      return `${spokenRecordLoad(record, record.value, units)}${previous !== undefined ? `, was ${spokenRecordLoad(record, previous, units)}` : ''}`;
   }
 }
 
 function spokenBest(best: BestSet | undefined, units: UnitSystem): string {
   if (!best) return 'no sets logged';
   if (best.kind === 'hold') return `best hold ${spokenDuration(best.seconds)}`;
-  if (best.kind === 'bodyweight') return best.addedKg > 0 ? `best bodyweight plus ${spokenLoad(best.addedKg, units)} for ${plural(best.reps, 'rep')}` : `best ${plural(best.reps, 'rep')}`;
+  if (best.kind === 'bodyweight') return `best ${spokenAddedLoad(best.addedKg, units)} for ${plural(best.reps, 'rep')}`;
   return `best ${spokenLoad(best.loadKg, units)} for ${plural(best.reps, 'rep')}`;
 }
 
 function formatRecord(record: PersonalRecord, units: UnitSystem): { value: string; was?: string } {
   switch (record.type) {
     case 'reps_at_weight':
-      return { value: `${record.value} reps at ${formatLoad(record.atLoadKg ?? 0, units)}`, was: record.previousValue !== undefined ? `${record.previousValue} reps` : undefined };
+      return {
+        value: `${record.value} reps at ${recordLoad(record, record.atLoadKg ?? 0, units, 'bodyweight')}`,
+        was: record.previousValue !== undefined ? `${record.previousValue} reps` : undefined,
+      };
     case 'longest_hold':
       return { value: `${record.value} s`, was: record.previousValue !== undefined ? `${record.previousValue} s` : undefined };
     default:
-      return { value: formatLoad(record.value, units), was: record.previousValue !== undefined ? formatLoad(record.previousValue, units) : undefined };
+      return { value: recordLoad(record, record.value, units), was: record.previousValue !== undefined ? recordLoad(record, record.previousValue, units) : undefined };
   }
 }
 
 export function formatBest(best: BestSet | undefined, units: UnitSystem): string {
   if (!best) return 'No sets logged';
   if (best.kind === 'hold') return `best ${best.seconds} s`;
-  if (best.kind === 'bodyweight') return best.addedKg > 0 ? `best +${formatLoad(best.addedKg, units)} × ${best.reps}` : `best ${best.reps} reps`;
+  if (best.kind === 'bodyweight') return `best ${formatAddedLoad(best.addedKg, units, 'bodyweight')} × ${best.reps}`;
   return `best ${formatLoad(best.loadKg, units)} × ${best.reps}`;
+}
+
+/** An exercise's line on the summary: "3 of 4 sets · best 225 lb × 5", or "Skipped after 2 sets · …". */
+function exerciseLine(e: ExerciseSummary, units: UnitSystem): { text: string; spoken: string } {
+  if (e.skipped && !e.setsDone) return { text: 'Skipped', spoken: 'skipped' };
+  const sets = e.skipped ? `Skipped after ${plural(e.setsDone, 'set')}` : `${e.setsDone} of ${plural(e.setsTotal, 'set')}`;
+  // Sets done without a best (partial reps only) show just the count.
+  if (!e.best && e.setsDone) return { text: sets, spoken: sets.toLowerCase() };
+  return { text: `${sets} · ${formatBest(e.best, units)}`, spoken: `${sets.toLowerCase()}, ${spokenBest(e.best, units)}` };
 }
 
 /** Up is good news (green); down is shown neutrally, never red (user's pick). `neutral` greys out both. */
@@ -218,6 +237,7 @@ export function ExercisesCard({ summary, units }: { summary: WorkoutSummary; uni
       <Card padding="none">
         {summary.exercises.map((e, i) => {
           const delta = formatExerciseDelta(e, units);
+          const line = exerciseLine(e, units);
           const pr = e.prTypes.length > 0;
           const spokenDelta =
             delta && e.delta ? `, ${spokenChange(e.delta.amount, (n) => (e.delta!.kind === 'hold' ? spokenDuration(n) : spokenLoad(n, units)))} since last time` : '';
@@ -231,7 +251,7 @@ export function ExercisesCard({ summary, units }: { summary: WorkoutSummary; uni
             <View
               key={e.entryId}
               accessible
-              accessibilityLabel={`${e.name}, ${e.skipped ? 'skipped' : `${e.setsDone} of ${plural(e.setsTotal, 'set')}, ${spokenBest(e.best, units)}`}${pr ? ', personal record' : ''}${spokenDelta}`}
+              accessibilityLabel={`${e.name}, ${line.spoken}${pr ? ', personal record' : ''}${spokenDelta}`}
               style={[styles.row, i < summary.exercises.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
             >
               <View style={styles.flex}>
@@ -239,7 +259,7 @@ export function ExercisesCard({ summary, units }: { summary: WorkoutSummary; uni
                   {e.name}
                 </AppText>
                 <AppText variant="footnote" tone="secondary" numeric>
-                  {e.skipped ? 'Skipped' : `${e.setsDone} of ${plural(e.setsTotal, 'set')} · ${formatBest(e.best, units)}`}
+                  {line.text}
                 </AppText>
                 {/* Large text: the PR star and change move under the name so it keeps the width. */}
                 {large && marks && <View style={styles.marksLine}>{marks}</View>}

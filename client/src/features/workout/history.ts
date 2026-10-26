@@ -1,5 +1,24 @@
-import { countsForPRs, effectiveLoadKg, setE1RM } from '@/data/calculations';
-import type { Exercise, LoggedSet, SessionExercise, WorkoutSession } from '@/data/types';
+import { isWorkingSet } from '@/data/calculations';
+import { derivePersonalRecords, newRecords } from '@/data/records';
+import type { BodyweightEntry, Exercise, LoggedSet, PersonalRecord, SessionExercise, WorkoutSession } from '@/data/types';
+import type { ActiveWorkout } from './workoutReducer';
+
+/**
+ * The bodyweight saved with a set as it's completed (spec 2.6): the latest weigh-in. In a reopened
+ * workout, a set logged the first time keeps what it was logged with, even none (never back-filled),
+ * and a set first done now uses the weigh-in from the workout's day or before, so an old workout
+ * never takes today's weight. `weighIns` must be sorted by date.
+ */
+export function bodyweightForSet(active: ActiveWorkout, original: WorkoutSession | undefined, setId: string, weighIns: BodyweightEntry[]): number | undefined {
+  if (active.mode !== 'reopen') return weighIns[weighIns.length - 1]?.weightKg;
+  const exerciseOf = (session: WorkoutSession | undefined) => session?.blocks.flatMap((b) => b.exercises).find((e) => e.sets.some((s) => s.id === setId));
+  const before = exerciseOf(original);
+  // Logged the first time as this same exercise (a swap keeps set ids but not what they were).
+  const loggedBefore = before?.exerciseId === exerciseOf(active.session)?.exerciseId && before?.sets.some((s) => s.id === setId && s.completedAt);
+  if (loggedBefore) return undefined;
+  const day = active.session.completedDate;
+  return day ? weighIns.filter((w) => w.date <= day).at(-1)?.weightKg : undefined;
+}
 
 /** Completed sessions, newest first. */
 export function completedNewestFirst(sessions: WorkoutSession[], excludeSessionId?: string): WorkoutSession[] {
@@ -8,12 +27,15 @@ export function completedNewestFirst(sessions: WorkoutSession[], excludeSessionI
     .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
 }
 
-/** The exercise's entry from the most recent session where it was actually logged. */
+/**
+ * The exercise's entry from the most recent session where a working set of it was done, even if
+ * it was skipped partway. Warm-ups alone don't count as doing it.
+ */
 export function lastEntryFor(exerciseId: string, newestFirst: WorkoutSession[]): SessionExercise | undefined {
   for (const session of newestFirst) {
     for (const block of session.blocks) {
       for (const entry of block.exercises) {
-        if (entry.exerciseId === exerciseId && !entry.skipped && entry.sets.some((s) => s.completedAt)) return entry;
+        if (entry.exerciseId === exerciseId && entry.sets.some((s) => s.completedAt && isWorkingSet(s))) return entry;
       }
     }
   }
@@ -33,36 +55,26 @@ export function previousSets(entry: SessionExercise, last: SessionExercise | und
   return entry.sets.map((set) => (set.kind === 'warmup' ? lastWarmups[warmupIndex++] : lastWorking[workingIndex++]));
 }
 
-export type Best = { heaviestKg: number; e1rmKg: number };
+/** Same exercise, type, and (for reps at a weight) load, in the 0.05 kg steps records use. */
+const sameRecordKey = (a: PersonalRecord, b: PersonalRecord) =>
+  a.exerciseId === b.exerciseId && a.type === b.type && Math.round((a.atLoadKg ?? 0) * 20) === Math.round((b.atLoadKg ?? 0) * 20);
 
-/** Best heaviest weight and e1RM per exercise from history, for spotting PRs as sets are completed. */
-export function computeBests(newestFirst: WorkoutSession[], exercisesById: Map<string, Exercise>): Map<string, Best> {
-  const bests = new Map<string, Best>();
-  for (const session of newestFirst) {
-    for (const block of session.blocks) {
-      for (const entry of block.exercises) {
-        const exercise = exercisesById.get(entry.exerciseId);
-        if (!exercise) continue;
-        for (const set of entry.sets) {
-          if (!countsForPRs(set) || !set.reps) continue;
-          const load = effectiveLoadKg(set, exercise);
-          const e1rm = setE1RM(set, exercise);
-          const best = bests.get(exercise.id) ?? { heaviestKg: 0, e1rmKg: 0 };
-          bests.set(exercise.id, {
-            heaviestKg: Math.max(best.heaviestKg, load ?? 0),
-            e1rmKg: Math.max(best.e1rmKg, e1rm ?? 0),
-          });
-        }
-      }
-    }
-  }
-  return bests;
-}
-
-/** Whether a just-completed set beats the exercise's previous best weight or e1RM. */
-export function isNewRecord(set: LoggedSet, exercise: Exercise, best: Best | undefined): boolean {
-  if (!best || !countsForPRs(set) || !set.reps) return false;
-  const load = effectiveLoadKg(set, exercise) ?? 0;
-  const e1rm = setE1RM(set, exercise) ?? 0;
-  return load > best.heaviestKg + 1e-6 || e1rm > best.e1rmKg + 1e-6;
+/**
+ * Records a reopened workout holds that it didn't hold before it was reopened, so finishing it
+ * celebrates only what the edits added (G3.6). `original` is the version from before the reopen
+ * and `finished` the one being saved; every other session is taken from `sessions` as it is.
+ * Only this workout's own records count, and a record an edit lowered (still a record, but less
+ * than before) isn't new, so correcting a typo downward never celebrates.
+ */
+export function recordsAddedByReopen(
+  sessions: WorkoutSession[],
+  original: WorkoutSession | undefined,
+  finished: WorkoutSession,
+  exercisesById: Map<string, Exercise>,
+): PersonalRecord[] {
+  const others = sessions.filter((s) => s.id !== finished.id);
+  const ownRecords = (version: WorkoutSession | undefined) =>
+    derivePersonalRecords(version ? [...others, version] : others, exercisesById).filter((r) => r.sessionId === finished.id);
+  const before = ownRecords(original);
+  return newRecords(before, ownRecords(finished)).filter((r) => !before.some((b) => sameRecordKey(b, r) && b.value >= r.value));
 }

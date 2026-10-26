@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useRepository } from './DataProvider';
+import { invalidateAfter } from './invalidation';
 import type { DateRange } from './repository';
 import type { BodyweightEntry, Exercise, Goal, ID, Plan, PlannedBlock, Preferences, WorkoutSession } from './types';
 
-// Writes. Each one refreshes the reads it affects. A failed write shows its `meta.errorMessage` as an
-// error toast (see SaveErrorToasts), so call sites only decide whether to carry on.
+// Writes. Each one refreshes the reads it affects, as listed in invalidation.ts. A failed write shows
+// its `meta.errorMessage` as an error toast (see SaveErrorToasts), so call sites only decide whether
+// to carry on.
 
 /** Awaits a write and reports whether it worked. The error toast is already handled. */
 export async function succeeded(write: Promise<unknown>): Promise<boolean> {
@@ -23,8 +25,7 @@ export function useSaveSession() {
   return useMutation({
     meta: { errorMessage: "Couldn't save your workout. It's still open, so nothing is lost. Try again." },
     mutationFn: (session: WorkoutSession) => repo.saveSession(session),
-    onSuccess: () =>
-      Promise.all(['sessions', 'occurrences', 'personalRecords', 'streak', 'badges'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+    onSuccess: () => invalidateAfter(client, 'saveSession'),
   });
 }
 
@@ -34,10 +35,7 @@ export function useDeleteSession() {
   return useMutation({
     meta: { errorMessage: "Couldn't delete the workout. Try again." },
     mutationFn: (sessionId: ID) => repo.deleteSession(sessionId),
-    onSuccess: () =>
-      Promise.all(
-        ['sessions', 'occurrences', 'personalRecords', 'streak', 'badges', 'formReports', 'recordings'].map((key) => client.invalidateQueries({ queryKey: [key] })),
-      ),
+    onSuccess: () => invalidateAfter(client, 'deleteSession'),
   });
 }
 
@@ -47,7 +45,7 @@ export function useUpdatePlanWorkout() {
   return useMutation({
     meta: { errorMessage: "Couldn't update your plan. Try again." },
     mutationFn: (input: { planId: ID; workoutId: ID; blocks: PlannedBlock[] }) => repo.updatePlanWorkout(input.planId, input.workoutId, input.blocks),
-    onSuccess: () => Promise.all(['plans', 'planVersions', 'occurrences'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+    onSuccess: () => invalidateAfter(client, 'updatePlanWorkout'),
   });
 }
 
@@ -57,7 +55,7 @@ export function useSavePlan() {
   return useMutation({
     meta: { errorMessage: "Couldn't save your plan. Try again." },
     mutationFn: (plan: Plan) => repo.savePlan(plan),
-    onSuccess: () => Promise.all(['plans', 'planVersions', 'occurrences'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+    onSuccess: () => invalidateAfter(client, 'savePlan'),
   });
 }
 
@@ -67,7 +65,7 @@ export function useDeletePlan() {
   return useMutation({
     meta: { errorMessage: "Couldn't delete the plan. Try again." },
     mutationFn: (planId: ID) => repo.deletePlan(planId),
-    onSuccess: () => Promise.all(['plans', 'planVersions', 'occurrences'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+    onSuccess: () => invalidateAfter(client, 'deletePlan'),
   });
 }
 
@@ -77,7 +75,7 @@ export function useSaveExercise() {
   return useMutation({
     meta: { errorMessage: "Couldn't save the exercise. Try again." },
     mutationFn: (exercise: Exercise) => repo.saveExercise(exercise),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['exercises'] }),
+    onSuccess: () => invalidateAfter(client, 'saveExercise'),
   });
 }
 
@@ -87,7 +85,7 @@ export function useSaveGoal() {
   return useMutation({
     meta: { errorMessage: "Couldn't save your goal. Try again." },
     mutationFn: (goal: Goal) => repo.saveGoal(goal),
-    onSuccess: () => Promise.all(['goals', 'streak'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+    onSuccess: () => invalidateAfter(client, 'saveGoal'),
   });
 }
 
@@ -97,7 +95,7 @@ export function useDeleteGoal() {
   return useMutation({
     meta: { errorMessage: "Couldn't delete the goal. Try again." },
     mutationFn: (goalId: ID) => repo.deleteGoal(goalId),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['goals'] }),
+    onSuccess: () => invalidateAfter(client, 'deleteGoal'),
   });
 }
 
@@ -107,7 +105,7 @@ export function useSaveBodyweight() {
   return useMutation({
     meta: { errorMessage: "Couldn't save your weight. Try again." },
     mutationFn: (entry: BodyweightEntry) => repo.saveBodyweight(entry),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['bodyweight'] }),
+    onSuccess: () => invalidateAfter(client, 'saveBodyweight'),
   });
 }
 
@@ -117,7 +115,7 @@ export function useDeleteBodyweight() {
   return useMutation({
     meta: { errorMessage: "Couldn't delete the weigh-in. Try again." },
     mutationFn: (entryId: ID) => repo.deleteBodyweight(entryId),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['bodyweight'] }),
+    onSuccess: () => invalidateAfter(client, 'deleteBodyweight'),
   });
 }
 
@@ -127,7 +125,7 @@ export function useDeleteRecordingVideo() {
   return useMutation({
     meta: { errorMessage: "Couldn't delete the video. Try again." },
     mutationFn: (recordingId: ID) => repo.deleteRecordingVideo(recordingId),
-    onSuccess: () => Promise.all(['formReports', 'recordings'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+    onSuccess: () => invalidateAfter(client, 'deleteRecordingVideo'),
   });
 }
 
@@ -137,7 +135,7 @@ export function useDeleteFormReport() {
   return useMutation({
     meta: { errorMessage: "Couldn't delete the report. Try again." },
     mutationFn: (reportId: ID) => repo.deleteFormReport(reportId),
-    onSuccess: () => Promise.all(['formReports', 'recordings', 'sessions', 'badges'].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+    onSuccess: () => invalidateAfter(client, 'deleteFormReport'),
   });
 }
 
@@ -155,7 +153,7 @@ export function useSavePreferences() {
       return { previous };
     },
     onError: (_error, _preferences, context) => context?.previous && client.setQueryData(['preferences'], context.previous),
-    onSettled: () => client.invalidateQueries({ queryKey: ['preferences'] }),
+    onSettled: () => invalidateAfter(client, 'savePreferences'),
   });
 }
 

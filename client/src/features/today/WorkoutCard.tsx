@@ -2,14 +2,14 @@ import type { SFSymbol } from 'expo-symbols';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Icon, PRBadge, type TextTone } from '@/components/ui';
-import { countsForPRs, effectiveLoadKg } from '@/data/calculations';
-import type { Exercise, ISODate, PlanWorkout, SessionExercise, UnitSystem } from '@/data/types';
+import type { Exercise, ISODate, UnitSystem } from '@/data/types';
 import { spokenDuration } from '@/hooks/useNow';
-import { formatDuration, formatLoad, formatLoadValue, formatRepTarget, formatShortDate, plural, unitLabel } from '@/lib/format';
+import { formatDuration, formatLoadValue, formatShortDate, plural, unitLabel } from '@/lib/format';
 import { useTextScale } from '@/theme/layout';
 import { SchemeOverride, useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import type { DayItem, DayItemStatus, SessionSummary } from './agenda';
+import { planLines, sessionLines } from './cardLines';
 
 type Props = {
   item: DayItem;
@@ -131,7 +131,7 @@ function CardBody({
       <View style={styles.lines}>
         {lines.slice(0, MAX_LINES).map((line) => (
           // Large text: the detail moves under the name so neither gets squeezed to nothing.
-          <View key={line.key} style={[styles.line, large && styles.lineStacked]} accessible accessibilityLabel={`${line.spokenName}, ${line.detail}`}>
+          <View key={line.key} style={[styles.line, large && styles.lineStacked]} accessible accessibilityLabel={`${line.spokenName}, ${line.spokenDetail ?? line.detail}`}>
             <AppText variant="subhead" weight="600" style={!large && styles.flex} tone={line.muted ? 'secondary' : 'primary'}>
               {line.name}
             </AppText>
@@ -264,56 +264,6 @@ function Stat({ label, value, unit, spoken }: { label: string; value: string; un
       </AppText>
     </View>
   );
-}
-
-type Line = {
-  key: string;
-  name: string;
-  /** "Superset, Bench Press" for the visible "SS · Bench Press". */
-  spokenName: string;
-  detail: string;
-  muted?: boolean;
-};
-
-function planLines(workout: PlanWorkout | undefined, exercisesById: Map<string, Exercise>): Line[] {
-  if (!workout) return [];
-  return workout.blocks.flatMap((block) =>
-    block.exercises.map((pe) => {
-      const working = pe.sets.filter((s) => s.kind !== 'warmup');
-      const first = working[0];
-      const detail = first?.kind === 'timed_hold' ? `${working.length} × ${first.targetDurationSec ?? 0} s` : `${working.length} × ${formatRepTarget(first?.targetReps)}`;
-      const prefix = block.type === 'superset' ? 'SS · ' : block.type === 'circuit' ? 'Circuit · ' : '';
-      const spokenPrefix = block.type === 'superset' ? 'Superset, ' : block.type === 'circuit' ? 'Circuit, ' : '';
-      const name = exercisesById.get(pe.exerciseId)?.name ?? 'Exercise';
-      return { key: pe.id, name: `${prefix}${name}`, spokenName: `${spokenPrefix}${name}`, detail };
-    }),
-  );
-}
-
-function sessionLines(exercises: SessionExercise[], exercisesById: Map<string, Exercise>, units: UnitSystem): Line[] {
-  return exercises.map((se) => {
-    const exercise = exercisesById.get(se.exerciseId);
-    const name = exercise?.name ?? 'Exercise';
-    if (se.skipped || !exercise) return { key: se.id, name, spokenName: name, detail: 'Skipped', muted: true };
-    const working = se.sets.filter((s) => s.kind !== 'warmup');
-    const holds = working.filter((s) => s.kind === 'timed_hold');
-    if (holds.length) return { key: se.id, name, spokenName: name, detail: `${holds.length} × ${Math.max(...holds.map((s) => s.durationSec ?? 0))} s` };
-    const sets = plural(working.length, 'set');
-
-    if (exercise.isBodyweight) {
-      // Show what the lifter added (or how many reps), not bodyweight plus load.
-      const added = Math.max(0, ...working.map((s) => s.addedLoadKg ?? 0));
-      const reps = Math.max(0, ...working.filter((s) => (s.addedLoadKg ?? 0) === added).map((s) => s.reps ?? 0));
-      return { key: se.id, name, spokenName: name, detail: added > 0 ? `${sets} · +${formatLoad(added, units)} × ${reps}` : `${sets} · ${reps} reps` };
-    }
-
-    let top: { load: number; reps: number } | undefined;
-    for (const set of working) {
-      const load = countsForPRs(set) ? effectiveLoadKg(set, exercise) : undefined;
-      if (load !== undefined && set.reps && (!top || load > top.load)) top = { load, reps: set.reps };
-    }
-    return { key: se.id, name, spokenName: name, detail: top ? `${sets} · ${formatLoad(top.load, units)} × ${top.reps}` : sets };
-  });
 }
 
 const styles = StyleSheet.create({

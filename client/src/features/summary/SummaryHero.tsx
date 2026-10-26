@@ -32,7 +32,7 @@ function Body({ session, planName, summary, units, onMenu, outerScheme }: Props 
   const { colors } = useAppTheme();
   const { fontScale } = useTextScale();
   const partial = session.completion === 'partial';
-  const prCount = new Set(summary.records.map((r) => r.setId)).size;
+  const prCount = summary.records.length;
   // Four tiles across at default sizes, two by two from XXL (labels truncate there), one per line at accessibility sizes.
   const layout = fontScale >= 1.5 ? styles.statsStacked : fontScale >= 1.2 ? styles.statsGrid : styles.stats;
   const tile = fontScale >= 1.5 ? styles.statFull : fontScale >= 1.2 ? styles.statHalf : styles.stat;

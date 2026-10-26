@@ -1,6 +1,7 @@
 import type { SFSymbol } from 'expo-symbols';
 
 import { countsForPRs, effectiveLoadKg, setVolumeKg } from '@/data/calculations';
+import { workoutCount } from '@/data/progress';
 import type { BadgeCategory, EarnedBadge, Exercise, FormReport, StreakState, WorkoutSession } from '@/data/types';
 import { lbToKg } from '@/data/units';
 
@@ -49,7 +50,8 @@ function stats(sessions: WorkoutSession[], exercisesById: Map<string, Exercise>,
   }
   const toLb = (kg: number) => kg / lbToKg(1);
   return {
-    workouts: completed.length,
+    // Only workouts with a completed working set count (spec 2.5).
+    workouts: workoutCount(sessions),
     volumeLb: toLb(volumeKg),
     bestLb: new Map([...best].map(([id, kg]) => [id, toLb(kg)])),
     streakWeeks: streak?.currentWeeks ?? 0,

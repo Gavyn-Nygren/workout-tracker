@@ -273,11 +273,29 @@ export type PersonalRecord = {
   value: number;
   /** For reps_at_weight: the load the reps were done at. */
   atLoadKg?: number;
+  /**
+   * Bodyweight lifts: heaviest weight and reps-at-weight compare what was added to bodyweight, so
+   * `value` / `atLoadKg` are added load (negative for assistance), not the total.
+   */
+  addedLoad?: boolean;
   sessionId: ID;
+  /** The set that achieved it; for volume, the exercise's last counted set in the workout. */
   setId: ID;
   achievedDate: ISODate;
-  /** The record this one beat, if any. */
+  /** The best this one beat. Records only exist once there's an earlier best to beat. */
   previousValue?: number;
+};
+
+/**
+ * "Longest weekly streak" (spec 2.7): an account-wide record, one per streak that outlasts the
+ * longest before it. It grows with the streak, dated by the workout that last extended it.
+ */
+export type StreakRecord = {
+  id: ID;
+  weeks: number;
+  previousWeeks: number;
+  achievedDate: ISODate;
+  sessionId: ID;
 };
 
 export type Goal = Timestamps & {
@@ -309,6 +327,10 @@ export type StreakState = {
   /** Workouts that count toward this week's target (partials with at least 1 working set count). */
   thisWeekCompleted: number;
   thisWeekTarget: number;
+  /** milestoneDates[n - 1] is the day a streak first reached n weeks, for streak badges. */
+  milestoneDates: ISODate[];
+  /** Longest-streak records, oldest first. */
+  records: StreakRecord[];
 };
 
 // ---------------------------------------------------------------------------

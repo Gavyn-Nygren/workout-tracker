@@ -1,5 +1,5 @@
 import type { WorkoutSession } from '@/data/types';
-import type { ActiveWorkout } from './workoutReducer';
+import { completionOf, type ActiveWorkout } from './workoutReducer';
 
 /** Rest countdown, kept as wall-clock times so it stays right across app restarts. */
 export type RestTimer = {
@@ -20,7 +20,6 @@ export type ActiveWorkoutMeta = {
   mode: ActiveWorkout['mode'];
   position?: ActiveWorkout['position'];
   rest: RestTimer | null;
-  prSetIds: string[];
   /** For a reopened workout: the finished version, restored if the reopen is discarded. */
   original?: WorkoutSession;
 };
@@ -42,7 +41,9 @@ export function discardPlan(meta: Pick<ActiveWorkoutMeta, 'mode' | 'original'>, 
 
 /**
  * Which unfinished workout to resume when the app opens: the one the phone remembers, or, if that
- * note was lost, the most recently started session still in progress.
+ * note was lost, the most recently started session still in progress. Without the note, a session
+ * that already has a completion time was a reopened workout: it resumes as a reopen, with itself
+ * marked finished as the restore point, so Finish keeps its date and Discard doesn't delete it.
  */
 export function sessionToResume(meta: ActiveWorkoutMeta | null, sessions: WorkoutSession[]): { session: WorkoutSession; meta: ActiveWorkoutMeta } | null {
   const inProgress = sessions.filter((s) => s.status === 'in_progress');
@@ -51,5 +52,16 @@ export function sessionToResume(meta: ActiveWorkoutMeta | null, sessions: Workou
     if (remembered) return { session: remembered, meta };
   }
   const latest = inProgress.sort((a, b) => (b.startedAt ?? b.createdAt).localeCompare(a.startedAt ?? a.createdAt))[0];
-  return latest ? { session: latest, meta: { sessionId: latest.id, mode: 'new', rest: null, prSetIds: [] } } : null;
+  if (!latest) return null;
+  return { session: latest, meta: { sessionId: latest.id, rest: null, ...continueAs(latest) } };
+}
+
+/**
+ * How an unfinished session picks back up without the phone's note: one that already has a
+ * completion time was a reopened workout, so it continues as a reopen with itself marked finished
+ * as the restore point. Finish then keeps its date, and Discard restores it instead of deleting it.
+ */
+export function continueAs(session: WorkoutSession): { mode: ActiveWorkout['mode']; original?: WorkoutSession } {
+  if (!session.completedAt) return { mode: 'new' };
+  return { mode: 'reopen', original: { ...session, status: 'completed', completion: completionOf(session) } };
 }

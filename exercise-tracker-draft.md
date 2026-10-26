@@ -313,6 +313,10 @@ Every set has exactly one **kind** and any number of **modifiers**.
   - **Exercise menu:** the ⋯ menu offers swap, note, skip, reorder, and remove. Exercises with form analysis also get a camera button.
   - **Finishing:** finishing with unlogged sets asks before saving the workout as partial. A set can't be completed without weight and reps.
 - **New PRs:** a set that beats the exercise's previous best weight or e1RM shows the gold PR badge with a success haptic as soon as it's completed.
+  - "Previous best" means everything before the set: earlier workouts and the sets already done in this one. Ramping up 120, then 125, badges both; 115 after 120 badges neither.
+  - An exercise's first-ever workout shows no badges, because it sets the baselines (2.7).
+  - The badge follows the set's current values: correcting a set's weight or kind adds or removes it.
+  - In a reopened workout, only workouts finished before it count as earlier.
 
 **Rest timer**
 
@@ -365,8 +369,12 @@ Every set has exactly one **kind** and any number of **modifiers**.
 | Partial-rep set (shortened/lengthened) | Yes | No | No |
 | Timed hold | No | Own "longest hold" PR | No |
 
-- **Volume** = reps × effective load.
-- **e1RM** uses **Epley**, weight × (1 + reps/30), and is calculated only for sets of **12 reps or fewer**.
+- Only **completed** sets count. Skipping an exercise skips what's left of it: sets already completed in it still count (G3.6 decision).
+- A **working set** is any set that isn't a warm-up, timed holds included. A finished workout counts toward streaks and workout totals only if it has at least one completed working set.
+- "Sets" on the summary and Today cards counts working sets.
+- **Volume** = reps × effective load. It's never negative: assistance above bodyweight counts as zero.
+- **e1RM** uses **Epley**, weight × (1 + reps/30), and is calculated only for sets of **12 reps or fewer**. A single rep is its own 1RM.
+- Effective load is read from what was logged with the set, so changing a custom exercise's "Counts bodyweight" setting later never rewrites its history. A counted-load override only applies to bodyweight sets.
 
 **PR types**
 
@@ -377,7 +385,20 @@ Every set has exactly one **kind** and any number of **modifiers**.
 - Longest weekly streak
 - Longest timed hold
 
+**How records are set** (G3.6 decisions)
+
+- An exercise's **first workout sets its baselines**. Records come from beating them later.
+- A workout makes **at most one record per exercise and type** (per weight, for most reps), with its best set compared against the best from *before* the workout. Ramping 102.5 → 105 → 107.5 past a best of 100 is one "heaviest weight: 107.5 (was 100)".
+- PR counts (summary, Today, Profile) count these records.
+- **Highest volume** is the exercise's total for the whole workout, across every block it appears in. It uses PR-eligible sets, so partial-rep sets are left out, following the table. Session volume stats still include partial-rep sets.
+- **Bodyweight lifts:** heaviest weight and most reps at a weight compare the **added weight**, and less assistance counts as heavier. A weigh-in alone therefore never makes a record. They show as "+20 lb", "Bodyweight", or "−20 lb". e1RM and volume use effective load.
+- Weights within 0.05 kg of each other are the same weight, so switching between kg and lb never makes a record.
+- **Longest weekly streak** is account-wide. The first streak is the baseline. A later streak that outlasts the longest before it is a record. The record grows week by week as that streak continues, and it shows in Recent wins and on Profile.
+- Badges are dated by when they were reached. For example, the 4-week streak badge is dated by the workout that completed the 4th week, so later workouts don't move it.
+
 Editing, deleting, or reopening a workout recalculates the affected PRs, volume, badges, and goals.
+- Finishing a **reopened** workout celebrates only records the edit actually created, and never shows the "update your plan?" prompt.
+- Data refreshes after every change that affects it: workouts, goals, custom exercises, and the date changing while the app is open.
 
 ### 2.8 Form analysis
 

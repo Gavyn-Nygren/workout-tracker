@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { Button, Chip, EmptyState, ErrorState, SectionHeader, SegmentedControl, Skeleton } from '@/components/ui';
-import { useRepository } from '@/data/DataProvider';
+import { useToday } from '@/data/DataProvider';
 import { useExercises, usePlans, useTemplates } from '@/data/hooks';
 import type { StarterTemplate } from '@/data/types';
 import { ExerciseList } from '@/features/exercises/ExerciseList';
@@ -40,7 +40,7 @@ export default function PlansScreen() {
 }
 
 function MyPlans() {
-  const today = useRepository().today();
+  const today = useToday();
   const { data: plans, isLoading, error, refetch } = usePlans();
   if (error) return <ErrorState title="Couldn't load your plans" onRetry={refetch} />;
   if (isLoading) return <Loading height={180} />;

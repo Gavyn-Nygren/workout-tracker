@@ -1,4 +1,4 @@
-import { countsForPRs, countsForVolume, effectiveLoadKg, setE1RM, setVolumeKg } from '@/data/calculations';
+import { countsForPRs, countsForVolume, effectiveLoadKg, isWorkingSet, setE1RM, setVolumeKg } from '@/data/calculations';
 import { addDays, daysBetween } from '@/data/dates';
 import type { BodyweightEntry, Exercise, ISODate, UnitSystem, WorkoutSession } from '@/data/types';
 import { kgToLb } from '@/data/units';
@@ -39,7 +39,10 @@ export function toDisplay(value: number, metric: Metric | 'bodyweight', units: U
   return weight && units === 'imperial' ? kgToLb(value) : value;
 }
 
-/** One point per completed session where the exercise was logged (spec 2.10). */
+/**
+ * One point per completed session where the exercise was logged (spec 2.10). Sets completed
+ * before an exercise was skipped still count.
+ */
 export function exerciseSeries(input: {
   exerciseId: string;
   metric: Metric;
@@ -55,7 +58,7 @@ export function exerciseSeries(input: {
     if (input.from && session.completedDate < input.from) continue;
     const sets = session.blocks
       .flatMap((b) => b.exercises)
-      .filter((e) => e.exerciseId === input.exerciseId && !e.skipped)
+      .filter((e) => e.exerciseId === input.exerciseId)
       .flatMap((e) => e.sets)
       .filter((s) => s.completedAt);
     if (!sets.length) continue;
@@ -75,7 +78,7 @@ export function exerciseSeries(input: {
         value = sets.filter(countsForVolume).reduce((sum, s) => sum + (s.reps ?? 0), 0);
         break;
       case 'sets':
-        value = sets.filter((s) => s.kind !== 'warmup').length;
+        value = sets.filter(isWorkingSet).length;
         break;
     }
     if (value > 0) points.push({ date: session.completedDate, value, sessionId: session.id });
@@ -121,7 +124,7 @@ export function mostFrequent(sessions: WorkoutSession[], since: ISODate, exclude
     if (s.status !== 'completed' || !s.completedDate || s.completedDate < since) continue;
     const seen = new Set<string>();
     for (const e of s.blocks.flatMap((b) => b.exercises)) {
-      if (e.skipped || !e.sets.some((x) => x.completedAt) || seen.has(e.exerciseId)) continue;
+      if (!e.sets.some((x) => x.completedAt) || seen.has(e.exerciseId)) continue;
       seen.add(e.exerciseId);
       counts.set(e.exerciseId, (counts.get(e.exerciseId) ?? 0) + 1);
     }

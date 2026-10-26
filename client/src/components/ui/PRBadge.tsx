@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import { Animated, StyleSheet } from 'react-native';
 
 import { useHaptics } from '@/hooks/useHaptics';
@@ -16,20 +16,30 @@ type Props = {
    * (set completion, workout summary), not in history lists.
    */
   celebrate?: boolean;
+  /**
+   * With `celebrate`: when the set was completed. The badge only celebrates if that was moments
+   * ago, so a badge that appears because of an edit, or when a screen opens, stays quiet.
+   */
+  completedAt?: string;
 };
 
+/** How recently a set must have been completed for its badge to celebrate. */
+const JUST_COMPLETED_MS = 2000;
+
 /** Gold personal-record marker: a filled pill with dark text so it reads on every surface. */
-export function PRBadge({ label = 'PR', celebrate = false }: Props) {
+export function PRBadge({ label = 'PR', celebrate = false, completedAt }: Props) {
   const { colors } = useAppTheme();
   const haptics = useHaptics();
   const reducedMotion = useReducedMotion();
   const scale = useRef(new Animated.Value(celebrate ? 0.4 : 1)).current;
   const fade = useRef(new Animated.Value(celebrate ? 0 : 1)).current;
 
-  useEffect(() => {
+  // Before the first frame shows, so a badge that doesn't celebrate never flickers.
+  useLayoutEffect(() => {
     if (!celebrate) return;
-    haptics.success();
-    if (reducedMotion) {
+    const justCompleted = !completedAt || Date.now() - Date.parse(completedAt) < JUST_COMPLETED_MS;
+    if (justCompleted) haptics.success();
+    if (!justCompleted || reducedMotion) {
       scale.setValue(1);
       fade.setValue(1);
       return;

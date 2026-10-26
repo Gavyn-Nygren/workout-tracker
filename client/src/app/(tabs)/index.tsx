@@ -77,6 +77,12 @@ export default function TodayScreen() {
       );
   };
   const [selected, setSelected] = useState<ISODate>(today);
+  // A new day while the app is open: if the old today was selected, move to the new one.
+  const [shownToday, setShownToday] = useState<ISODate>(today);
+  if (shownToday !== today) {
+    setShownToday(today);
+    if (selected === shownToday) setSelected(today);
+  }
 
   // The workout in progress shows as "In progress" with a Resume button.
   const activeSession = active.workout?.session;
@@ -117,8 +123,9 @@ export default function TodayScreen() {
       {
         text: 'Discard it and start',
         style: 'destructive',
-        onPress: () => {
-          active.end();
+        onPress: async () => {
+          // If the discard can't be saved, the old workout stays open (the error toast says so).
+          if (!(await active.end())) return;
           start();
           router.push('/workout');
         },

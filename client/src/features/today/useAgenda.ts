@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import { useRepository } from '@/data/DataProvider';
+import { useToday } from '@/data/DataProvider';
 import { addDays } from '@/data/dates';
 import { useExercises, useOccurrences, usePersonalRecords, usePlans, usePlanVersions, usePreferences, useSessions } from '@/data/hooks';
 import { buildAgenda, type Agenda } from './agenda';
@@ -10,7 +10,7 @@ export const AGENDA_PAST_DAYS = 70;
 export const AGENDA_FUTURE_DAYS = 28;
 
 export function useAgenda() {
-  const today = useRepository().today();
+  const today = useToday();
   const range = useMemo(() => ({ from: addDays(today, -AGENDA_PAST_DAYS), to: addDays(today, AGENDA_FUTURE_DAYS) }), [today]);
 
   const occurrences = useOccurrences(range);

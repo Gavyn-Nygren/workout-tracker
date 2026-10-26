@@ -38,7 +38,7 @@ export default function ProgressScreen() {
     const last = new Map<string, { date: string; count: number }>();
     for (const s of data.sessions) {
       if (s.status !== 'completed' || !s.completedDate) continue;
-      for (const id of new Set(s.blocks.flatMap((b) => b.exercises).filter((e) => !e.skipped && e.sets.some((x) => x.completedAt)).map((e) => e.exerciseId))) {
+      for (const id of new Set(s.blocks.flatMap((b) => b.exercises).filter((e) => e.sets.some((x) => x.completedAt)).map((e) => e.exerciseId))) {
         const prev = last.get(id);
         last.set(id, { date: !prev || s.completedDate > prev.date ? s.completedDate : prev.date, count: (prev?.count ?? 0) + 1 });
       }

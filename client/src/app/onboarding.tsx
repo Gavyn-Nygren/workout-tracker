@@ -6,7 +6,7 @@ import { AccessibilityInfo, ActionSheetIOS, Pressable, ScrollView, StyleSheet, V
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText, Button, Card, Chip, EmptyState, ErrorState, Icon, NumberField, PressableScale, Skeleton, Stepper, TextField, useToast } from '@/components/ui';
-import { useRepository } from '@/data/DataProvider';
+import { useToday } from '@/data/DataProvider';
 import { succeeded, usePreferences, useSaveBodyweight, useSavePlan, useTemplates } from '@/data/hooks';
 import type { Equipment, ExperienceLevel } from '@/data/types';
 import { lbToKg } from '@/data/units';
@@ -55,7 +55,7 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { large } = useTextScale();
   const toast = useToast();
-  const today = useRepository().today();
+  const today = useToday();
   const templatesQuery = useTemplates();
   const templates = templatesQuery.data;
   const savePlan = useSavePlan();

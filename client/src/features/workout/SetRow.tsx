@@ -134,6 +134,7 @@ export function SetRow({ set, number, previous, exercise, exerciseName, units, e
     ]).start();
   }, [done, reducedMotion, tint, pop]);
 
+
   return (
     <View style={styles.wrap}>
       <Animated.View pointerEvents="none" style={[styles.tint, { backgroundColor: colors.successSubtle, opacity: tint }]} />
@@ -223,7 +224,8 @@ export function SetRow({ set, number, previous, exercise, exerciseName, units, e
 
       {showMeta && (
         <View style={[styles.meta, { paddingLeft: cols.set + cols.gap }]}>
-          {isPR && <PRBadge celebrate label="PR" />}
+          {/* Celebrates only when the set was just completed: never on opening, or when an edit moves it. */}
+          {isPR && <PRBadge celebrate completedAt={set.completedAt} label="PR" />}
           {modifiers.map((m) => (
             <SetTag key={m} tag={m} />
           ))}

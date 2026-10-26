@@ -95,7 +95,16 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
     );
     return joinSessions(headers, sets);
   };
-  const allSessions = () => (sessionsCache ??= loadSessions());
+  const allSessions = () => {
+    if (sessionsCache) return sessionsCache;
+    const loading = loadSessions();
+    sessionsCache = loading;
+    // A failed read isn't kept, so Retry reads again instead of getting the same error back.
+    loading.catch(() => {
+      if (sessionsCache === loading) sessionsCache = null;
+    });
+    return loading;
+  };
 
   const listExercises = async (): Promise<Exercise[]> => [...builtinExercises, ...(await readAll<Exercise>(db, 'custom_exercises'))];
   const exerciseMap = async () => new Map((await listExercises()).map((e) => [e.id, e]));
@@ -104,7 +113,8 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
 
   const weeklyTarget = async () => {
     const goals = await readAll<Goal>(db, 'goals');
-    const frequency = goals.find((g) => g.type === 'frequency');
+    // The newest frequency goal wins if there's more than one.
+    const frequency = goals.filter((g) => g.type === 'frequency').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
     return frequency?.type === 'frequency' ? frequency.workoutsPerWeek : DEFAULT_WEEKLY_TARGET;
   };
   const getStreak = async () => deriveStreak(await allSessions(), today(), await weeklyTarget());

@@ -24,8 +24,9 @@ export default function WorkoutExercisePicker() {
   if (mode === 'swap' && !swapping) return <NotFoundState thing="Exercise" icon="dumbbell" backLabel="Close" />;
 
   const choose = (exercise: Exercise) => {
-    if (swapping) dispatch({ type: 'swapExercise', entryId: swapping.id, exerciseId: exercise.id });
-    else dispatch({ type: 'addExercise', exerciseId: exercise.id });
+    // Assisted exercises (assisted pull-up and dip machines) log assistance by default.
+    if (swapping) dispatch({ type: 'swapExercise', entryId: swapping.id, exerciseId: exercise.id, isAssisted: exercise.isAssisted });
+    else dispatch({ type: 'addExercise', exerciseId: exercise.id, isAssisted: exercise.isAssisted });
     router.back();
   };
 

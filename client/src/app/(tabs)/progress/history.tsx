@@ -4,12 +4,14 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Card, EmptyState, ErrorState, Icon, ListRow, NotFoundState, PRBadge, ScreenSkeleton, SectionHeader } from '@/components/ui';
 import { useExercises, useFormReports, usePersonalRecords, useSessions } from '@/data/hooks';
-import { countsForPRs } from '@/data/calculations';
+import { signedAddedKg, usesBodyweight } from '@/data/calculations';
+import { deriveRecordBests, exerciseBests, type RecordBest } from '@/data/records';
 import type { LoggedSet, PRType } from '@/data/types';
 import { spokenDuration } from '@/hooks/useNow';
-import { formatLoad, formatLoadValue, formatLongDate, formatShortDate, plural } from '@/lib/format';
+import { formatAddedLoad, formatLoad, formatLoadValue, formatLongDate, formatShortDate, plural, spokenAddedLoad, spokenLoad } from '@/lib/format';
 import { reportAngle } from '@/features/home/goals';
 import { useProgressData } from '@/features/progress/useProgressData';
+import { bestSet } from '@/features/summary/summarize';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { readable, useTextScale } from '@/theme/layout';
@@ -21,7 +23,7 @@ const RECORD_ROWS: { type: PRType; label: string; spoken: string }[] = [
   { type: 'longest_hold', label: 'Longest hold', spoken: 'Longest hold' },
 ];
 
-/** Everything logged for one exercise: personal records and every session's sets. */
+/** Everything logged for one exercise: its all-time bests and every session's sets. */
 export default function ExerciseHistoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useAppTheme();
@@ -39,7 +41,7 @@ export default function ExerciseHistoryScreen() {
     () =>
       data.sessions
         .filter((s) => s.status === 'completed' && s.completedDate)
-        .map((s) => ({ session: s, sets: s.blocks.flatMap((b) => b.exercises).filter((e) => e.exerciseId === id && !e.skipped).flatMap((e) => e.sets).filter((x) => x.completedAt) }))
+        .map((s) => ({ session: s, sets: s.blocks.flatMap((b) => b.exercises).filter((e) => e.exerciseId === id).flatMap((e) => e.sets).filter((x) => x.completedAt) }))
         .filter((x) => x.sets.length)
         .sort((a, b) => (b.session.completedAt ?? '').localeCompare(a.session.completedAt ?? '')),
     [data.sessions, id],
@@ -48,9 +50,13 @@ export default function ExerciseHistoryScreen() {
   const reportsQuery = useFormReports({ exerciseId: id });
   const reports = [...(reportsQuery.data ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-  const records = data.records.filter((r) => r.exerciseId === id);
-  const best = (type: PRType) => records.filter((r) => r.type === type).sort((a, b) => b.value - a.value)[0];
-  const prSessions = new Set(records.map((r) => r.sessionId));
+  // All-time bests, including ones set in the exercise's first workout and never beaten since.
+  const bests = useMemo(() => {
+    const ex = data.exercisesById.get(id);
+    return ex ? exerciseBests(deriveRecordBests(data.sessions, data.exercisesById), ex) : {};
+  }, [data.sessions, data.exercisesById, id]);
+  // Sessions that set a record (beat an earlier best) get a star.
+  const prSessions = new Set(data.records.filter((r) => r.exerciseId === id).map((r) => r.sessionId));
 
   const queries = [sessionsQuery, exercisesQuery, recordsQuery, reportsQuery];
   const failed = queries.filter((q) => q.error);
@@ -58,18 +64,22 @@ export default function ExerciseHistoryScreen() {
   if (queries.some((q) => q.isLoading)) return <ScreenSkeleton />;
   if (!exercise) return <NotFoundState thing="Exercise" icon="dumbbell" />;
 
+  // Bodyweight sets show what was added: "+20", "−20" for assistance, or "BW".
+  const loadText = (s: LoggedSet) => {
+    if (!usesBodyweight(s, exercise)) return formatLoadValue(s.loadKg ?? 0, data.units);
+    const added = signedAddedKg(s);
+    const shown = formatLoadValue(Math.abs(added), data.units);
+    return shown === '0' ? 'BW' : `${added > 0 ? '+' : '−'}${shown}`;
+  };
   const setText = (s: LoggedSet) => {
     if (s.kind === 'timed_hold') return `${s.durationSec ?? 0} s`;
-    const load = exercise.isBodyweight ? (s.addedLoadKg ? `+${formatLoadValue(s.addedLoadKg, data.units)}` : 'BW') : formatLoadValue(s.loadKg ?? 0, data.units);
-    return `${load}×${s.reps ?? 0}${s.kind === 'warmup' ? 'w' : ''}`;
+    return `${loadText(s)}×${s.reps ?? 0}${s.kind === 'warmup' ? 'w' : ''}`;
   };
 
   // VoiceOver versions: "185 pounds for 5 reps", and repeats read once with a count.
-  const unitWord = data.units === 'imperial' ? 'pounds' : 'kilograms';
-  const spokenLoad = (kg: number) => `${formatLoadValue(kg, data.units)} ${unitWord}`;
   const spokenSet = (s: LoggedSet) => {
     if (s.kind === 'timed_hold') return `a ${spokenDuration(s.durationSec ?? 0)} hold`;
-    const load = exercise.isBodyweight ? (s.addedLoadKg ? `bodyweight plus ${spokenLoad(s.addedLoadKg)}` : 'bodyweight') : spokenLoad(s.loadKg ?? 0);
+    const load = usesBodyweight(s, exercise) ? spokenAddedLoad(signedAddedKg(s), data.units) : spokenLoad(s.loadKg ?? 0, data.units);
     return `${load} for ${plural(s.reps ?? 0, 'rep')}`;
   };
   const spokenSets = (sets: LoggedSet[]) => {
@@ -82,6 +92,15 @@ export default function ExerciseHistoryScreen() {
     return groups.map((g) => (g.count > 1 ? `${g.count} sets of ${g.text}` : g.text)).join(', ');
   };
 
+  // A best's value: seconds for holds, and added load for a bodyweight lift's heaviest weight.
+  const bestText = (b: RecordBest) => (b.type === 'longest_hold' ? `${b.value} s` : b.addedLoad ? formatAddedLoad(b.value, data.units) : formatLoad(b.value, data.units));
+  const spokenBestValue = (b: RecordBest) =>
+    b.type === 'longest_hold' ? spokenDuration(b.value) : b.addedLoad ? spokenAddedLoad(b.value, data.units) : spokenLoad(b.value, data.units);
+  const recordRows = RECORD_ROWS.flatMap((row) => {
+    const best = bests[row.type];
+    return best ? [{ ...row, best }] : [];
+  });
+
   return (
     <>
       <Stack.Screen options={{ title: exercise.name }} />
@@ -89,12 +108,11 @@ export default function ExerciseHistoryScreen() {
         <View style={styles.section}>
           <SectionHeader title="Personal records" />
           <Card padding="none">
-            {RECORD_ROWS.filter((row) => best(row.type)).map((row, i, arr) => {
-              const r = best(row.type)!;
-              const hold = row.type === 'longest_hold';
+            {recordRows.map((row, i, arr) => {
+              const r = row.best;
               const value = (
                 <AppText variant="subhead" weight="700" numeric style={stackRecords ? styles.shrink : styles.flex}>
-                  {hold ? `${r.value} s` : formatLoad(r.value, data.units)}
+                  {bestText(r)}
                 </AppText>
               );
               const date = (
@@ -106,7 +124,7 @@ export default function ExerciseHistoryScreen() {
                 <View
                   key={row.type}
                   accessible
-                  accessibilityLabel={`${row.spoken}: ${hold ? spokenDuration(r.value) : spokenLoad(r.value)}, ${formatLongDate(r.achievedDate)}`}
+                  accessibilityLabel={`${row.spoken}: ${spokenBestValue(r)}, ${formatLongDate(r.achievedDate)}`}
                   style={[stackRecords ? styles.rowStacked : styles.row, i < arr.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
                 >
                   <PRBadge label={row.label} />
@@ -124,9 +142,9 @@ export default function ExerciseHistoryScreen() {
                 </View>
               );
             })}
-            {!records.length && (
+            {!recordRows.length && (
               <AppText variant="subhead" tone="secondary" style={styles.none}>
-                Records appear after you beat your first logged session.
+                Your bests show here once you log a working set.
               </AppText>
             )}
           </Card>
@@ -160,7 +178,8 @@ export default function ExerciseHistoryScreen() {
           <Card padding="none">
             {sessions.map(({ session, sets }, i) => {
               const working = sets.filter((s) => s.kind !== 'warmup');
-              const top = working.filter(countsForPRs).sort((a, b) => (b.loadKg ?? b.addedLoadKg ?? 0) - (a.loadKg ?? a.addedLoadKg ?? 0))[0];
+              // The same best set the workout summary shows.
+              const top = bestSet({ sets: working }, exercise);
               const pr = prSessions.has(session.id);
               return (
                 <Pressable
@@ -181,9 +200,9 @@ export default function ExerciseHistoryScreen() {
                   <AppText variant="footnote" tone="secondary" numeric>
                     {working.map(setText).join('  ·  ')}
                   </AppText>
-                  {top && !exercise.isBodyweight && top.kind !== 'timed_hold' && (
+                  {top?.kind === 'load' && (
                     <AppText variant="caption" tone="secondary" numeric>
-                      {`Top set ${formatLoad(top.loadKg ?? 0, data.units)} × ${top.reps}`}
+                      {`Top set ${formatLoad(top.loadKg, data.units)} × ${top.reps}`}
                     </AppText>
                   )}
                 </Pressable>

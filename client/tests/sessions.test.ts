@@ -41,21 +41,23 @@ describe('resuming an unfinished workout', () => {
   const session = (id: string, status: WorkoutSession['status'], startedAt: string): WorkoutSession => ({ id, name: id, status, startedAt, blocks: [], createdAt: startedAt, updatedAt: startedAt });
 
   test('the remembered workout is resumed with its mode and rest timer', () => {
-    const meta: ActiveWorkoutMeta = { sessionId: 's2', mode: 'reopen', rest: null, prSetIds: ['set9'] };
+    const rest = { endsAtMs: Date.parse(STAMP) + 60_000, durationSec: 90, label: 'Squat' };
+    const meta: ActiveWorkoutMeta = { sessionId: 's2', mode: 'reopen', rest };
     const found = sessionToResume(meta, [session('s1', 'in_progress', STAMP), session('s2', 'in_progress', STAMP), session('s3', 'completed', STAMP)]);
     assert.equal(found?.session.id, 's2');
     assert.equal(found?.meta.mode, 'reopen');
-    assert.deepEqual(found?.meta.prSetIds, ['set9']);
+    assert.deepEqual(found?.meta.rest, rest);
   });
 
   test('if the note was lost, the most recently started unfinished workout is resumed', () => {
     const found = sessionToResume(null, [session('old', 'in_progress', '2026-10-18T08:00:00Z'), session('new', 'in_progress', '2026-10-19T08:00:00Z'), session('done', 'completed', '2026-10-20T08:00:00Z')]);
     assert.equal(found?.session.id, 'new');
     assert.equal(found?.meta.mode, 'new');
+    assert.equal(found?.meta.original, undefined);
   });
 
   test('nothing to resume when no workout is unfinished', () => {
-    assert.equal(sessionToResume({ sessionId: 'gone', mode: 'new', rest: null, prSetIds: [] }, [session('done', 'completed', STAMP)]), null);
+    assert.equal(sessionToResume({ sessionId: 'gone', mode: 'new', rest: null }, [session('done', 'completed', STAMP)]), null);
   });
 
   test('a running rest timer survives a restart; one that ran out does not; a paused one always does', () => {

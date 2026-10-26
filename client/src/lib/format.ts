@@ -34,6 +34,30 @@ export function formatLoad(kg: number, units: UnitSystem): string {
   return `${formatLoadValue(kg, units)} ${unitLabel(units)}`;
 }
 
+/** VoiceOver version of formatLoad: "225 pounds". */
+export function spokenLoad(kg: number, units: UnitSystem): string {
+  return `${formatLoadValue(kg, units)} ${units === 'imperial' ? 'pounds' : 'kilograms'}`;
+}
+
+/** Whether a load shows as 0 in the user's unit. */
+const showsAsZero = (kg: number, units: UnitSystem) => formatLoadValue(Math.abs(kg), units) === '0';
+
+/**
+ * A bodyweight lift's load as what was added to bodyweight: "Bodyweight", "+20 lb", or "−20 lb"
+ * for assistance (true minus sign). `bodyweight` is the word used when nothing was added, so it
+ * can be lowercase mid-sentence.
+ */
+export function formatAddedLoad(kg: number, units: UnitSystem, bodyweight = 'Bodyweight'): string {
+  if (showsAsZero(kg, units)) return bodyweight;
+  return `${kg > 0 ? '+' : '−'}${formatLoad(Math.abs(kg), units)}`;
+}
+
+/** VoiceOver version of formatAddedLoad: "bodyweight plus 20 pounds", "20 pounds of assistance". */
+export function spokenAddedLoad(kg: number, units: UnitSystem): string {
+  if (showsAsZero(kg, units)) return 'bodyweight';
+  return kg > 0 ? `bodyweight plus ${spokenLoad(kg, units)}` : `${spokenLoad(-kg, units)} of assistance`;
+}
+
 /** "5–8" or "12" */
 export function formatRepTarget(target: RepTarget | undefined): string {
   if (target === undefined) return '';

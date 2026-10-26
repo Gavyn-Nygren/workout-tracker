@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { AccessibilityInfo, ScrollView, StyleSheet, View, type ViewInstance } from 'react-native';
 
 import { AppText, Button, Card, Chip, Icon, PressableScale, SectionHeader, SegmentedControl, Stepper, TextField } from '@/components/ui';
-import { useRepository } from '@/data/DataProvider';
+import { useToday } from '@/data/DataProvider';
 import { succeeded, useSavePlan } from '@/data/hooks';
 import type { PlanSchedule, Weekday } from '@/data/types';
 import { formatShortDate, plural } from '@/lib/format';
@@ -26,7 +26,7 @@ const TYPES: { type: PlanType; title: string; body: string; icon: SFSymbol }[] =
 export default function NewPlanScreen() {
   const { colors } = useAppTheme();
   const { large } = useTextScale();
-  const today = useRepository().today();
+  const today = useToday();
   const savePlan = useSavePlan();
   const [step, setStep] = useState(1);
   const [type, setType] = useState<PlanType>('weekly');

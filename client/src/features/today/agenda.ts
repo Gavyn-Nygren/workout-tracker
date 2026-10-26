@@ -1,4 +1,4 @@
-import { setVolumeKg } from '@/data/calculations';
+import { isWorkingSet, setVolumeKg } from '@/data/calculations';
 import { daysBetween } from '@/data/dates';
 import type { Exercise, ISODate, PersonalRecord, Plan, PlanWorkout, ScheduledOccurrence, WorkoutSession } from '@/data/types';
 
@@ -113,6 +113,11 @@ export function latestMissed(agenda: Agenda, today: ISODate): DayItem | undefine
 
 export type SessionSummary = { volumeKg: number; minutes?: number; prCount: number; exercisesDone: number; exercisesTotal: number };
 
+/**
+ * A finished workout's stats for its Today card. An exercise is done once it has a completed set,
+ * even if it was skipped part-way; volume comes from completed sets (setVolumeKg checks), and
+ * the PR count is the number of records the workout set, as on its summary.
+ */
 export function summarizeSession(session: WorkoutSession, exercisesById: Map<string, Exercise>, records: PersonalRecord[]): SessionSummary {
   let volumeKg = 0;
   let exercisesDone = 0;
@@ -120,13 +125,13 @@ export function summarizeSession(session: WorkoutSession, exercisesById: Map<str
   for (const block of session.blocks) {
     for (const se of block.exercises) {
       exercisesTotal++;
-      if (!se.skipped && se.sets.length) exercisesDone++;
+      if (se.sets.some((s) => s.completedAt && isWorkingSet(s))) exercisesDone++;
       const exercise = exercisesById.get(se.exerciseId);
       if (exercise) for (const set of se.sets) volumeKg += setVolumeKg(set, exercise);
     }
   }
   const minutes =
     session.startedAt && session.completedAt ? (Date.parse(session.completedAt) - Date.parse(session.startedAt)) / 60_000 : undefined;
-  const prCount = new Set(records.filter((r) => r.sessionId === session.id).map((r) => r.setId)).size;
+  const prCount = records.filter((r) => r.sessionId === session.id).length;
   return { volumeKg, minutes, prCount, exercisesDone, exercisesTotal };
 }

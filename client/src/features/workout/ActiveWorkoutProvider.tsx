@@ -4,17 +4,18 @@ import { AccessibilityInfo, AppState } from 'react-native';
 import { useRepository } from '@/data/DataProvider';
 
 import { toISODate } from '@/data/dates';
-import { useBodyweight, useDeleteSession, useExercises, usePreferences, useSaveSession, useSessions } from '@/data/hooks';
+import { succeeded, useBodyweight, useDeleteSession, useExercises, usePreferences, useSaveSession, useSessions } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
+import { deriveRecordBests, livePRSetIds, sessionsBefore, type RecordBests } from '@/data/records';
 import type { Exercise, LoggedSet, SessionBlock, SessionExercise, WorkoutSession } from '@/data/types';
 import { useHaptics } from '@/hooks/useHaptics';
 import { spokenDuration } from '@/hooks/useNow';
 import { createLocalStore } from '@/lib/localStore';
 import type { DayItem } from '../today/agenda';
 import { sessionForReopen, sessionFromPlan } from './buildSession';
-import { completedNewestFirst, computeBests, isNewRecord } from './history';
-import { discardPlan, restoredRest, sessionToResume, type ActiveWorkoutMeta, type RestTimer } from './persistence';
-import { countSets, setName, setNumber, workoutReducer, type ActiveWorkout, type SetCounts, type WorkoutAction } from './workoutReducer';
+import { bodyweightForSet, completedNewestFirst, recordsAddedByReopen } from './history';
+import { continueAs, discardPlan, restoredRest, sessionToResume, type ActiveWorkoutMeta, type RestTimer } from './persistence';
+import { completionOf, countSets, setName, setNumber, workoutReducer, type ActiveWorkout, type SetCounts, type WorkoutAction } from './workoutReducer';
 
 export type { RestTimer } from './persistence';
 
@@ -26,13 +27,25 @@ const activeWorkoutStore = createLocalStore<ActiveWorkoutMeta | null>('activeWor
 
 type Position = { index: number; total: number };
 
+/** What Finish saved, for opening the summary. */
+export type FinishedWorkout = {
+  session: WorkoutSession;
+  /** A reopened workout finished again, rather than a new one. */
+  reopened: boolean;
+  /** For a reopened workout: how many records the edits added that it didn't have before (G3.6). */
+  newRecordCount: number;
+};
+
 type ContextValue = {
   workout: ActiveWorkout | null;
   counts: SetCounts;
   rest: RestTimer | null;
   /** True for a few seconds after a rest countdown finishes. */
   restJustEnded: boolean;
-  /** Sets completed this session that beat the exercise's previous best. */
+  /**
+   * Sets that show the live PR badge: completed sets that beat the best from before them (earlier
+   * workouts and earlier sets in this one). Derived from the sets as they are, so edits move it.
+   */
   prSetIds: ReadonlySet<string>;
   exercisesById: Map<string, Exercise>;
   /** Completed sessions other than the active one, newest first. */
@@ -51,14 +64,16 @@ type ContextValue = {
   skipRest: () => void;
   /**
    * Discards the unfinished workout: a new one is deleted, a reopened one goes back to how it was
-   * before it was reopened.
+   * before it was reopened. Resolves false if that couldn't be saved; the workout then stays open
+   * and the error toast says so.
    */
-  end: () => void;
+  end: () => Promise<boolean>;
   /**
    * Saves the workout as completed: 'full', or 'partial' if any set is unlogged or an exercise was
    * skipped. Unlogged sets stay in the session (they don't count anywhere) so the plan diff stays accurate.
+   * Resolves null if it couldn't be saved; the workout then stays open and the error toast says so.
    */
-  finish: () => Promise<WorkoutSession | null>;
+  finish: () => Promise<FinishedWorkout | null>;
 };
 
 const Context = createContext<ContextValue | null>(null);
@@ -79,7 +94,6 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
   const [workout, dispatch] = useReducer(workoutReducer, null);
   const [rest, setRest] = useState<RestTimer | null>(null);
   const [restJustEnded, setRestJustEnded] = useState(false);
-  const [prSetIds, setPrSetIds] = useState<ReadonlySet<string>>(new Set());
   const haptics = useHaptics();
   const repo = useRepository();
   const saveSession = useSaveSession();
@@ -88,6 +102,10 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
   const original = useRef<WorkoutSession | undefined>(undefined);
   const current = useRef<ActiveWorkout | null>(null);
   current.current = workout;
+  /** Set while Finish or Discard is writing the workout, so auto-save doesn't write it back meanwhile. */
+  const finishing = useRef(false);
+  /** Counts workouts opened, so a Finish or Discard that resolves late never closes a newer workout. */
+  const generation = useRef(0);
 
   const sessions = useSessions();
   const exercises = useExercises();
@@ -96,11 +114,26 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
 
   const exercisesById = useMemo(() => new Map((exercises.data ?? []).map((e) => [e.id, e])), [exercises.data]);
   const history = useMemo(() => completedNewestFirst(sessions.data ?? [], workout?.session.id), [sessions.data, workout?.session.id]);
-  const bests = useMemo(() => computeBests(history, exercisesById), [history, exercisesById]);
-  const latestBodyweightKg = useMemo(() => {
-    const entries = [...(bodyweight.data ?? [])].sort((a, b) => a.date.localeCompare(b.date));
-    return entries[entries.length - 1]?.weightKg;
-  }, [bodyweight.data]);
+  // Bests from the workouts before this one (for a reopened workout, those finished before it).
+  // Only what sessionsBefore reads, so editing a set doesn't re-derive every best.
+  const activeId = workout?.session.id;
+  const activeCompletedAt = workout?.session.completedAt;
+  const activeCompletedDate = workout?.session.completedDate;
+  const activeMode = workout?.mode;
+  const beforeBests = useMemo<RecordBests>(
+    () =>
+      activeId && activeMode
+        ? deriveRecordBests(sessionsBefore(sessions.data ?? [], { id: activeId, completedAt: activeCompletedAt, completedDate: activeCompletedDate }, activeMode), exercisesById)
+        : new Map(),
+    [sessions.data, exercisesById, activeId, activeCompletedAt, activeCompletedDate, activeMode],
+  );
+  const activeSession = workout?.session;
+  const prSetIds = useMemo<ReadonlySet<string>>(
+    () => (activeSession ? livePRSetIds(activeSession, beforeBests, exercisesById) : new Set()),
+    [activeSession, beforeBests, exercisesById],
+  );
+  const weighIns = useMemo(() => [...(bodyweight.data ?? [])].sort((a, b) => a.date.localeCompare(b.date)), [bodyweight.data]);
+
 
   // Countdown end: haptic and a VoiceOver announcement (iOS has no live regions), then a brief
   // "Rest over" state. Works while the sheet is minimized, and with haptics turned off.
@@ -133,7 +166,6 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
         if (!found) return;
         original.current = found.meta.original;
         setRest(restoredRest(found.meta.rest, Date.now()));
-        setPrSetIds(new Set(found.meta.prSetIds));
         dispatch({ type: 'resume', workout: { mode: found.meta.mode, position: found.meta.position, session: found.session } });
       })
       .catch(() => {})
@@ -145,16 +177,12 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
     };
   }, [repo]);
 
-  // Remember what resuming needs (mode, rest timer, PRs). Waits for the resume check, so the note
-  // isn't wiped before it's been read.
+  // Remember what resuming needs (mode, rest timer, restore point). Waits for the resume check, so
+  // the note isn't wiped before it's been read.
   useEffect(() => {
     if (!resumeChecked) return;
-    activeWorkoutStore.set(
-      workout
-        ? { sessionId: workout.session.id, mode: workout.mode, position: workout.position, rest, prSetIds: [...prSetIds], original: original.current }
-        : null,
-    );
-  }, [resumeChecked, workout, rest, prSetIds]);
+    activeWorkoutStore.set(workout ? { sessionId: workout.session.id, mode: workout.mode, position: workout.position, rest, original: original.current } : null);
+  }, [resumeChecked, workout, rest]);
 
   // Auto-save: the session is written shortly after each change, and right away when the app goes
   // to the background, so closing it never loses a set.
@@ -168,11 +196,21 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
     cancelAutosave();
     if (pending) repo.saveSession(pending.session).catch(() => {});
   }, [repo, cancelAutosave]);
+  const scheduleAutosave = useCallback(
+    (session: WorkoutSession) => {
+      cancelAutosave();
+      pendingSave.current = { session, timer: setTimeout(flushAutosave, AUTOSAVE_DELAY_MS) };
+    },
+    [cancelAutosave, flushAutosave],
+  );
   useEffect(() => {
-    if (!workout) return;
-    cancelAutosave();
-    pendingSave.current = { session: workout.session, timer: setTimeout(flushAutosave, AUTOSAVE_DELAY_MS) };
-  }, [workout, cancelAutosave, flushAutosave]);
+    if (!workout) {
+      cancelAutosave();
+      return;
+    }
+    // Finish and Discard write the workout themselves; an auto-save landing after them would undo it.
+    if (!finishing.current) scheduleAutosave(workout.session);
+  }, [workout, cancelAutosave, scheduleAutosave]);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state !== 'active') flushAutosave();
@@ -209,12 +247,12 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       const exercise = exercisesById.get(found.entry.exerciseId);
 
       haptics.tap();
-      const bodyweightKg = exercise?.isBodyweight ? latestBodyweightKg : undefined;
-      dispatch({ type: 'completeSet', entryId, setId, completedAt: new Date().toISOString(), bodyweightKg });
-
-      const completed: LoggedSet = { ...set, completedAt: 'now', bodyweightSnapshotKg: bodyweightKg ?? set.bodyweightSnapshotKg };
-      const isPR = Boolean(exercise && isNewRecord(completed, exercise, bests.get(exercise.id)));
-      if (isPR) setPrSetIds((prev) => new Set(prev).add(setId));
+      const bodyweightKg = exercise?.isBodyweight ? bodyweightForSet(workout, original.current, setId, weighIns) : undefined;
+      const action: WorkoutAction = { type: 'completeSet', entryId, setId, completedAt: new Date().toISOString(), bodyweightKg };
+      dispatch(action);
+      // The badge's own rule, applied to the workout as this completion leaves it. The badge brings the haptic.
+      const next = workoutReducer(workout, action);
+      const isPR = Boolean(next && livePRSetIds(next.session, beforeBests, exercisesById).has(setId));
 
       // Numbered like the set table, where warm-ups count separately from working sets.
       const name = setName(set.kind, setNumber(found.entry.sets, set)).toLowerCase();
@@ -227,11 +265,31 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
         { queue: true },
       );
     },
-    [workout, exercisesById, latestBodyweightKg, bests, haptics, restAfter, startRest],
+    [workout, exercisesById, weighIns, beforeBests, haptics, restAfter, startRest],
   );
 
-  const value = useMemo<ContextValue>(
-    () => ({
+  const value = useMemo<ContextValue>(() => {
+    /** Clears what belonged to the last workout before another one opens. */
+    const open = (next: ActiveWorkout, restorePoint?: WorkoutSession) => {
+      generation.current++;
+      finishing.current = false;
+      original.current = restorePoint;
+      setRest(null);
+      dispatch({ type: 'start', workout: next });
+    };
+    const close = () => {
+      original.current = undefined;
+      setRest(null);
+      setRestJustEnded(false);
+      dispatch({ type: 'end' });
+    };
+    /** The write failed and the workout stays open: auto-save resumes, starting with any edits made meanwhile. */
+    const keepOpen = () => {
+      finishing.current = false;
+      if (current.current) scheduleAutosave(current.current.session);
+    };
+
+    return {
       workout,
       counts: workout ? countSets(workout.session) : { done: 0, total: 0 },
       rest,
@@ -241,46 +299,23 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       history,
       dispatch,
       startFromItem: (item, position) => {
-        setRest(null);
-        setPrSetIds(new Set());
-        original.current = undefined;
         const session = sessionFromPlan({ item, history, exercisesById, preferences });
         // "Start anyway" on a skipped workout turns that skip into the workout itself.
         const skipped = item.session?.status === 'skipped' ? item.session : undefined;
-        dispatch({ type: 'start', workout: { mode: 'new', position, session: skipped ? { ...session, id: skipped.id, createdAt: skipped.createdAt } : session } });
+        open({ mode: 'new', position, session: skipped ? { ...session, id: skipped.id, createdAt: skipped.createdAt } : session });
       },
-      reopen: (session, position) => {
-        setRest(null);
-        setPrSetIds(new Set());
-        original.current = session;
-        dispatch({ type: 'start', workout: { mode: 'reopen', position, session: sessionForReopen(session) } });
-      },
+      reopen: (session, position) => open({ mode: 'reopen', position, session: sessionForReopen(session) }, session),
       continueSession: (session, position) => {
-        setRest(null);
-        setPrSetIds(new Set());
-        original.current = undefined;
-        dispatch({ type: 'start', workout: { mode: 'new', position, session } });
+        const { mode, original: restorePoint } = continueAs(session);
+        open({ mode, position, session }, restorePoint);
       },
-      repeat: (item, source) => {
-        setRest(null);
-        setPrSetIds(new Set());
-        original.current = undefined;
-        dispatch({
-          type: 'start',
-          workout: { mode: 'new', session: sessionFromPlan({ item, history, exercisesById, preferences, repeatOf: source }) },
-        });
-      },
+      repeat: (item, source) => open({ mode: 'new', session: sessionFromPlan({ item, history, exercisesById, preferences, repeatOf: source }) }),
       completeSet,
       uncompleteSet: (entryId, setId) => {
         const entry = workout ? locate(workout.session, entryId)?.entry : undefined;
         const set = entry?.sets.find((s) => s.id === setId);
         dispatch({ type: 'uncompleteSet', entryId, setId });
         if (entry && set) AccessibilityInfo.announceForAccessibilityWithOptions(`${setName(set.kind, setNumber(entry.sets, set))} marked not done.`, { queue: true });
-        setPrSetIds((prev) => {
-          const next = new Set(prev);
-          next.delete(setId);
-          return next;
-        });
       },
       startRest,
       adjustRest: (deltaSec) =>
@@ -297,46 +332,63 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
           return { ...r, pausedRemainingMs: Math.max(0, r.endsAtMs - Date.now()) };
         }),
       skipRest: () => setRest(null),
-      end: () => {
-        if (!workout) return;
+      end: async () => {
+        if (!workout) return false;
+        const opened = generation.current;
+        finishing.current = true;
         cancelAutosave();
         const plan = discardPlan({ mode: workout.mode, original: original.current }, workout.session.id);
-        if (plan.kind === 'restore') saveSession.mutate(plan.session);
-        else deleteSession.mutate(plan.sessionId);
-        original.current = undefined;
-        setRest(null);
-        setRestJustEnded(false);
-        setPrSetIds(new Set());
-        dispatch({ type: 'end' });
+        const write = plan.kind === 'restore' ? saveSession.mutateAsync(plan.session) : deleteSession.mutateAsync(plan.sessionId);
+        const ok = await succeeded(write);
+        if (generation.current !== opened) return ok;
+        if (ok) close();
+        else keepOpen();
+        return ok;
       },
       finish: async () => {
         if (!workout) return null;
         const { session, mode } = workout;
-        const { done, total } = countSets(session);
-        const anySkipped = session.blocks.some((b) => b.exercises.some((e) => e.skipped));
+        const reopened = mode === 'reopen';
         const now = new Date();
         const finished: WorkoutSession = {
           ...session,
           status: 'completed',
-          completion: done < total || anySkipped ? 'partial' : 'full',
+          completion: completionOf(session),
           // Reopening keeps the original day so history and streaks don't move (spec 2.5).
-          completedAt: mode === 'reopen' && session.completedAt ? session.completedAt : now.toISOString(),
-          completedDate: mode === 'reopen' && session.completedDate ? session.completedDate : toISODate(now),
+          completedAt: reopened && session.completedAt ? session.completedAt : now.toISOString(),
+          completedDate: reopened && session.completedDate ? session.completedDate : toISODate(now),
           updatedAt: now.toISOString(),
         };
+        // A reopened workout celebrates only records its edits added, not ones it already had.
+        const newRecordCount = reopened ? recordsAddedByReopen(sessions.data ?? [], original.current, finished, exercisesById).length : 0;
+        const opened = generation.current;
         // A pending auto-save mustn't land after this and mark the workout unfinished again.
+        finishing.current = true;
         cancelAutosave();
-        await saveSession.mutateAsync(finished);
-        original.current = undefined;
-        setRest(null);
-        setRestJustEnded(false);
-        setPrSetIds(new Set());
-        dispatch({ type: 'end' });
-        return finished;
+        const ok = await succeeded(saveSession.mutateAsync(finished));
+        if (generation.current === opened) {
+          if (ok) close();
+          else keepOpen();
+        }
+        return ok ? { session: finished, reopened, newRecordCount } : null;
       },
-    }),
-    [workout, rest, restJustEnded, prSetIds, exercisesById, history, preferences, completeSet, startRest, saveSession, deleteSession, cancelAutosave],
-  );
+    };
+  }, [
+    workout,
+    rest,
+    restJustEnded,
+    prSetIds,
+    exercisesById,
+    history,
+    sessions.data,
+    preferences,
+    completeSet,
+    startRest,
+    saveSession,
+    deleteSession,
+    cancelAutosave,
+    scheduleAutosave,
+  ]);
 
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

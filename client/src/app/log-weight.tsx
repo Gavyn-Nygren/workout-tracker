@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, ErrorState, NumberField, SegmentedControl, Skeleton, ToastViewport, useToast } from '@/components/ui';
-import { useRepository } from '@/data/DataProvider';
+import { useToday } from '@/data/DataProvider';
 import { addDays } from '@/data/dates';
 import { succeeded, useBodyweight, usePreferences, useSaveBodyweight } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
@@ -39,7 +39,7 @@ export default function LogWeightSheet() {
 function LogWeightForm({ entries, units }: { entries: BodyweightEntry[]; units: UnitSystem }) {
   const { colors } = useAppTheme();
   const toast = useToast();
-  const today = useRepository().today();
+  const today = useToday();
   const save = useSaveBodyweight();
 
   const latest = [...entries].sort((a, b) => a.date.localeCompare(b.date)).at(-1);

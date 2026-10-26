@@ -1,9 +1,10 @@
-import { countsForPRs, effectiveLoadKg, setVolumeKg } from '@/data/calculations';
+import { countsForPRs, effectiveLoadKg, isWorkingSet, setVolumeKg, signedAddedKg, usesBodyweight } from '@/data/calculations';
 import { derivePersonalRecords } from '@/data/records';
 import type { Exercise, PersonalRecord, PRType, SessionExercise, WorkoutSession } from '@/data/types';
 
 export type BestSet =
   | { kind: 'load'; loadKg: number; reps: number }
+  /** What was added to bodyweight; negative for assistance. */
   | { kind: 'bodyweight'; addedKg: number; reps: number }
   | { kind: 'hold'; seconds: number };
 
@@ -12,6 +13,7 @@ export type ExerciseSummary = {
   exerciseId: string;
   name: string;
   skipped: boolean;
+  /** Working sets (no warm-ups) done, and planned. */
   setsDone: number;
   setsTotal: number;
   best?: BestSet;
@@ -23,6 +25,7 @@ export type ExerciseSummary = {
 export type WorkoutSummary = {
   minutes?: number;
   volumeKg: number;
+  /** Working sets (no warm-ups) done, and planned. */
   setsDone: number;
   setsTotal: number;
   /** PRs set in this workout. */
@@ -36,15 +39,26 @@ function minutesOf(session: WorkoutSession): number | undefined {
   return session.startedAt && session.completedAt ? (Date.parse(session.completedAt) - Date.parse(session.startedAt)) / 60_000 : undefined;
 }
 
+/**
+ * Working sets done and planned for one exercise. Skipping an exercise skips what's left of it, so
+ * a skipped exercise only counts the sets done before it was skipped.
+ */
+export function workingSetCounts(entry: SessionExercise): { done: number; total: number } {
+  const working = entry.sets.filter(isWorkingSet);
+  const done = working.filter((s) => s.completedAt).length;
+  return { done, total: entry.skipped ? done : working.length };
+}
+
 function totals(session: WorkoutSession, exercisesById: Map<string, Exercise>) {
   let volumeKg = 0;
   let setsDone = 0;
   let setsTotal = 0;
   for (const block of session.blocks) {
     for (const entry of block.exercises) {
-      if (entry.skipped) continue;
-      setsTotal += entry.sets.length;
-      setsDone += entry.sets.filter((s) => s.completedAt).length;
+      const { done, total } = workingSetCounts(entry);
+      setsDone += done;
+      setsTotal += total;
+      // Only completed sets add volume, including those done before an exercise was skipped.
       const exercise = exercisesById.get(entry.exerciseId);
       if (exercise) for (const set of entry.sets) volumeKg += setVolumeKg(set, exercise);
     }
@@ -52,21 +66,25 @@ function totals(session: WorkoutSession, exercisesById: Map<string, Exercise>) {
   return { volumeKg, setsDone, setsTotal };
 }
 
-/** The heaviest working set (by load, added load, or hold time) of a logged exercise. */
-export function bestSet(entry: SessionExercise, exercise: Exercise | undefined): BestSet | undefined {
-  const done = entry.sets.filter((s) => s.completedAt && s.kind !== 'warmup');
+/**
+ * The heaviest completed working set of a logged exercise: by load, by added load for bodyweight
+ * sets (less assistance is heavier), or by hold time. Ties go to more reps.
+ */
+export function bestSet(entry: Pick<SessionExercise, 'sets'>, exercise: Exercise | undefined): BestSet | undefined {
+  const done = entry.sets.filter((s) => s.completedAt && isWorkingSet(s));
   const holds = done.filter((s) => s.kind === 'timed_hold' && s.durationSec);
   if (holds.length) return { kind: 'hold', seconds: Math.max(...holds.map((s) => s.durationSec ?? 0)) };
+  const ex = exercise ?? { isBodyweight: false };
   let best: BestSet | undefined;
   for (const set of done) {
     if (!countsForPRs(set) || !set.reps) continue;
-    if (exercise?.isBodyweight) {
-      const addedKg = set.addedLoadKg ?? 0;
+    if (usesBodyweight(set, ex)) {
+      const addedKg = signedAddedKg(set);
       if (!best || (best.kind === 'bodyweight' && (addedKg > best.addedKg || (addedKg === best.addedKg && set.reps > best.reps)))) {
         best = { kind: 'bodyweight', addedKg, reps: set.reps };
       }
     } else {
-      const loadKg = exercise ? (effectiveLoadKg(set, exercise) ?? 0) : (set.loadKg ?? 0);
+      const loadKg = effectiveLoadKg(set, ex) ?? 0;
       if (!best || (best.kind === 'load' && (loadKg > best.loadKg || (loadKg === best.loadKg && set.reps > best.reps)))) {
         best = { kind: 'load', loadKg, reps: set.reps };
       }
@@ -86,10 +104,11 @@ export function buildSummary(session: WorkoutSession, allSessions: WorkoutSessio
   const records = derivePersonalRecords(chronological, exercisesById).filter((r) => r.sessionId === session.id);
   const earlier = completed.filter((s) => (s.completedAt ?? '') < (session.completedAt ?? '')).sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
 
+  // The last time the exercise had a completed set, even in an exercise skipped part-way.
   const lastEntry = (exerciseId: string) => {
     for (const s of earlier) {
       for (const block of s.blocks) {
-        const entry = block.exercises.find((e) => e.exerciseId === exerciseId && !e.skipped && e.sets.some((x) => x.completedAt));
+        const entry = block.exercises.find((e) => e.exerciseId === exerciseId && e.sets.some((x) => x.completedAt && isWorkingSet(x)));
         if (entry) return entry;
       }
     }
@@ -99,17 +118,18 @@ export function buildSummary(session: WorkoutSession, allSessions: WorkoutSessio
   const exercises: ExerciseSummary[] = session.blocks.flatMap((block) =>
     block.exercises.map((entry) => {
       const exercise = exercisesById.get(entry.exerciseId);
-      const best = entry.skipped ? undefined : bestSet(entry, exercise);
+      const best = bestSet(entry, exercise);
       const previousEntry = lastEntry(entry.exerciseId);
       const previousBest = previousEntry ? bestSet(previousEntry, exercise) : undefined;
       const delta = best && previousBest && best.kind === previousBest.kind ? { amount: amountOf(best) - amountOf(previousBest), kind: best.kind } : undefined;
+      const { done, total } = workingSetCounts(entry);
       return {
         entryId: entry.id,
         exerciseId: entry.exerciseId,
         name: exercise?.name ?? 'Exercise',
         skipped: entry.skipped,
-        setsDone: entry.sets.filter((s) => s.completedAt).length,
-        setsTotal: entry.sets.length,
+        setsDone: done,
+        setsTotal: total,
         best,
         delta,
         prTypes: [...new Set(records.filter((r) => r.exerciseId === entry.exerciseId).map((r) => r.type))],

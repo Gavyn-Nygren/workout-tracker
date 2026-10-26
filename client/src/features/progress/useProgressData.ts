@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import { useRepository } from '@/data/DataProvider';
+import { useToday } from '@/data/DataProvider';
 import { useBodyweight, useExercises, usePersonalRecords, usePreferences, useSessions } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import type { UnitSystem } from '@/data/types';
@@ -10,7 +10,7 @@ import { rangeStart, type Metric } from './series';
 
 /** Shared reads for every Progress screen, scoped by the range chips at the top. */
 export function useProgressData() {
-  const today = useRepository().today();
+  const today = useToday();
   const sessions = useSessions();
   const exercises = useExercises();
   const bodyweight = useBodyweight();

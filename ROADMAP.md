@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G3.6 (calculations).
+**Current goal:** G3.7 (calendar rules).
 
 ## How we work
 
@@ -275,18 +275,31 @@ Everything works on one phone, offline, with no server.
 
 ### G3.6 Calculations
 
-- [ ] Volume, e1RM (Epley, 12 reps or fewer), and all PR types.
-- [ ] Rules for which sets count (spec 2.7).
-- [ ] Recalculation after an edit, delete, or reopen.
+- [x] Volume, e1RM (Epley, 12 reps or fewer), and all PR types.
+  - *One record per exercise and type per workout, measured against the best from before it. Previously, ramping sets made chains of PRs, and a first workout made PRs.*
+  - *Volume PRs are per exercise per workout, and leave out partial reps.*
+  - *Bodyweight lifts compare added weight. Kg/lb rounding no longer makes records.*
+  - *Longest weekly streak is now a record (Recent wins, Profile). The live PR badge follows the same rules as the summary and is derived from the sets' current values.*
+- [x] Rules for which sets count (spec 2.7).
+  - *Completed sets in a skipped exercise count everywhere.*
+  - *A workout needs a completed working set to count.*
+  - *Effective load is read from what was logged, ignores leftover values from other kinds, and is never negative.*
+  - *Assisted machines added or swapped in mid-workout start as assisted.*
+- [x] Recalculation after an edit, delete, or reopen.
+  - *Every mutation invalidates what depends on it: goals refresh the streak and badges, and custom exercises refresh records.*
+  - *Date changes refresh the streak.*
+  - *A failed read isn't cached.*
+  - *Finishing a reopened workout celebrates only new records and skips the plan prompt.*
+  - *Discarding a reopen waits for the restore. A lost resume note no longer turns a reopen into a new workout.*
 
-**Done when:** automated unit tests cover all of the above.
+**Done when:** automated unit tests cover all of the above. *Done: 193 tests, including the calculation rules, every record type, live badges, summary and Today stats, the CSV, and repository recalculation after edit, delete, reopen, and goal changes. Audit findings that belong to later goals are listed under G3.7 and G3.10.*
 
 ### G3.7 Calendar rules
 
 - [ ] Attribute workouts to their completion date.
 - [ ] Missed-workout prompt, push-forward shift, and one-tap undo.
 - [ ] Multi-workout days.
-- [ ] Decide time zone and week-start handling.
+- [ ] Decide time zone and week-start handling. *From the G3.6 audit: `weekStartsOn` exists in preferences but nothing reads it yet. Thread it into the streak, the Home week row, and the week strip together.*
 
 ### G3.8 Rest timer
 
@@ -300,9 +313,27 @@ Everything works on one phone, offline, with no server.
 - [ ] Rep-range and percentage rules.
 - [ ] Missed-rep behaviour set per rule.
 
+*From the G3.6 check: after Home's "Discard it and start" on a reopened workout, the new workout's pre-fill still skips the workout just restored (start uses history from before the discard). Low impact; fix with the pre-fill work.*
+
 ### G3.10 Goals, badges, streaks
 
-- [ ] Weekly streak rules, including partial workouts.
+*Carried over from the G3.6 audit:*
+
+- *Streak target:*
+  - *The target should be the planned number of workouts when there's no frequency goal; today it defaults to 4.*
+  - *Each week should be judged against the target in force that week, and frozen once the week ends, so editing a goal or plan doesn't rewrite past streaks.*
+- *Badges:*
+  - *Next-up badges (50/100 workouts, 12-week streak, plate milestones, form) are never awarded. Use one catalog for earning and progress.*
+- *Goals:*
+  - *A lift goal on a bodyweight exercise compares total load, not added weight.*
+  - *Lift goal progress uses all-time history, not progress since the goal was set.*
+  - *A bodyweight goal saved without a weigh-in is "achieved" at any weight.*
+  - *The form goal reads only the newest report.*
+  - *Frequency goals have no deadline or pace.*
+- *Reopened workouts:*
+  - *While a reopened workout is open, it drops out of the streak until it's finished again. This is accepted for now.*
+
+- [ ] Weekly streak rules, including partial workouts. *Partial workouts are done in G3.6: one completed working set (not a warm-up) counts.*
 - [ ] All four goal types, with pace tracking.
 - [ ] Badge catalog thresholds (a content task: propose them for the user to approve).
 

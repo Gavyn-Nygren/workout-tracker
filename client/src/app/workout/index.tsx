@@ -106,8 +106,11 @@ export default function ActiveWorkoutScreen() {
     const remaining = counts.total - counts.done;
     const close = async () => {
       // On failure the error toast shows (SaveErrorToasts) and the workout stays open, so nothing is lost.
-      const saved = await saveWorkout().catch(() => null);
-      if (saved) router.replace({ pathname: '/summary', params: { session: saved.id, fresh: '1' } });
+      const saved = await saveWorkout();
+      if (!saved) return;
+      // A reopened workout celebrates only the records its edits added, and never offers plan changes.
+      const params = saved.reopened ? { session: saved.session.id, reopened: '1', newRecords: String(saved.newRecordCount) } : { session: saved.session.id, fresh: '1' };
+      router.replace({ pathname: '/summary', params });
     };
     if (counts.done === 0) {
       Alert.alert('No sets logged yet', 'Complete at least one set to save this workout, or discard it.', [
@@ -129,8 +132,9 @@ export default function ActiveWorkoutScreen() {
 
   const reopened = workout?.mode === 'reopen';
 
-  function discard() {
-    end();
+  async function discard() {
+    // On failure the error toast shows and the workout stays open.
+    if (!(await end())) return;
     router.back();
     toast.show({ message: reopened ? 'Changes discarded.' : 'Workout discarded.' });
   }

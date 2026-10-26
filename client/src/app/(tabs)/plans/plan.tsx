@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { ActionSheetIOS, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Card, EmptyState, ErrorState, Icon, ListRow, NotFoundState, ScreenSkeleton, SectionHeader, useToast } from '@/components/ui';
-import { useRepository } from '@/data/DataProvider';
+import { useToday } from '@/data/DataProvider';
 import { succeeded, useDeletePlan, usePlan, useSavePlan, useTemplates } from '@/data/hooks';
 import { programWeek } from '@/data/schedule';
 import type { Plan } from '@/data/types';
@@ -22,7 +22,7 @@ export default function PlanDetailScreen() {
   const { colors, scheme } = useAppTheme();
   const { large } = useTextScale();
   const toast = useToast();
-  const today = useRepository().today();
+  const today = useToday();
   const planQuery = usePlan(id);
   const templatesQuery = useTemplates();
   const savePlan = useSavePlan();

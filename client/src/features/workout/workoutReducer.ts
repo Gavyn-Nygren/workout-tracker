@@ -1,4 +1,5 @@
-import type { LoggedSet, SessionBlock, SessionExercise, WorkoutSession } from '@/data/types';
+import { kindForExercise } from '@/data/logging';
+import type { LoggedSet, SessionBlock, SessionExercise, SetKind, WorkoutSession } from '@/data/types';
 import { newId } from '@/lib/id';
 
 export type ActiveWorkout = {
@@ -19,8 +20,9 @@ export type WorkoutAction =
   | { type: 'uncompleteSet'; entryId: string; setId: string }
   | { type: 'addSet'; entryId: string }
   | { type: 'removeSet'; entryId: string; setId: string }
-  | { type: 'addExercise'; exerciseId: string }
-  | { type: 'swapExercise'; entryId: string; exerciseId: string }
+  /** `isAssisted` is the exercise's own setting, so its sets log assistance by default. */
+  | { type: 'addExercise'; exerciseId: string; isAssisted?: boolean }
+  | { type: 'swapExercise'; entryId: string; exerciseId: string; isAssisted?: boolean }
   | { type: 'toggleSkip'; entryId: string }
   | { type: 'removeExercise'; entryId: string }
   | { type: 'moveBlock'; from: number; to: number }
@@ -56,6 +58,21 @@ function nextSet(entry: SessionExercise): LoggedSet {
   };
 }
 
+/**
+ * A kind change keeps only the weight field the new kind shows: an assisted set has no added load,
+ * and any other set no assistance.
+ */
+function withKind(set: LoggedSet, kind: SetKind | undefined): Partial<LoggedSet> {
+  if (kind === undefined || kind === set.kind) return {};
+  if (kind === 'assisted') return { addedLoadKg: undefined };
+  return set.kind === 'assisted' ? { assistanceKg: undefined } : {};
+}
+
+/** A swapped-in exercise logs assistance (or not) by its own setting; other set kinds stay as they were. */
+function swappedKind(kind: SetKind, isAssisted: boolean | undefined): SetKind {
+  return kind === 'normal' || kind === 'assisted' ? kindForExercise('normal', { isAssisted }) : kind;
+}
+
 /** All edits to the in-progress session. Pure, so the rules can be unit-tested (G3.4). */
 export function workoutReducer(state: ActiveWorkout | null, action: WorkoutAction): ActiveWorkout | null {
   if (action.type === 'start') return action.workout;
@@ -68,13 +85,15 @@ export function workoutReducer(state: ActiveWorkout | null, action: WorkoutActio
     case 'end':
       return null;
     case 'updateSet':
-      return update(mapSet(session, action.entryId, action.setId, (s) => ({ ...s, ...action.patch })));
+      return update(mapSet(session, action.entryId, action.setId, (s) => ({ ...s, ...action.patch, ...withKind(s, action.patch.kind) })));
     case 'completeSet':
       return update(
         mapSet(session, action.entryId, action.setId, (s) => ({
           ...s,
           completedAt: action.completedAt,
-          bodyweightSnapshotKg: action.bodyweightKg ?? s.bodyweightSnapshotKg,
+          // A set keeps the bodyweight it was first logged with, so re-checking it in a reopened
+          // workout never stamps today's weight on an old set (spec 2.6).
+          bodyweightSnapshotKg: s.bodyweightSnapshotKg ?? action.bodyweightKg,
         })),
       );
     case 'uncompleteSet':
@@ -88,19 +107,30 @@ export function workoutReducer(state: ActiveWorkout | null, action: WorkoutActio
         id: newId('entry'),
         exerciseId: action.exerciseId,
         skipped: false,
-        sets: [1, 2, 3].map(() => ({ id: newId('set'), kind: 'normal' as const, modifiers: [] })),
+        sets: [1, 2, 3].map(() => ({ id: newId('set'), kind: kindForExercise('normal', { isAssisted: action.isAssisted }), modifiers: [] })),
       };
       const block: SessionBlock = { id: newId('block'), type: 'single', exercises: [entry] };
       return update({ ...session, blocks: [...session.blocks, block] });
     }
     case 'swapExercise':
-      // Same number of sets and reps; loads cleared because they belonged to the old exercise.
+      // Same number of sets and reps. Loads, the bodyweight they were logged with, and recordings
+      // are cleared because they belonged to the old exercise.
       return update(
         mapEntry(session, action.entryId, (entry) => ({
           ...entry,
           exerciseId: action.exerciseId,
           skipped: false,
-          sets: entry.sets.map((s) => ({ ...s, completedAt: undefined, loadKg: undefined, addedLoadKg: undefined, recordingId: undefined })),
+          sets: entry.sets.map((s) => ({
+            ...s,
+            kind: swappedKind(s.kind, action.isAssisted),
+            completedAt: undefined,
+            loadKg: undefined,
+            addedLoadKg: undefined,
+            assistanceKg: undefined,
+            effectiveLoadOverrideKg: undefined,
+            bodyweightSnapshotKg: undefined,
+            recordingId: undefined,
+          })),
         })),
       );
     case 'toggleSkip':
@@ -151,10 +181,18 @@ export function countSets(session: WorkoutSession): SetCounts {
   let total = 0;
   for (const block of session.blocks) {
     for (const entry of block.exercises) {
-      if (entry.skipped) continue;
-      total += entry.sets.length;
-      done += entry.sets.filter((s) => s.completedAt).length;
+      // A skipped exercise counts only the sets already done in it (skipping skips the rest).
+      const doneHere = entry.sets.filter((s) => s.completedAt).length;
+      done += doneHere;
+      total += entry.skipped ? doneHere : entry.sets.length;
     }
   }
   return { done, total };
+}
+
+/** How a finished workout is saved: 'partial' if any set is unlogged or an exercise was skipped. */
+export function completionOf(session: WorkoutSession): 'full' | 'partial' {
+  const { done, total } = countSets(session);
+  const anySkipped = session.blocks.some((b) => b.exercises.some((e) => e.skipped));
+  return done < total || anySkipped ? 'partial' : 'full';
 }

@@ -51,8 +51,17 @@ export function useHomeData() {
   );
 
   const wins = useMemo(
-    () => buildWins({ records: records.data ?? [], formReports: formReports.data ?? [], badges: badges.data ?? [], exercisesById, units, today }),
-    [records.data, formReports.data, badges.data, exercisesById, units, today],
+    () =>
+      buildWins({
+        records: records.data ?? [],
+        streakRecords: streak.data?.records,
+        formReports: formReports.data ?? [],
+        badges: badges.data ?? [],
+        exercisesById,
+        units,
+        today,
+      }),
+    [records.data, streak.data, formReports.data, badges.data, exercisesById, units, today],
   );
 
   const earned = useMemo(() => [...(badges.data ?? [])].sort((a, b) => b.earnedDate.localeCompare(a.earnedDate)), [badges.data]);

@@ -37,7 +37,7 @@ function prefillSets(planned: PlannedExercise, exercise: Exercise | undefined, i
 
   let baseKg = lastWorking.length ? Math.max(...lastWorking.map(loadOf)) : 0;
   const rule = planned.progression;
-  if (rule?.type === 'rep_range' && lastWorking.length && lastWorking.every((s) => (s.reps ?? 0) >= (range(s.target?.targetReps)?.max ?? Infinity))) {
+  if (rule?.type === 'rep_range' && !last?.skipped && lastWorking.length && lastWorking.every((s) => (s.reps ?? 0) >= (range(s.target?.targetReps)?.max ?? Infinity))) {
     baseKg += rule.incrementKg;
   }
   baseKg = round(baseKg);
