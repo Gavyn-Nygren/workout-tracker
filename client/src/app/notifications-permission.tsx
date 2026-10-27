@@ -1,11 +1,11 @@
-import * as Notifications from 'expo-notifications';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Linking, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect } from 'react';
+import { AccessibilityInfo, Linking, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Icon, ToastViewport, useToast } from '@/components/ui';
 import type { Preferences } from '@/data/types';
 import { useSettings } from '@/features/settings/useSettings';
+import { refreshNotificationPermission, requestNotificationPermission, useNotificationPermission } from '@/features/workout/useRestAlarm';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 
@@ -20,19 +20,20 @@ const BENEFITS: { icon: 'timer' | 'calendar' | 'chart.bar' | 'moon'; text: strin
 
 /**
  * Explains notifications before iOS asks (spec 2.11: ask at the first relevant moment, after a
- * short explanation). Opened when the user first turns a notification on.
+ * short explanation). Opened when the user first turns a notification on, and with `from=rest`
+ * by the first rest of a workout, to offer the rest alarm (decision A).
  */
 export default function NotificationPermissionScreen() {
   const { colors } = useAppTheme();
-  const { key } = useLocalSearchParams<{ key?: Key }>();
+  const { key, from } = useLocalSearchParams<{ key?: Key; from?: 'rest' }>();
   const toast = useToast();
   const { update } = useSettings();
-  const [blocked, setBlocked] = useState(false);
+  const permission = useNotificationPermission();
+  const blocked = permission === 'denied';
+  const forRest = from === 'rest' && key === 'restTimer';
 
   useEffect(() => {
-    Notifications.getPermissionsAsync()
-      .then((p) => setBlocked(!p.granted && !p.canAskAgain))
-      .catch(() => {});
+    void refreshNotificationPermission();
   }, []);
 
   const enable = () => {
@@ -41,8 +42,13 @@ export default function NotificationPermissionScreen() {
 
   const allow = async () => {
     try {
-      const result = await Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowSound: true, allowBadge: false } });
-      if (result.granted) enable();
+      // Already allowed: just turn it on, with no iOS prompt.
+      const answer = permission === 'granted' ? permission : await requestNotificationPermission();
+      if (answer === 'granted') {
+        enable();
+        // The sheet closes, so the change is said rather than shown. A running rest gets its alarm now.
+        if (forRest) AccessibilityInfo.announceForAccessibilityWithOptions('Rest alarm on.', { queue: true });
+      }
     } catch {
       // Carry on as if denied.
       toast.show({ message: "Couldn't ask for notification permission. You can turn it on in Settings." });
@@ -55,21 +61,37 @@ export default function NotificationPermissionScreen() {
       {/* The sheet opens full height at large text sizes; the content scrolls so the buttons stay reachable. */}
       <ScrollView contentContainerStyle={styles.screen}>
         <View style={[styles.icon, { backgroundColor: colors.accentSubtle }]}>
-          <Icon name="bell.badge.fill" color={colors.accentText} size={32} />
+          <Icon name={forRest ? 'timer' : 'bell.badge.fill'} color={colors.accentText} size={32} />
         </View>
-        <AppText variant="title2" accessibilityRole="header" style={styles.center}>
-          Stay on track without checking the app
-        </AppText>
-        <View style={styles.list}>
-          {BENEFITS.map((b) => (
-            <View key={b.text} style={styles.item}>
-              <Icon name={b.icon} color={colors.accentText} size={18} />
-              <AppText variant="subhead" style={styles.flex}>
-                {b.text}
-              </AppText>
+        {forRest ? (
+          <>
+            <AppText variant="title2" accessibilityRole="header" style={styles.center}>
+              Know when rest is over
+            </AppText>
+            <AppText variant="body" style={[styles.center, styles.lead]}>
+              Get a notification when your rest ends, even with your phone locked or while you’re in another app. It says what’s next, like “Squat, set 3”.
+            </AppText>
+            <AppText variant="footnote" tone="secondary" style={styles.center}>
+              You can turn it off anytime in Profile → Notifications.
+            </AppText>
+          </>
+        ) : (
+          <>
+            <AppText variant="title2" accessibilityRole="header" style={styles.center}>
+              Stay on track without checking the app
+            </AppText>
+            <View style={styles.list}>
+              {BENEFITS.map((b) => (
+                <View key={b.text} style={styles.item}>
+                  <Icon name={b.icon} color={colors.accentText} size={18} />
+                  <AppText variant="subhead" style={styles.flex}>
+                    {b.text}
+                  </AppText>
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
+          </>
+        )}
         {blocked ? (
           <>
             <AppText variant="footnote" tone="secondary" style={styles.center}>
@@ -78,7 +100,7 @@ export default function NotificationPermissionScreen() {
             <Button title="Open iOS Settings" fullWidth onPress={() => Linking.openSettings()} />
           </>
         ) : (
-          <Button title="Turn on notifications" fullWidth onPress={allow} />
+          <Button title={forRest ? 'Turn on rest alarm' : 'Turn on notifications'} fullWidth onPress={allow} />
         )}
         <Button title="Not now" variant="ghost" onPress={() => router.back()} style={styles.centerSelf} />
       </ScrollView>
@@ -103,6 +125,9 @@ const styles = StyleSheet.create({
   },
   center: {
     textAlign: 'center',
+  },
+  lead: {
+    marginTop: spacing.xs,
   },
   centerSelf: {
     alignSelf: 'center',

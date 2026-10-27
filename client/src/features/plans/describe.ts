@@ -1,5 +1,5 @@
 import { trainingDays, weekdaysByWorkout } from '@/data/schedule';
-import type { Exercise, Plan, PlannedExercise, PlanSchedule, PlanWorkout, ProgressionRule, StarterTemplate, UnitSystem, Weekday } from '@/data/types';
+import type { Exercise, Plan, PlannedExercise, PlanSchedule, PlanWorkout, ProgressionRule, SetPrescription, StarterTemplate, UnitSystem, Weekday } from '@/data/types';
 import { formatLoad, formatRepTarget, plural, sortWeekdays, WEEKDAY_LONG, WEEKDAY_SHORT } from '@/lib/format';
 import { formatClock, spokenDuration } from '@/hooks/useNow';
 
@@ -61,7 +61,10 @@ export function describeProgression(rule: ProgressionRule | undefined, units: Un
   return rule.type === 'rep_range' ? `+${formatLoad(rule.incrementKg, units)} at top of range · ${miss}` : `+${rule.percent}% a week · ${miss}`;
 }
 
-/** "3 × 5–8 · 2 warm-ups · rest 3:00" */
+/**
+ * "3 × 5–8 · 2 warm-ups · rest 3:00". The rest shows only when the plan sets one: a blank rest
+ * uses the exercise's own (remembered, or the default from Settings), so there's no plan rest to show.
+ */
 export function prescriptionSummary(planned: PlannedExercise): string {
   const working = planned.sets.filter((s) => s.kind !== 'warmup');
   const warmups = planned.sets.length - working.length;
@@ -85,6 +88,25 @@ export function spokenPrescription(planned: PlannedExercise): string {
   if (first?.restSec) parts.push(`rest ${spokenDuration(first.restSec)}`);
   if (first?.tempo) parts.push(`tempo ${first.tempo}`);
   return parts.join(', ');
+}
+
+/**
+ * The plan editor's note under the sets: what a rest left on Auto does, the way the rest timer
+ * works it out (features/workout/rest.ts). Straight sets use the exercise's remembered rest or its
+ * type's default; warm-ups always use the warm-up default; in a superset or circuit the working
+ * sets rest after each round. `spoken` is for VoiceOver: it names the settings screen without the
+ * arrow, and reads the round rest as words.
+ */
+export function autoRestHint(sets: readonly SetPrescription[], group: { type: 'superset' | 'circuit'; roundRestSec: number } | undefined, spoken = false): string {
+  const where = spoken ? 'in Profile, Workout defaults' : 'in Profile → Workout defaults';
+  const warmups = sets.some((s) => s.kind === 'warmup');
+  if (group) {
+    const round = spoken ? spokenDuration(group.roundRestSec) : formatClock(group.roundRestSec);
+    return `In this ${group.type}, you rest ${round} after each round.${warmups ? ` Warm-ups left on Auto use your warm-up default ${where}.` : ''}`;
+  }
+  return warmups
+    ? `Working sets left on Auto use the rest remembered for this exercise, or your default ${where}. Warm-ups left on Auto use your warm-up default.`
+    : `Leave rest on Auto to use the rest remembered for this exercise, or your default ${where}.`;
 }
 
 export function exerciseName(exercisesById: Map<string, Exercise>, id: string): string {

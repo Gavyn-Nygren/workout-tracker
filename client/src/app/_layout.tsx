@@ -8,9 +8,13 @@ import { SaveErrorToasts } from '@/data/SaveErrorToasts';
 import { authStore } from '@/features/auth/authStore';
 import { ActiveWorkoutProvider } from '@/features/workout/ActiveWorkoutProvider';
 import { useMiniBarHeight } from '@/features/workout/MiniBar';
+import { setUpNotificationHandler } from '@/features/workout/useRestAlarm';
 import { useTextScale } from '@/theme/layout';
 import { AppThemeProvider, useAppTheme } from '@/theme/ThemeProvider';
 import { radius } from '@/theme/tokens';
+
+// Once, before anything can arrive: how notifications show while the app is open.
+setUpNotificationHandler();
 
 export default function RootLayout() {
   return (

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 
 import { useRepository } from './DataProvider';
 import { invalidateAfter } from './invalidation';
@@ -162,6 +163,16 @@ export function useSavePreferences() {
 export function usePreferences() {
   const repo = useRepository();
   return useQuery({ queryKey: ['preferences'], queryFn: () => repo.getPreferences() });
+}
+
+/**
+ * Reads the preferences as the app has them this moment (with any optimistic save), or undefined
+ * before they load. For a change built after an await or a timer: a render's `data` may be older
+ * by then, and saving on top of it would undo whatever was saved in between.
+ */
+export function useLatestPreferences(): () => Preferences | undefined {
+  const client = useQueryClient();
+  return useCallback(() => client.getQueryData<Preferences>(['preferences']), [client]);
 }
 
 export function useExercises() {

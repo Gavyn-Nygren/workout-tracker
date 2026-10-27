@@ -42,7 +42,7 @@ export default function PlanExercisePicker() {
   const choose = async (exercise: Exercise) => {
     // A second tap while the first saves would add the exercise twice.
     if (!plan || !workout || savePlan.isPending) return;
-    const next = mode === 'swap' && planned ? swapExercise(plan, workout.id, planned.id, exercise.id) : addExercise(plan, workout.id, exercise.id, exercise.category);
+    const next = mode === 'swap' && planned ? swapExercise(plan, workout.id, planned.id, exercise.id) : addExercise(plan, workout.id, exercise.id);
     if (!(await succeeded(savePlan.mutateAsync(next)))) return;
     router.back();
   };

@@ -28,17 +28,24 @@ export function updatePlanned(plan: Plan, workoutId: string, plannedId: string, 
   }));
 }
 
-/** Three straight sets of 8-12 with the exercise type's default rest. */
-export function defaultSets(category: 'compound' | 'isolation' = 'compound'): SetPrescription[] {
-  const restSec = category === 'compound' ? 150 : 90;
-  return [1, 2, 3].map(() => ({ kind: 'normal' as const, modifiers: [], targetReps: { min: 8, max: 12 }, targetRir: 2, restSec }));
+/**
+ * Three straight sets of 8-12. No rest is set, so they rest like the exercise does anywhere else:
+ * its remembered rest, or its type's default from Settings (spec 2.6), until the user types one.
+ */
+export function defaultSets(): SetPrescription[] {
+  return [1, 2, 3].map(() => ({ kind: 'normal' as const, modifiers: [], targetReps: { min: 8, max: 12 }, targetRir: 2 }));
 }
 
-export function addExercise(plan: Plan, workoutId: string, exerciseId: string, category?: 'compound' | 'isolation'): Plan {
+/** "Add warm-up": a warm-up set of 5 first, rest left blank so it uses the warm-up default from Settings. */
+export function withWarmupSet(planned: PlannedExercise): PlannedExercise {
+  return { ...planned, sets: [{ kind: 'warmup', modifiers: [], targetReps: 5 }, ...planned.sets] };
+}
+
+export function addExercise(plan: Plan, workoutId: string, exerciseId: string): Plan {
   const block: PlannedBlock = {
     id: newId('pb'),
     type: 'single',
-    exercises: [{ id: newId('pe'), exerciseId, sets: defaultSets(category) }],
+    exercises: [{ id: newId('pe'), exerciseId, sets: defaultSets() }],
   };
   return updateWorkout(plan, workoutId, (w) => ({ ...w, blocks: [...w.blocks, block] }));
 }
@@ -68,7 +75,15 @@ export function moveBlock(plan: Plan, workoutId: string, from: number, to: numbe
   });
 }
 
-/** Joins a block with the next one into a superset, keeping the first block's position. */
+/** The set with its rest left blank, so it rests like the exercise does (see `defaultSets`). */
+function withoutRest({ restSec: _, ...set }: SetPrescription): SetPrescription {
+  return set;
+}
+
+/**
+ * Joins a block with the next one into a superset, keeping the first block's position. The sets'
+ * own rests are left blank: in a superset you rest after each round instead.
+ */
 export function supersetWithNext(plan: Plan, workoutId: string, blockIndex: number): Plan {
   return updateWorkout(plan, workoutId, (w) => {
     const current = w.blocks[blockIndex];
@@ -79,13 +94,16 @@ export function supersetWithNext(plan: Plan, workoutId: string, blockIndex: numb
       type: current.type === 'circuit' || current.exercises.length + next.exercises.length > 2 ? 'circuit' : 'superset',
       roundRestSec: current.roundRestSec ?? 90,
       transitionRestSec: current.transitionRestSec,
-      exercises: [...current.exercises, ...next.exercises].map((e) => ({ ...e, sets: e.sets.map((s) => ({ ...s, restSec: 0 })) })),
+      exercises: [...current.exercises, ...next.exercises].map((e) => ({ ...e, sets: e.sets.map(withoutRest) })),
     };
     return { ...w, blocks: [...w.blocks.slice(0, blockIndex), merged, ...w.blocks.slice(blockIndex + 2)] };
   });
 }
 
-/** Splits a superset or circuit back into single exercises with default rest. */
+/**
+ * Splits a superset or circuit back into single exercises. No rest is filled in: a set keeps a rest
+ * typed for it, and a blank one rests like the exercise does (see `defaultSets`).
+ */
 export function ungroup(plan: Plan, workoutId: string, blockIndex: number): Plan {
   return updateWorkout(plan, workoutId, (w) => {
     const block = w.blocks[blockIndex];
@@ -93,7 +111,7 @@ export function ungroup(plan: Plan, workoutId: string, blockIndex: number): Plan
     const singles: PlannedBlock[] = block.exercises.map((e) => ({
       id: newId('pb'),
       type: 'single',
-      exercises: [{ ...e, sets: e.sets.map((s) => ({ ...s, restSec: s.restSec || block.roundRestSec || 90 })) }],
+      exercises: [{ ...e, sets: e.sets.map((s) => (s.restSec ? s : withoutRest(s))) }],
     }));
     return { ...w, blocks: [...w.blocks.slice(0, blockIndex), ...singles, ...w.blocks.slice(blockIndex + 1)] };
   });

@@ -424,6 +424,11 @@ export type Preferences = {
   /** Weight rounding increments per equipment, in the user's display unit. */
   roundingIncrements: Partial<Record<Equipment, number>>;
   restDefaultsSec: { compound: number; isolation: number; warmup: number };
+  /**
+   * Each exercise's own rest, in seconds by exercise id, used instead of its type's default when a
+   * plan sets none. Learned from adjusting the rest timer after its sets, or set on the exercise's page.
+   */
+  restByExerciseSec: Record<ID, number>;
   weekStartsOn: Weekday;
   haptics: boolean;
   celebrations: boolean;

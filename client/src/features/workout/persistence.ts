@@ -1,15 +1,8 @@
 import type { WorkoutSession } from '@/data/types';
+import type { RestTimer } from './rest';
 import { completionOf, type ActiveWorkout } from './workoutReducer';
 
-/** Rest countdown, kept as wall-clock times so it stays right across app restarts. */
-export type RestTimer = {
-  /** When the countdown reaches zero (ms epoch); ignored while paused. */
-  endsAtMs: number;
-  durationSec: number;
-  /** Set while paused. */
-  pausedRemainingMs?: number;
-  label: string;
-};
+export type { RestTimer } from './rest';
 
 /**
  * What the app needs, beyond the session row itself, to pick an unfinished workout back up after
@@ -24,10 +17,14 @@ export type ActiveWorkoutMeta = {
   original?: WorkoutSession;
 };
 
-/** The rest timer to restore on resume: kept while it's paused or still running, dropped once it's over. */
-export function restoredRest(rest: RestTimer | null, nowMs: number): RestTimer | null {
-  if (!rest) return null;
-  if (rest.pausedRemainingMs !== undefined) return rest;
+/**
+ * The rest timer to restore on resume: kept while it's paused or still running, dropped once it's
+ * over (quietly: it ended while the app was closed). Notes saved before G3.8 restore too; they just
+ * can't teach an exercise its rest.
+ */
+export function restoredRest(rest: RestTimer | null | undefined, nowMs: number): RestTimer | null {
+  if (!rest || !Number.isFinite(rest.endsAtMs) || !Number.isFinite(rest.durationSec)) return null;
+  if (rest.pausedRemainingMs !== undefined) return Number.isFinite(rest.pausedRemainingMs) ? rest : null;
   return rest.endsAtMs > nowMs ? rest : null;
 }
 

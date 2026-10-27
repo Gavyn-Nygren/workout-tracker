@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, type ViewProps } from 'react-native';
 
 import { AppText, Card, Icon } from '@/components/ui';
 import type { SessionBlock, SessionExercise } from '@/data/types';
@@ -13,25 +13,30 @@ type Props = {
   /** Letter for grouped blocks: "A" gives exercises A1, A2. */
   letter: string;
   renderExercise: (entry: SessionExercise, label?: string) => ReactNode;
+  /** The round rest when the plan sets none (the compound default), so the header says what will run. */
+  defaultRoundRestSec: number;
+  /** The card's place in the workout's scroll content, for scrolling to a set. */
+  onLayout?: ViewProps['onLayout'];
 };
 
 /** "No rest between · 2:00 after each round"; `spoken` uses words for VoiceOver. */
-function restCaption(block: SessionBlock, spoken: boolean): string {
+function restCaption(block: SessionBlock, defaultRoundRestSec: number, spoken: boolean): string {
   const between = block.transitionRestSec
     ? `${spoken ? spokenDuration(block.transitionRestSec) : `${block.transitionRestSec} s`} between`
     : 'No rest between';
-  const round = block.roundRestSec ? `${spoken ? spokenDuration(block.roundRestSec) : formatClock(block.roundRestSec)} after each round` : undefined;
+  const roundSec = block.roundRestSec ?? defaultRoundRestSec;
+  const round = roundSec ? `${spoken ? spokenDuration(roundSec) : formatClock(roundSec)} after each round` : undefined;
   return [between, round].filter(Boolean).join(' · ');
 }
 
 /** A card per block. Supersets and circuits share one card with a header explaining the rest. */
-export function BlockCard({ block, letter, renderExercise }: Props) {
+export function BlockCard({ block, letter, renderExercise, defaultRoundRestSec, onLayout }: Props) {
   const { colors } = useAppTheme();
   const { large } = useTextScale();
   const grouped = block.type === 'superset' || block.type === 'circuit';
 
   return (
-    <Card padding="none">
+    <Card padding="none" onLayout={onLayout}>
       {grouped && (
         // Large text: the rest caption moves under the label instead of squeezing beside it.
         <View style={[styles.groupHeader, large && styles.groupHeaderStacked, { backgroundColor: colors.accentSubtle }]}>
@@ -41,8 +46,8 @@ export function BlockCard({ block, letter, renderExercise }: Props) {
               {block.type === 'superset' ? `Superset ${letter}` : `Circuit ${letter}`}
             </AppText>
           </View>
-          <AppText variant="caption" tone="accent" style={!large && styles.caption} accessibilityLabel={restCaption(block, true)}>
-            {restCaption(block, false)}
+          <AppText variant="caption" tone="accent" style={!large && styles.caption} accessibilityLabel={restCaption(block, defaultRoundRestSec, true)}>
+            {restCaption(block, defaultRoundRestSec, false)}
           </AppText>
         </View>
       )}

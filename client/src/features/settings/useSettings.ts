@@ -1,18 +1,22 @@
-import { usePreferences, useSavePreferences } from '@/data/hooks';
+import { useLatestPreferences, usePreferences, useSavePreferences } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import type { Preferences } from '@/data/types';
 
 /**
  * Current preferences plus an `update` that merges and saves (optimistically). Until the saved
  * preferences load, the defaults show and `update` does nothing, so a tap can't overwrite them.
+ * `update` builds on the preferences as they are when it's called, not as they were at render, so
+ * one called after an await (the iOS permission prompt) keeps anything saved meanwhile.
  */
 export function useSettings() {
   const query = usePreferences();
+  const latest = useLatestPreferences();
   const preferences = query.data ?? defaultPreferences;
   const save = useSavePreferences();
   const update = (patch: Partial<Preferences> | ((p: Preferences) => Preferences)) => {
-    if (!query.data) return;
-    save.mutate(typeof patch === 'function' ? patch(query.data) : { ...query.data, ...patch });
+    const base = latest() ?? query.data;
+    if (!base) return;
+    save.mutate(typeof patch === 'function' ? patch(base) : { ...base, ...patch });
   };
   return { preferences, update, isLoading: query.isLoading, error: query.error, retry: query.refetch };
 }

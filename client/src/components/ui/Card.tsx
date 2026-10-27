@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewProps, type ViewStyle } from 'react-native';
 
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
@@ -10,14 +10,16 @@ type Props = {
   padding?: 'none' | 'md' | 'lg';
   elevated?: boolean;
   style?: StyleProp<ViewStyle>;
+  onLayout?: ViewProps['onLayout'];
 };
 
 /** Raised surface for one self-contained group of content. */
-export function Card({ children, padding = 'lg', elevated, style }: Props) {
+export function Card({ children, padding = 'lg', elevated, style, onLayout }: Props) {
   const { colors, elevation } = useAppTheme();
   return (
     // The shadow lives on the outer view; the inner view clips content (e.g. row highlights) to the corners.
     <View
+      onLayout={onLayout}
       style={[
         styles.card,
         { backgroundColor: elevated ? colors.cardElevated : colors.card, borderColor: colors.border, boxShadow: elevation.card },

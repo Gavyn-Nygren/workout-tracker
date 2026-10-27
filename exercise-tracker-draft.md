@@ -212,7 +212,7 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
   - Exercises show their sets × reps, rest, and progression.
   - The ⋯ menu offers edit sets & reps, swap, superset with next / split up, move up or down, and remove.
 - **Sets & reps editor:**
-  - A per-set table of reps (a number or a range), effort, and rest, where you can change each set's type and add sets or warm-ups.
+  - A per-set table of reps (a number or a range), effort, and rest, where you can change each set's type and add sets or warm-ups. Rest starts on **Auto** (blank): the set uses the exercise's own rest (below). A rest typed here always wins (user's pick).
   - A shared target weight (Auto by default), applied to every working set, and a shared tempo.
   - The progression rule (none, rep range, or weekly %) and what to do on a miss (repeat, or deload after N misses).
   - It saves with a Save button and warns before you discard unsaved edits.
@@ -335,10 +335,15 @@ Every set has exactly one **kind** and any number of **modifiers**.
 **Rest timer**
 
 - Marking a set complete starts its rest timer automatically. The user can pause, extend, skip, or adjust it.
-- **In the app:** a **bar docked at the bottom** of the workout shows the countdown with −15 s, +15 s, and Skip, plus a draining progress line. Tapping the bar opens a larger timer sheet with pause/resume and presets. When rest ends, there's a strong haptic and a brief "Rest over" bar.
+- **In the app:** a **bar docked at the bottom** of the workout shows the countdown with −15 s, +15 s, and Skip, plus a draining progress line. Tapping the bar opens a larger timer sheet with pause/resume and presets. When rest ends, there's a strong haptic and a brief "Rest over" bar. The bar rides above the number pad when it's open.
+- **Accurate in the background:** the countdown runs on the clock, so it's right after the app was in the background, the phone was locked, or the app was closed. A rest that ended while the app was away clears quietly on return, with no late buzz (the alarm below already went off).
+- **Rest-over alarm** (user's pick: ask at the first rest): a local notification, "Rest over" with what's next, for example "Squat, set 3", or "That was your last set" after the last one. It follows every change to the rest (adjust, pause, skip, finish) and never doubles up. With the app open, only the haptic plays. The first time a rest starts after a completed set, a short sheet offers the alarm once; Allow asks iOS for permission and turns it on. It can be turned off in Profile → Notifications.
 - The timer runs as a **Live Activity** on the lock screen and Dynamic Island.
 - **Default rest when the plan sets none:** compound 3:00, isolation 1:30, warm-up 1:00. Defaults can be edited in Settings and per exercise, and the app remembers the last value used for each exercise.
-- **Supersets and circuits:** completing one exercise moves straight to the next with no timer (an optional short transition is allowed). The round's rest timer starts after the last exercise in the round.
+  - **Order:** a rest typed in the plan, then the exercise's own rest, then the default for its type. Warm-ups use the warm-up default.
+  - **Memory** (user's pick: adjusting teaches it): changing a rest with −15 s, +15 s, or a preset after an exercise's set makes that the exercise's rest, for the rest of this workout and future ones. The exercise's page shows it, lets you set it directly, and has a Reset back to the type default.
+- **Supersets and circuits** (user's pick: jump to the next exercise): completing one exercise moves straight to the next with no timer (an optional short transition is allowed). The workout scrolls to that exercise's set and the bar briefly says "Next: Bench Press, set 2".
+  - A round is each exercise's set at the same position (warm-ups come before the rounds). The round's rest timer starts once every exercise that has a set in that round has done it, so uneven set counts and doing them out of order both work.
 
 **Progression**
 

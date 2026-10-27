@@ -2,8 +2,10 @@ import { router } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Chip, ProgressRing } from '@/components/ui';
-import { formatClock, spokenDuration, useNow } from '@/hooks/useNow';
+import { useLiveNow } from '@/hooks/useLiveNow';
+import { formatClock, spokenDuration } from '@/hooks/useNow';
 import { restRemainingMs, useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
+import { describeNextUp, shownNextUp } from '@/features/workout/rest';
 import { useTextScale } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -15,8 +17,9 @@ const RING = 200;
 export default function RestTimerSheet() {
   const { colors } = useAppTheme();
   const { fontScale } = useTextScale();
-  const { rest, startRest, adjustRest, togglePauseRest, skipRest } = useActiveWorkout();
-  const now = useNow(250, Boolean(rest));
+  const { rest, pickRestPreset, adjustRest, togglePauseRest, skipRest } = useActiveWorkout();
+  const now = useLiveNow(250, Boolean(rest));
+  const next = rest ? shownNextUp(rest) : undefined;
 
   const remaining = rest ? restRemainingMs(rest, now) / 1000 : 0;
   const secondsLeft = Math.ceil(remaining);
@@ -36,6 +39,11 @@ export default function RestTimerSheet() {
       <AppText variant="subhead" tone="secondary" style={styles.center}>
         {rest ? `After ${rest.label}` : 'No rest running. Pick a time to start one.'}
       </AppText>
+      {next && (
+        <AppText variant="subhead" weight="600" style={styles.center}>
+          Next: {describeNextUp(next)}
+        </AppText>
+      )}
 
       {/* One adjustable element for VoiceOver: swipe up or down to add or take off 15 seconds. */}
       <View
@@ -78,7 +86,7 @@ export default function RestTimerSheet() {
               // Starts a rest rather than toggling, so it reads as a button.
               role="button"
               accessibilityLabel={`Start ${spokenDuration(sec)} rest`}
-              onPress={() => startRest(sec, rest?.label ?? 'manual timer')}
+              onPress={() => pickRestPreset(sec)}
             />
           );
         })}

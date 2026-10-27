@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { AccessibilityInfo, ActionSheetIOS, Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AccessibilityInfo, ActionSheetIOS, Alert, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Card, EmptyState, ToastViewport, useToast } from '@/components/ui';
@@ -9,6 +9,8 @@ import { missingForCompletion } from '@/data/logging';
 import { defaultPreferences } from '@/data/preferences';
 import type { LoggedSet, SessionExercise } from '@/data/types';
 import { useHaptics } from '@/hooks/useHaptics';
+import { keyboardHeightNow } from '@/hooks/useKeyboardFrame';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { plural } from '@/lib/format';
 
 import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
@@ -17,11 +19,14 @@ import { ExerciseSection } from '@/features/workout/ExerciseSection';
 import { RestTimerBar } from '@/features/workout/RestTimerBar';
 import { WorkoutHeader } from '@/features/workout/WorkoutHeader';
 import { lastEntryFor, previousSets } from '@/features/workout/history';
+import { coveredBelow, scrollOffsetToShow, settleDelayMs, SETTLE_MAX_MS } from '@/features/workout/scrollTarget';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { readable } from '@/theme/layout';
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+/** The least the docked bar covers (default text size), in case it hasn't been measured yet. */
+const MIN_BAR_SPACE = 72;
 
 /** The active workout (roadmap G2.2), presented as a sheet that can be swiped down to minimize. */
 export default function ActiveWorkoutScreen() {
@@ -30,9 +35,76 @@ export default function ActiveWorkoutScreen() {
   const toast = useToast();
   const haptics = useHaptics();
   const preferences = usePreferences().data ?? defaultPreferences;
-  const { workout, counts, prSetIds, exercisesById, history, dispatch, completeSet, uncompleteSet, rest, skipRest, end, finish: saveWorkout } = useActiveWorkout();
+  const { workout, counts, prSetIds, exercisesById, history, dispatch, completeSet, uncompleteSet, rest, upNext, skipRest, end, finish: saveWorkout } = useActiveWorkout();
+  const reducedMotion = useReducedMotion();
   // Space the floating rest bar covers; it grows with the text size, so it's measured.
   const [restBarSpace, setRestBarSpace] = useState(0);
+  const barSpace = useRef(0);
+
+  // Where each block, exercise and set row sits (from onLayout, each relative to its parent), and
+  // the scroll view's own state: for bringing the next set into view in a superset.
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const layout = useRef({
+    blocks: new Map<string, number>(),
+    entries: new Map<string, { blockId: string; y: number }>(),
+    sets: new Map<string, { y: number; height: number }>(),
+    scrollY: 0,
+    viewportHeight: 0,
+    contentHeight: 0,
+  });
+
+  // Decision C: after a superset set that isn't its round's last, the next exercise's set comes
+  // into view above the docked bar, once per completion. No animation with Reduce Motion on. The
+  // scroll waits for the layout to settle (scrollTarget.ts), so it uses the height of the bar that
+  // just appeared and where the row sits after a PR line pushed it down, not sizes from before.
+  const pendingScroll = useRef<{ setId: string; entryId: string; deadline: number } | null>(null);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrolledFor = useRef<number | null>(null);
+  const scrollToPending = useCallback(() => {
+    settleTimer.current = null;
+    const pending = pendingScroll.current;
+    pendingScroll.current = null;
+    if (!pending) return;
+    const at = layout.current;
+    const entry = at.entries.get(pending.entryId);
+    const row = at.sets.get(pending.setId);
+    const blockY = entry ? at.blocks.get(entry.blockId) : undefined;
+    if (!entry || !row || blockY === undefined) return;
+    // The number pad stays up when the check is tapped, and the bar rides on top of it.
+    const keyboard = keyboardHeightNow();
+    const y = scrollOffsetToShow({
+      rowTop: blockY + entry.y + row.y,
+      rowHeight: row.height,
+      scrollY: at.scrollY,
+      viewportHeight: at.viewportHeight,
+      contentHeight: at.contentHeight,
+      coveredBelow: coveredBelow({ safeAreaBottom: insets.bottom, keyboardHeight: keyboard, barSpace: Math.max(barSpace.current, MIN_BAR_SPACE) }),
+      keyboardInset: keyboard,
+    });
+    if (y !== null) scrollRef.current?.scrollTo({ y, animated: !reducedMotion });
+  }, [insets.bottom, reducedMotion]);
+  /** Called on the completion and on every layout report: while a scroll is pending, it waits a moment longer. */
+  const settle = useCallback(() => {
+    const pending = pendingScroll.current;
+    if (!pending) return;
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(scrollToPending, settleDelayMs(Date.now(), pending.deadline));
+  }, [scrollToPending]);
+  useEffect(() => {
+    if (!upNext || scrolledFor.current === upNext.key) return;
+    scrolledFor.current = upNext.key;
+    pendingScroll.current = { setId: upNext.next.setId, entryId: upNext.next.entryId, deadline: Date.now() + SETTLE_MAX_MS };
+    settle();
+  }, [upNext, settle]);
+
+  const onBarHeight = useCallback(
+    (height: number) => {
+      barSpace.current = height;
+      setRestBarSpace(height);
+      settle();
+    },
+    [settle],
+  );
 
   // Last time's sets per exercise, for the PREVIOUS column.
   const lastByExercise = useMemo(() => {
@@ -156,6 +228,17 @@ export default function ActiveWorkoutScreen() {
       <WorkoutHeader title={session.name} startedAt={session.startedAt} counts={counts} onMinimize={() => router.back()} onFinish={finish} />
 
       <ScrollView
+        ref={scrollRef}
+        onLayout={(e) => {
+          layout.current.viewportHeight = e.nativeEvent.layout.height;
+          settle();
+        }}
+        onContentSizeChange={(_width, height) => {
+          layout.current.contentHeight = height;
+          settle();
+        }}
+        onScroll={(e) => (layout.current.scrollY = e.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={16}
         contentContainerStyle={[styles.content, readable, { paddingBottom: insets.bottom + (restBarSpace ? restBarSpace + spacing.lg : spacing.huge) }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
@@ -169,6 +252,11 @@ export default function ActiveWorkoutScreen() {
               key={block.id}
               block={block}
               letter={letter}
+              defaultRoundRestSec={preferences.restDefaultsSec.compound}
+              onLayout={(e) => {
+                layout.current.blocks.set(block.id, e.nativeEvent.layout.y);
+                settle();
+              }}
               renderExercise={(entry, label) => (
                 <ExerciseSection
                   entry={entry}
@@ -189,6 +277,14 @@ export default function ActiveWorkoutScreen() {
                     router.push({ pathname: '/form/setup', params: { exercise: entry.exerciseId, entry: entry.id, set: next?.id } });
                   }}
                   onUnskip={() => dispatch({ type: 'toggleSkip', entryId: entry.id })}
+                  onLayout={(e) => {
+                    layout.current.entries.set(entry.id, { blockId: block.id, y: e.nativeEvent.layout.y });
+                    settle();
+                  }}
+                  onSetLayout={(setId, e) => {
+                    layout.current.sets.set(setId, { y: e.nativeEvent.layout.y, height: e.nativeEvent.layout.height });
+                    settle();
+                  }}
                 />
               )}
             />
@@ -226,7 +322,7 @@ export default function ActiveWorkoutScreen() {
         </View>
       </ScrollView>
 
-      <RestTimerBar onExpand={() => router.push('/workout/timer')} onHeightChange={setRestBarSpace} />
+      <RestTimerBar onExpand={() => router.push('/workout/timer')} onHeightChange={onBarHeight} />
       {/* This sheet sits above the root view, so it needs its own toast host (clear of the rest bar). */}
       <ToastViewport bottomOffset={restBarSpace ? restBarSpace + spacing.sm : spacing.lg} />
     </View>

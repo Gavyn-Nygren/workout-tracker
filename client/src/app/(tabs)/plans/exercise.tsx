@@ -1,29 +1,35 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppText, Card, ErrorState, Icon, ListRow, NotFoundState, ScreenSkeleton, SectionHeader } from '@/components/ui';
-import { useExercises, usePlans, usePreferences, useSessions } from '@/data/hooks';
-import { defaultPreferences } from '@/data/preferences';
+import { AppText, Button, Card, ErrorState, Icon, ListRow, NotFoundState, ScreenSkeleton, SectionHeader } from '@/components/ui';
+import { useExercises, usePlans, useSessions } from '@/data/hooks';
+import { withRememberedRests } from '@/data/preferences';
+import { formatClock, spokenDuration } from '@/hooks/useNow';
 import { formatShortDate } from '@/lib/format';
 import { EQUIPMENT_ICON, EQUIPMENT_LABEL, MUSCLE_LABEL } from '@/features/exercises/ExerciseList';
+import { RestStepper } from '@/features/settings/RestStepper';
+import { useSettings } from '@/features/settings/useSettings';
 import { formatBest } from '@/features/summary/SummaryCards';
 import { bestSet } from '@/features/summary/summarize';
+import { exerciseRest } from '@/features/workout/rest';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
-import { readable } from '@/theme/layout';
+import { readable, useTextScale } from '@/theme/layout';
 
-/** Exercise details: what it trains, where it's used, and when you last did it. */
+/** Exercise details: what it trains, its rest, where it's used, and when you last did it. */
 export default function ExerciseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useAppTheme();
+  const { large } = useTextScale();
   const exercisesQuery = useExercises();
   const plansQuery = usePlans();
   const sessionsQuery = useSessions();
   const { data: exercises } = exercisesQuery;
   const { data: plans } = plansQuery;
   const { data: sessions } = sessionsQuery;
-  const units = (usePreferences().data ?? defaultPreferences).units;
+  const { preferences, update } = useSettings();
+  const units = preferences.units;
 
   const exercise = exercises?.find((e) => e.id === id);
   const base = exercises?.find((e) => e.id === exercise?.baseMovementId);
@@ -60,6 +66,12 @@ export default function ExerciseScreen() {
     exercise.isBodyweight ? 'Bodyweight load' : undefined,
     exercise.source === 'custom' ? 'Custom' : undefined,
   ].filter(Boolean) as string[];
+
+  // The rest between its sets when a plan sets none (spec 2.6): remembered from adjusting the
+  // timer in workouts or set here, else its type's default from Settings.
+  const rest = exerciseRest(exercise.id, exercise.category, { defaults: preferences.restDefaultsSec, remembered: preferences.restByExerciseSec });
+  const typeName = exercise.category === 'compound' ? 'compound' : 'isolation';
+  const typeDefaultSec = preferences.restDefaultsSec[exercise.category];
 
   return (
     <>
@@ -115,6 +127,45 @@ export default function ExerciseScreen() {
             separator={false}
           />
         </Card>
+
+        <View style={styles.section}>
+          <SectionHeader title="Rest" />
+          <Card padding="none">
+            {/* At accessibility sizes the label sits above the stepper so neither gets squeezed. */}
+            <View style={large ? styles.restStacked : styles.restRow}>
+              <View style={!large && styles.flex}>
+                <AppText variant="body">Rest between sets</AppText>
+                <AppText variant="footnote" tone="secondary">
+                  {rest.source === 'remembered' ? 'Remembered for this exercise' : `${typeName === 'compound' ? 'Compound' : 'Isolation'} default`}
+                </AppText>
+              </View>
+              <RestStepper
+                label={`Rest between sets of ${exercise.name}`}
+                value={rest.durationSec}
+                onChange={(sec) => update((p) => withRememberedRests(p, { [exercise.id]: sec }))}
+              />
+            </View>
+            {rest.source === 'remembered' && (
+              <View style={[styles.restFooter, { borderTopColor: colors.border }]}>
+                <Button
+                  title={`Reset to ${typeName} default`}
+                  variant="ghost"
+                  size="sm"
+                  icon="arrow.counterclockwise"
+                  onPress={() => {
+                    update((p) => withRememberedRests(p, { [exercise.id]: null }));
+                    // The button goes away with the remembered rest, so the result is said.
+                    AccessibilityInfo.announceForAccessibility(`Rest reset to the ${typeName} default, ${spokenDuration(typeDefaultSec)}.`);
+                  }}
+                  accessibilityLabel={`Reset rest to the ${typeName} default, ${spokenDuration(typeDefaultSec)}`}
+                />
+              </View>
+            )}
+          </Card>
+          <AppText variant="footnote" tone="secondary" style={styles.hint}>
+            {`Used when a plan doesn't set its own rest. Changing the rest timer after a set of this exercise updates it.${rest.source === 'remembered' ? ` The ${typeName} default is ${formatClock(typeDefaultSec)}.` : ''}`}
+          </AppText>
+        </View>
 
         {exercise.instructions && (
           <View style={styles.section}>
@@ -194,5 +245,30 @@ const styles = StyleSheet.create({
   },
   none: {
     padding: spacing.lg,
+  },
+  restRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  restStacked: {
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  restFooter: {
+    alignItems: 'flex-start',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  hint: {
+    paddingHorizontal: spacing.xs,
+  },
+  flex: {
+    flex: 1,
   },
 });

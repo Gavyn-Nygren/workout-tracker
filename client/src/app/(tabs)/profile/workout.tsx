@@ -1,7 +1,7 @@
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppText, Card, ListRow, SectionHeader, Stepper, Toggle } from '@/components/ui';
-import { formatClock, spokenDuration } from '@/hooks/useNow';
+import { AppText, Card, ListRow, SectionHeader, Toggle } from '@/components/ui';
+import { RestStepper } from '@/features/settings/RestStepper';
 import { useSettings } from '@/features/settings/useSettings';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -33,21 +33,16 @@ export default function WorkoutDefaultsScreen() {
                   {row.hint}
                 </AppText>
               </View>
-              <Stepper
+              <RestStepper
                 label={`${row.label} rest`}
                 value={preferences.restDefaultsSec[row.key]}
                 onChange={(sec) => update((p) => ({ ...p, restDefaultsSec: { ...p.restDefaultsSec, [row.key]: sec } }))}
-                step={15}
-                min={15}
-                max={600}
-                formatValue={formatClock}
-                spokenValue={spokenDuration}
               />
             </View>
           ))}
         </Card>
         <AppText variant="footnote" tone="secondary" style={styles.hint}>
-          Used when a plan doesn't set its own rest. Supersets rest after each round instead.
+          {"Used when a plan doesn't set its own rest. When you change the timer after an exercise's set, that exercise keeps your time instead. Supersets rest after each round."}
         </AppText>
       </View>
 

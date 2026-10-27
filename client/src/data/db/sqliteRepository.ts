@@ -1,11 +1,12 @@
 import { builtinExercises, starterTemplates } from '../content';
 import { addDays, todayISO } from '../dates';
-import { defaultPreferences } from '../preferences';
+import { withPreferenceDefaults } from '../preferences';
 import { deriveBadges, deriveStreak } from '../progress';
 import { derivePersonalRecords } from '../records';
 import { SCHEDULE_AHEAD_DAYS, type DataRepository, type DateRange } from '../repository';
 import { planShiftFor, scheduleOccurrences, shiftCovers, shiftedDate } from '../schedule';
 import type { BodyweightEntry, Exercise, FormReport, Goal, ID, ISODate, LoggedSet, Plan, PlanShift, Preferences, Recording, ScheduledOccurrence, WorkoutSession } from '../types';
+import { blankAutoFilledPlanRests } from './blankPlanRests';
 import { insertRowIfMissing, joinSessions, nowISO, putRow, readAll, readAllSync, readOne, readOneSync, splitSession, tombstone } from './rows';
 import type { SqlDb, SqlValue } from './sql';
 
@@ -105,8 +106,7 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
     return frequency?.type === 'frequency' ? frequency.workoutsPerWeek : DEFAULT_WEEKLY_TARGET;
   };
   const preferencesSync = (): Preferences => {
-    const stored = readOneSync<Preferences>(db, 'preferences', PREFERENCES_ID);
-    return stored ? { ...defaultPreferences, ...stored } : defaultPreferences;
+    return withPreferenceDefaults(readOneSync<Preferences>(db, 'preferences', PREFERENCES_ID));
   };
   const getStreak = async () => deriveStreak(await allSessions(), today(), await weeklyTarget(), preferencesSync().weekStartsOn);
 
@@ -166,6 +166,8 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
     }
   };
 
+  // Once per database: plans made before G3.8 lose the rests the app filled in (see blankPlanRests.ts).
+  blankAutoFilledPlanRests(db);
   ensureSchedule();
 
   return {
@@ -178,9 +180,8 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
     // Reads
 
     getPreferences: async () => {
-      const stored = await readOne<Preferences>(db, 'preferences', PREFERENCES_ID);
       // Settings added in later versions fall back to their defaults.
-      return stored ? { ...defaultPreferences, ...stored, notifications: { ...defaultPreferences.notifications, ...stored.notifications } } : defaultPreferences;
+      return withPreferenceDefaults(await readOne<Preferences>(db, 'preferences', PREFERENCES_ID));
     },
     listExercises,
     getExercise: async (id) => builtinById.get(id) ?? (await readOne<Exercise>(db, 'custom_exercises', id)),

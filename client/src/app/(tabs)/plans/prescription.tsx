@@ -8,7 +8,8 @@ import { defaultPreferences } from '@/data/preferences';
 import type { MissBehavior, PlannedExercise, ProgressionRule, RepTarget, SetKind, SetPrescription } from '@/data/types';
 import { kgToLb, lbToKg } from '@/data/units';
 import { plural, unitLabel } from '@/lib/format';
-import { updatePlanned } from '@/features/plans/planEdits';
+import { autoRestHint } from '@/features/plans/describe';
+import { updatePlanned, withWarmupSet } from '@/features/plans/planEdits';
 import { TempoField } from '@/features/plans/TempoField';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing, tabularNums, typography } from '@/theme/tokens';
@@ -46,7 +47,8 @@ export default function PrescriptionScreen() {
   const savePlan = useSavePlan();
 
   const plan = planQuery.data;
-  const planned = plan?.workouts.find((w) => w.id === workoutId)?.blocks.flatMap((b) => b.exercises).find((e) => e.id === pe);
+  const block = plan?.workouts.find((w) => w.id === workoutId)?.blocks.find((b) => b.exercises.some((e) => e.id === pe));
+  const planned = block?.exercises.find((e) => e.id === pe);
   const exercise = exercisesQuery.data?.find((e) => e.id === planned?.exerciseId);
 
   const [draft, setDraft] = useState<PlannedExercise | undefined>(planned);
@@ -128,6 +130,11 @@ export default function PrescriptionScreen() {
   const effortName = preferences.effortScale === 'rpe' ? 'RPE' : 'RIR';
   const unitWord = units === 'imperial' ? 'pounds' : 'kilograms';
 
+  // What a rest left on Auto does. In a superset or circuit the working sets rest after each round
+  // instead of on their own (the block's round rest, else the compound default, like the timer).
+  const group = block?.type === 'superset' || block?.type === 'circuit' ? { type: block.type, roundRestSec: block.roundRestSec ?? preferences.restDefaultsSec.compound } : undefined;
+  const restHint = { text: autoRestHint(draft.sets, group), spoken: autoRestHint(draft.sets, group, true) };
+
   /** The set's type button and its three fields, laid out by the table row or the stacked block. */
   const setParts = (set: SetPrescription, i: number) => {
     const hold = set.kind === 'timed_hold';
@@ -161,7 +168,16 @@ export default function PrescriptionScreen() {
           placeholder="—"
         />
       ),
-      rest: <NumberField label={`Set ${i + 1} rest in seconds`} value={set.restSec} onChange={(v) => editSet(i, { restSec: v })} width={fieldWidth(72)} placeholder="—" />,
+      // Blank (or 0) is Auto: the set rests like the exercise does (see restHint below).
+      rest: (
+        <NumberField
+          label={`Set ${i + 1} rest in seconds`}
+          value={set.restSec || undefined}
+          onChange={(v) => editSet(i, { restSec: v || undefined })}
+          width={fieldWidth(72)}
+          placeholder="Auto"
+        />
+      ),
     };
   };
 
@@ -240,6 +256,9 @@ export default function PrescriptionScreen() {
               );
             })}
           </Card>
+          <AppText variant="footnote" tone="secondary" accessibilityLabel={restHint.spoken} style={styles.hint}>
+            {restHint.text}
+          </AppText>
           <View style={styles.buttons}>
             <Button
               title="Add set"
@@ -253,7 +272,7 @@ export default function PrescriptionScreen() {
               variant="ghost"
               size="sm"
               icon="flame"
-              onPress={() => edit((d) => ({ ...d, sets: [{ kind: 'warmup', modifiers: [], targetReps: 5, restSec: 60 }, ...d.sets] }))}
+              onPress={() => edit(withWarmupSet)}
             />
           </View>
         </View>
@@ -459,6 +478,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     textAlign: 'center',
     paddingHorizontal: spacing.sm,
+  },
+  hint: {
+    paddingHorizontal: spacing.xs,
   },
   buttons: {
     flexDirection: 'row',

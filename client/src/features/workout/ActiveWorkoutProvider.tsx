@@ -1,31 +1,72 @@
+import { router } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, AppState } from 'react-native';
 
 import { useRepository } from '@/data/DataProvider';
 
 import { completionStamp } from '@/data/dates';
-import { succeeded, useBodyweight, useDeleteSession, useExercises, usePreferences, useSaveSession, useSessions } from '@/data/hooks';
-import { defaultPreferences } from '@/data/preferences';
+import { succeeded, useBodyweight, useDeleteSession, useExercises, useLatestPreferences, usePreferences, useSavePreferences, useSaveSession, useSessions } from '@/data/hooks';
+import { defaultPreferences, withRememberedRests } from '@/data/preferences';
 import { deriveRecordBests, livePRSetIds, sessionsBefore, type RecordBests } from '@/data/records';
-import type { Exercise, LoggedSet, SessionBlock, SessionExercise, WorkoutSession } from '@/data/types';
+import type { Exercise, SessionBlock, SessionExercise, WorkoutSession } from '@/data/types';
 import { useHaptics } from '@/hooks/useHaptics';
 import { spokenDuration } from '@/hooks/useNow';
 import { createLocalStore } from '@/lib/localStore';
 import type { DayItem } from '../today/agenda';
 import { sessionForReopen, sessionFromPlan } from './buildSession';
 import { bodyweightForSet, completedNewestFirst, recordsAddedByReopen } from './history';
-import { continueAs, discardPlan, restoredRest, sessionToResume, type ActiveWorkoutMeta, type RestTimer } from './persistence';
+import { continueAs, discardPlan, restoredRest, sessionToResume, type ActiveWorkoutMeta } from './persistence';
+import {
+  adjustedRest,
+  describeNextUp,
+  followsLastSet,
+  learnedRest,
+  nextUp,
+  presetRest,
+  restAfterSet,
+  restEnd,
+  restOverAnnouncement,
+  startedRest,
+  toggledPause,
+  withCurrentNext,
+  type NextUp,
+  type RestTimer,
+} from './rest';
+import { shouldOfferRestAlarm } from './restAlarm';
+import { markRestAlarmAsked, notificationPermission, restAlarmAsked, useRestAlarm } from './useRestAlarm';
 import { completionOf, countSets, setName, setNumber, workoutReducer, type ActiveWorkout, type SetCounts, type WorkoutAction } from './workoutReducer';
 
-export type { RestTimer } from './persistence';
+export type { RestTimer } from './rest';
+export { restRemainingMs } from './rest';
 
 /** How long edits wait before they're written, so a burst of taps saves once. */
 const AUTOSAVE_DELAY_MS = 500;
+/** How long rest adjustments wait before the exercise's remembered rest is saved, so a burst of ±15 taps saves once. */
+const LEARN_SAVE_DELAY_MS = 2000;
+/** How long the "Rest over" bar stays. */
+const REST_OVER_MS = 3000;
+/** How long the bar says "Next: Bench Press, set 2" after a superset set (or until the next completion). */
+const UP_NEXT_MS = 4000;
+/** How long after the first rest starts its rest-alarm offer opens, so the check and the rest bar land first. */
+const REST_ALARM_OFFER_DELAY_MS = 1000;
 
 /** The phone's note of the unfinished workout, for resuming after the app is closed. */
 const activeWorkoutStore = createLocalStore<ActiveWorkoutMeta | null>('activeWorkout', null);
 
 type Position = { index: number; total: number };
+
+/**
+ * After a superset or circuit set that isn't the last of its round: the set to do next. The
+ * workout scrolls to it; `cue` is true when there's no transition rest, so the bar says "Next: …"
+ * instead. `key` is new every time, even for the same set.
+ */
+export type UpNext = { next: NextUp; cue: boolean; key: number };
+
+/** The brief "Rest over" notice after a rest ends with the app open. */
+export type RestOver = {
+  /** The rest followed the workout's last set, so there's no next set to go to. */
+  lastSet: boolean;
+};
 
 /** What Finish saved, for opening the summary. */
 export type FinishedWorkout = {
@@ -39,9 +80,12 @@ export type FinishedWorkout = {
 type ContextValue = {
   workout: ActiveWorkout | null;
   counts: SetCounts;
+  /** The running rest, with its next set up to date with edits made during it. */
   rest: RestTimer | null;
-  /** True for a few seconds after a rest countdown finishes. */
-  restJustEnded: boolean;
+  /** Set for a few seconds after a rest countdown finishes with the app open. */
+  restJustEnded: RestOver | null;
+  /** For a few seconds after a superset or circuit set that isn't its round's last (decision C). */
+  upNext: UpNext | null;
   /**
    * Sets that show the live PR badge: completed sets that beat the best from before them (earlier
    * workouts and earlier sets in this one). Derived from the sets as they are, so edits move it.
@@ -58,7 +102,9 @@ type ContextValue = {
   repeat: (item: DayItem, source: WorkoutSession) => void;
   completeSet: (entryId: string, setId: string) => void;
   uncompleteSet: (entryId: string, setId: string) => void;
-  startRest: (durationSec: number, label: string) => void;
+  /** A preset from the timer sheet: restarts the running rest at that length, or starts a manual timer. */
+  pickRestPreset: (sec: number) => void;
+  /** −15 s / +15 s. On a rest that can teach, the new length becomes the exercise's rest. */
   adjustRest: (deltaSec: number) => void;
   togglePauseRest: () => void;
   skipRest: () => void;
@@ -92,12 +138,15 @@ function locate(session: WorkoutSession, entryId: string): { block: SessionBlock
  */
 export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
   const [workout, dispatch] = useReducer(workoutReducer, null);
-  const [rest, setRest] = useState<RestTimer | null>(null);
-  const [restJustEnded, setRestJustEnded] = useState(false);
+  const [rest, setRestState] = useState<RestTimer | null>(null);
+  const [restJustEnded, setRestJustEnded] = useState<RestOver | null>(null);
+  const [upNext, setUpNext] = useState<UpNext | null>(null);
   const haptics = useHaptics();
   const repo = useRepository();
   const saveSession = useSaveSession();
   const deleteSession = useDeleteSession();
+  const { mutateAsync: savePreferences } = useSavePreferences();
+  const latestPreferences = useLatestPreferences();
   /** For a reopened workout, the finished version to restore if the reopen is discarded. */
   const original = useRef<WorkoutSession | undefined>(undefined);
   const current = useRef<ActiveWorkout | null>(null);
@@ -110,7 +159,8 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
   const sessions = useSessions();
   const exercises = useExercises();
   const bodyweight = useBodyweight();
-  const preferences = usePreferences().data ?? defaultPreferences;
+  const preferencesQuery = usePreferences();
+  const preferences = preferencesQuery.data ?? defaultPreferences;
 
   const exercisesById = useMemo(() => new Map((exercises.data ?? []).map((e) => [e.id, e])), [exercises.data]);
   const history = useMemo(() => completedNewestFirst(sessions.data ?? [], workout?.session.id), [sessions.data, workout?.session.id]);
@@ -134,24 +184,167 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
   );
   const weighIns = useMemo(() => [...(bodyweight.data ?? [])].sort((a, b) => a.date.localeCompare(b.date)), [bodyweight.data]);
 
+  // ---------------------------------------------------------------------------
+  // Rest timer (the rules live in rest.ts)
 
-  // Countdown end: haptic and a VoiceOver announcement (iOS has no live regions), then a brief
-  // "Rest over" state. Works while the sheet is minimized, and with haptics turned off.
-  const endTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** The rest as last changed, for callbacks (state only catches up on the next render). */
+  const restRef = useRef<RestTimer | null>(null);
+  /**
+   * The one place the running rest changes: a rest after a set, presets, ±15 s, pause, skip, its
+   * end, opening or closing a workout, and restoring after a restart all come through here.
+   * Everything that follows the rest (the end timer, the resume note, a rest alarm) watches `rest`.
+   */
+  const changeRest = useCallback((next: RestTimer | null) => {
+    restRef.current = next;
+    setRestState(next);
+  }, []);
+
+  // Brief notices in the bar's slot: "Rest over" and "Next: …". Each owns its timer, so an old one never cuts a new one short.
+  const restOverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showRestOver = useCallback((ended: RestOver | null) => {
+    if (restOverTimer.current) clearTimeout(restOverTimer.current);
+    restOverTimer.current = ended ? setTimeout(() => setRestJustEnded(null), REST_OVER_MS) : null;
+    setRestJustEnded(ended);
+  }, []);
+  const upNextTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const upNextCount = useRef(0);
+  const showUpNext = useCallback((next: NextUp | null, cue: boolean) => {
+    if (upNextTimer.current) clearTimeout(upNextTimer.current);
+    upNextTimer.current = next ? setTimeout(() => setUpNext(null), UP_NEXT_MS) : null;
+    setUpNext(next ? { next, cue, key: ++upNextCount.current } : null);
+  }, []);
+
+  /** When the app went to the background, while it's still there; null in the foreground. */
+  const awaySince = useRef<number | null>(null);
+  /** Counts returns to the foreground, so the end timer is re-armed from the clock (timers may run slow while the phone sleeps). */
+  const [returns, setReturns] = useState(0);
+
+  /**
+   * Ends the rest if its time is up. With the app open: a strong haptic, a VoiceOver announcement
+   * (iOS has no live regions), and the brief "Rest over" bar, also while the sheet is minimized.
+   * While the app is in the background it's left alone, so the pending rest alarm still rings;
+   * `returning` settles it when the app is back. If the alarm's time passed while the app was
+   * away, it just clears: no late buzz, bar, or announcement (rest.ts `restEnd`).
+   * Safe to call any time; it does nothing to a rest that's paused or still running.
+   */
+  const settleRest = useCallback(
+    (returning = false) => {
+      const ending = restRef.current;
+      const outcome = restEnd(ending, Date.now(), { awaySinceMs: awaySince.current, returning });
+      if (!ending || (outcome !== 'alert' && outcome !== 'quiet')) return outcome;
+      changeRest(null);
+      if (outcome === 'alert') {
+        // What's next as the workout is now, not as it was when the rest started.
+        const ended = withCurrentNext(ending, current.current?.session, exercisesById) ?? ending;
+        haptics.timerEnd();
+        AccessibilityInfo.announceForAccessibility(restOverAnnouncement(ended));
+        showRestOver({ lastSet: followsLastSet(ended) });
+      }
+      return outcome;
+    },
+    [changeRest, haptics, showRestOver, exercisesById],
+  );
+
+  // The countdown's end while the app is open. Re-armed whenever the rest changes, so a timer
+  // never fires for a rest that's been adjusted, paused, or replaced, and on every return to the app.
   useEffect(() => {
-    if (endTimer.current) clearTimeout(endTimer.current);
     if (!rest || rest.pausedRemainingMs !== undefined) return;
-    endTimer.current = setTimeout(() => {
-      haptics.timerEnd();
-      AccessibilityInfo.announceForAccessibility('Rest over. Time for your next set.');
-      setRest(null);
-      setRestJustEnded(true);
-      setTimeout(() => setRestJustEnded(false), 3000);
-    }, Math.max(0, rest.endsAtMs - Date.now()));
-    return () => {
-      if (endTimer.current) clearTimeout(endTimer.current);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      timer = setTimeout(() => {
+        // A timer that fires a moment early waits out the rest of it. One that fires in the
+        // background ('away') isn't re-armed: returning to the app settles the rest.
+        if (settleRest() === 'running' && restRef.current === rest) arm();
+      }, Math.max(0, rest.endsAtMs - Date.now()));
     };
-  }, [rest, haptics]);
+    arm();
+    return () => clearTimeout(timer);
+  }, [rest, settleRest, returns]);
+
+  // Rest memory (decision B): adjusting a rest that can teach makes its new length the exercise's
+  // rest, right away for this workout, and saved for later ones without a write per tap.
+  /** Learned and not sent yet. */
+  const unsaved = useRef<Record<string, number>>({});
+  /** Sent and not settled yet, so they still count before the saved settings catch up. */
+  const saving = useRef<Record<string, number>>({});
+  const learnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushLearned = useCallback(() => {
+    if (learnTimer.current) clearTimeout(learnTimer.current);
+    learnTimer.current = null;
+    // The settings as they are now, so a change saved meanwhile (another screen's) isn't undone.
+    const base = latestPreferences();
+    const changes = unsaved.current;
+    // Before the saved settings load there's nothing to merge into; they wait for the next flush.
+    if (!base || !Object.keys(changes).length) return;
+    unsaved.current = {};
+    // Rests still being saved go along again, in case the settings here don't show them yet.
+    saving.current = { ...saving.current, ...changes };
+    // Saved or not (a failure shows the settings error toast), the saved settings now say what counts.
+    void succeeded(savePreferences(withRememberedRests(base, saving.current))).then(() => {
+      const left = { ...saving.current };
+      for (const [id, sec] of Object.entries(changes)) if (left[id] === sec) delete left[id];
+      saving.current = left;
+    });
+  }, [savePreferences, latestPreferences]);
+  const learn = useCallback(
+    (changed: RestTimer | null) => {
+      const lesson = learnedRest(changed);
+      if (!lesson) return;
+      unsaved.current = { ...unsaved.current, [lesson.exerciseId]: lesson.sec };
+      if (learnTimer.current) clearTimeout(learnTimer.current);
+      learnTimer.current = setTimeout(flushLearned, LEARN_SAVE_DELAY_MS);
+    },
+    [flushLearned],
+  );
+
+  const adjustRest = useCallback(
+    (deltaSec: number) => {
+      if (!restRef.current) return;
+      const next = adjustedRest(restRef.current, deltaSec, Date.now());
+      changeRest(next);
+      learn(next);
+    },
+    [changeRest, learn],
+  );
+  const pickRestPreset = useCallback(
+    (sec: number) => {
+      const next = presetRest(restRef.current, sec, Date.now());
+      showRestOver(null);
+      changeRest(next);
+      learn(next);
+    },
+    [changeRest, learn, showRestOver],
+  );
+  const togglePauseRest = useCallback(() => {
+    if (restRef.current) changeRest(toggledPause(restRef.current, Date.now()));
+  }, [changeRest]);
+  const skipRest = useCallback(() => changeRest(null), [changeRest]);
+
+  // Decision A: the first rest that starts by itself after a set offers the rest alarm, once per
+  // phone. The sheet explains it, then iOS asks; it opens a moment later, if a rest is still on.
+  const offerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelRestAlarmOffer = useCallback(() => {
+    if (offerTimer.current) clearTimeout(offerTimer.current);
+    offerTimer.current = null;
+  }, []);
+  const offerRestAlarm = useCallback(
+    (started: RestTimer | null) => {
+      const wanted = (candidate: RestTimer | null) => {
+        const settings = latestPreferences();
+        return Boolean(settings) && shouldOfferRestAlarm({ rest: candidate, enabled: Boolean(settings?.notifications.restTimer), asked: restAlarmAsked(), permission: notificationPermission() });
+      };
+      if (!wanted(started)) return;
+      cancelRestAlarmOffer();
+      offerTimer.current = setTimeout(() => {
+        offerTimer.current = null;
+        // Skipped meanwhile, or a superset transition took over: wait for another rest.
+        if (!wanted(restRef.current)) return;
+        markRestAlarmAsked();
+        router.push({ pathname: '/notifications-permission', params: { key: 'restTimer', from: 'rest' } });
+      }, REST_ALARM_OFFER_DELAY_MS);
+    },
+    [cancelRestAlarmOffer, latestPreferences],
+  );
 
   // Resume: when the app opens, pick up the workout that was in progress when it closed.
   const [resumeChecked, setResumeChecked] = useState(false);
@@ -165,7 +358,8 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
         const found = sessionToResume(remembered, all);
         if (!found) return;
         original.current = found.meta.original;
-        setRest(restoredRest(found.meta.rest, Date.now()));
+        // A paused rest picks up where it was; one that ran out while the app was closed is dropped quietly.
+        changeRest(restoredRest(found.meta.rest, Date.now()));
         dispatch({ type: 'resume', workout: { mode: found.meta.mode, position: found.meta.position, session: found.session } });
       })
       .catch(() => {})
@@ -175,7 +369,14 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [repo]);
+  }, [repo, changeRest]);
+
+  // What's next follows edits made during the rest (a swap, a skip, a removed set), for the bar,
+  // the timer sheet and the alarm. The same rest object while nothing about it changed.
+  const liveRest = useMemo(() => withCurrentNext(rest, activeSession, exercisesById), [rest, activeSession, exercisesById]);
+
+  // The rest alarm follows the rest: scheduled, moved, and cancelled with it (useRestAlarm.ts).
+  useRestAlarm(liveRest, preferencesQuery.data?.notifications, resumeChecked);
 
   // Remember what resuming needs (mode, rest timer, restore point). Waits for the resume check, so
   // the note isn't wiped before it's been read.
@@ -211,32 +412,25 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
     // Finish and Discard write the workout themselves; an auto-save landing after them would undo it.
     if (!finishing.current) scheduleAutosave(workout.session);
   }, [workout, cancelAutosave, scheduleAutosave]);
+
+  // Leaving the app saves everything pending. Coming back settles a rest that ran out meanwhile
+  // before anything shows, so there's no late buzz or "Rest over" once the alarm has rung (JS
+  // timers stop while iOS has the app suspended, and fire late on return).
   useEffect(() => {
+    if (AppState.currentState === 'background' && awaySince.current === null) awaySince.current = Date.now();
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') flushAutosave();
+      if (state === 'active') {
+        settleRest(true);
+        awaySince.current = null;
+        setReturns((n) => n + 1);
+        return;
+      }
+      if (state === 'background' && awaySince.current === null) awaySince.current = Date.now();
+      flushAutosave();
+      flushLearned();
     });
     return () => subscription.remove();
-  }, [flushAutosave]);
-
-  const startRest = useCallback((durationSec: number, label: string) => {
-    setRestJustEnded(false);
-    setRest(durationSec > 0 ? { endsAtMs: Date.now() + durationSec * 1000, durationSec, label } : null);
-  }, []);
-
-  const restAfter = useCallback(
-    (block: SessionBlock, entry: SessionExercise, set: LoggedSet): number => {
-      const exercise = exercisesById.get(entry.exerciseId);
-      const defaults = preferences.restDefaultsSec;
-      if (set.kind === 'warmup') return set.target?.restSec || defaults.warmup;
-      if (block.type === 'superset' || block.type === 'circuit') {
-        // Rest after the round's last exercise; otherwise only the optional transition.
-        const isLast = block.exercises[block.exercises.length - 1]?.id === entry.id;
-        return isLast ? (block.roundRestSec ?? defaults.compound) : (block.transitionRestSec ?? 0);
-      }
-      return set.target?.restSec || (exercise?.category === 'isolation' ? defaults.isolation : defaults.compound);
-    },
-    [exercisesById, preferences.restDefaultsSec],
-  );
+  }, [flushAutosave, flushLearned, settleRest]);
 
   const completeSet = useCallback(
     (entryId: string, setId: string) => {
@@ -257,30 +451,50 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       // Numbered like the set table, where warm-ups count separately from working sets.
       const name = setName(set.kind, setNumber(found.entry.sets, set)).toLowerCase();
       const exerciseName = exercise?.name ?? 'Exercise';
-      const restSec = restAfter(found.block, found.entry, set);
-      startRest(restSec, `${exerciseName} · ${name}`);
+      const session = next?.session ?? workout.session;
+      const done = { entryId, setId };
+      const remembered = { ...preferences.restByExerciseSec, ...saving.current, ...unsaved.current };
+      const choice = restAfterSet(session, done, exercisesById, { defaults: preferences.restDefaultsSec, remembered });
+      // Null when this was the last set left to do.
+      const following = nextUp(session, done, exercisesById);
+      const restSec = choice?.durationSec ?? 0;
+      showRestOver(null);
+      const started = choice && startedRest(choice, { label: `${exerciseName} · ${name}`, after: { ...done, exerciseId: found.entry.exerciseId }, next: following }, Date.now());
+      changeRest(started);
+      offerRestAlarm(started);
+      // Superset or circuit, mid-round (decision C): straight on to the next exercise. The workout
+      // scrolls to it, and with no transition rest the bar says "Next: …" for a moment.
+      const midRound = choice?.source === 'transition' ? following : null;
+      showUpNext(midRound, restSec === 0);
       // Queued so it follows VoiceOver reading the check's new state.
       AccessibilityInfo.announceForAccessibilityWithOptions(
-        `${exerciseName} ${name} done.${isPR ? ' New personal record!' : ''}${restSec > 0 ? ` Rest ${spokenDuration(restSec)}.` : ''}`,
+        `${exerciseName} ${name} done.${isPR ? ' New personal record!' : ''}${restSec > 0 ? ` Rest ${spokenDuration(restSec)}.` : ''}${midRound ? ` Next: ${describeNextUp(midRound)}.` : ''}`,
         { queue: true },
       );
     },
-    [workout, exercisesById, weighIns, beforeBests, haptics, restAfter, startRest],
+    [workout, exercisesById, weighIns, beforeBests, haptics, preferences.restByExerciseSec, preferences.restDefaultsSec, changeRest, showRestOver, showUpNext, offerRestAlarm],
   );
 
   const value = useMemo<ContextValue>(() => {
+    /** Clears what belonged to the last workout. Learned rests are saved now rather than waiting. */
+    const reset = () => {
+      changeRest(null);
+      cancelRestAlarmOffer();
+      showRestOver(null);
+      showUpNext(null, false);
+      flushLearned();
+    };
     /** Clears what belonged to the last workout before another one opens. */
     const open = (next: ActiveWorkout, restorePoint?: WorkoutSession) => {
       generation.current++;
       finishing.current = false;
       original.current = restorePoint;
-      setRest(null);
+      reset();
       dispatch({ type: 'start', workout: next });
     };
     const close = () => {
       original.current = undefined;
-      setRest(null);
-      setRestJustEnded(false);
+      reset();
       dispatch({ type: 'end' });
     };
     /** The write failed and the workout stays open: auto-save resumes, starting with any edits made meanwhile. */
@@ -292,8 +506,9 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
     return {
       workout,
       counts: workout ? countSets(workout.session) : { done: 0, total: 0 },
-      rest,
+      rest: liveRest,
       restJustEnded,
+      upNext,
       prSetIds,
       exercisesById,
       history,
@@ -317,21 +532,10 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'uncompleteSet', entryId, setId });
         if (entry && set) AccessibilityInfo.announceForAccessibilityWithOptions(`${setName(set.kind, setNumber(entry.sets, set))} marked not done.`, { queue: true });
       },
-      startRest,
-      adjustRest: (deltaSec) =>
-        setRest((r) => {
-          if (!r) return r;
-          if (r.pausedRemainingMs !== undefined) return { ...r, pausedRemainingMs: Math.max(0, r.pausedRemainingMs + deltaSec * 1000) };
-          const endsAtMs = Math.max(Date.now(), r.endsAtMs + deltaSec * 1000);
-          return { ...r, endsAtMs, durationSec: Math.max(1, r.durationSec + deltaSec) };
-        }),
-      togglePauseRest: () =>
-        setRest((r) => {
-          if (!r) return r;
-          if (r.pausedRemainingMs !== undefined) return { ...r, endsAtMs: Date.now() + r.pausedRemainingMs, pausedRemainingMs: undefined };
-          return { ...r, pausedRemainingMs: Math.max(0, r.endsAtMs - Date.now()) };
-        }),
-      skipRest: () => setRest(null),
+      pickRestPreset,
+      adjustRest,
+      togglePauseRest,
+      skipRest,
       end: async () => {
         if (!workout) return false;
         const opened = generation.current;
@@ -374,15 +578,24 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
     };
   }, [
     workout,
-    rest,
+    liveRest,
     restJustEnded,
+    upNext,
     prSetIds,
     exercisesById,
     history,
     sessions.data,
     preferences,
     completeSet,
-    startRest,
+    pickRestPreset,
+    adjustRest,
+    togglePauseRest,
+    skipRest,
+    changeRest,
+    showRestOver,
+    showUpNext,
+    cancelRestAlarmOffer,
+    flushLearned,
     saveSession,
     deleteSession,
     cancelAutosave,
@@ -396,9 +609,4 @@ export function useActiveWorkout(): ContextValue {
   const value = useContext(Context);
   if (!value) throw new Error('useActiveWorkout must be used inside ActiveWorkoutProvider');
   return value;
-}
-
-/** Remaining rest in ms, accounting for pause. */
-export function restRemainingMs(rest: RestTimer, now: number): number {
-  return rest.pausedRemainingMs ?? Math.max(0, rest.endsAtMs - now);
 }

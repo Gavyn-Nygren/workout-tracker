@@ -3,7 +3,8 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Appear, AppText, Icon } from '@/components/ui';
-import { formatClock, spokenDuration, useNow } from '@/hooks/useNow';
+import { useLiveNow } from '@/hooks/useLiveNow';
+import { formatClock, spokenDuration } from '@/hooks/useNow';
 import { DENSE_TEXT_MAX } from '@/theme/layout';
 import { SchemeOverride, useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
@@ -49,7 +50,7 @@ export function MiniBar() {
 function Body() {
   const { colors } = useAppTheme();
   const { workout, counts, rest } = useActiveWorkout();
-  const now = useNow(rest ? 500 : 1000);
+  const now = useLiveNow(rest ? 500 : 1000);
   if (!workout) return null;
 
   const startedAt = workout.session.startedAt ? Date.parse(workout.session.startedAt) : now;

@@ -38,6 +38,31 @@ const LOADS: Record<string, { startLb: number; perWeekLb: number; roundLb: numbe
   pe_cc_legraise: { startLb: 0, perWeekLb: 0, roundLb: 5 },
 };
 
+/**
+ * The rest the sample lifter takes after each working set, per planned exercise (warm-ups: 1:00).
+ * The sample plans leave rest blank (it comes from the exercise and Settings), but logged sets
+ * still record what was rested. Supersets and circuits rest by round, so theirs aren't listed.
+ */
+const REST_TAKEN_SEC: Record<string, number> = {
+  pe_ua_bench: 180,
+  pe_ua_row: 150,
+  pe_ua_ohp: 150,
+  pe_la_squat: 180,
+  pe_la_rdl: 150,
+  pe_la_bss: 90,
+  pe_la_curl: 90,
+  pe_ub_pullup: 150,
+  pe_ub_incline: 120,
+  pe_ub_cablerow: 90,
+  pe_ub_lateral: 60,
+  pe_lb_deadlift: 210,
+  pe_lb_frontsquat: 150,
+  pe_lb_legpress: 120,
+  pe_lb_ext: 60,
+  pe_cc_standing: 60,
+};
+const WARMUP_REST_TAKEN_SEC = 60;
+
 const HISTORY_DAYS = 56;
 const FUTURE_DAYS = 21;
 
@@ -124,13 +149,14 @@ function logSets(planned: PlannedExercise, ctx: SetContext): LoggedSet[] {
 
   return planned.sets.map((target, setIndex) => {
     const id = `${ctx.sessionId}_${planned.id}_s${setIndex + 1}`;
+    const rested = target.restSec || (target.kind === 'warmup' ? WARMUP_REST_TAKEN_SEC : REST_TAKEN_SEC[planned.id]);
     const base: LoggedSet = {
       id,
       kind: target.kind,
       modifiers: [...target.modifiers],
       target,
       completedAt: isoAt(ctx.completedDate, 17, 40 + setIndex * 3),
-      restSec: target.restSec ? target.restSec + Math.round((ctx.random() - 0.5) * 30) : undefined,
+      restSec: rested ? rested + Math.round((ctx.random() - 0.5) * 30) : undefined,
       tempo: target.tempo,
     };
 

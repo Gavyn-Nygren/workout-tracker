@@ -1,11 +1,11 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
-import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Card, ListRow, SectionHeader, SegmentedControl, Toggle } from '@/components/ui';
 import type { Preferences, Weekday } from '@/data/types';
 import { dateToTime, timeToDate, useSettings } from '@/features/settings/useSettings';
+import { markRestAlarmAsked, refreshNotificationPermission } from '@/features/workout/useRestAlarm';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { readable, useTextScale } from '@/theme/layout';
@@ -35,9 +35,10 @@ export default function NotificationsScreen() {
 
   // The first time one is turned on, explain before iOS asks (spec 2.11).
   const toggle = async (key: Toggles, on: boolean) => {
+    // Choosing here, either way, means the first rest of a workout won't offer the alarm again.
+    if (key === 'restTimer') markRestAlarmAsked();
     if (!on) return set({ [key]: false });
-    const permission = await Notifications.getPermissionsAsync().catch(() => undefined);
-    if (permission?.granted) set({ [key]: true });
+    if ((await refreshNotificationPermission()) === 'granted') set({ [key]: true });
     else router.push({ pathname: '/notifications-permission', params: { key } });
   };
 

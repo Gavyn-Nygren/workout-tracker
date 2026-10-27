@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G3.8 (rest timer).
+**Current goal:** G3.9 (progression rules).
 
 ## How we work
 
@@ -314,10 +314,18 @@ Everything works on one phone, offline, with no server.
 
 ### G3.8 Rest timer
 
-- [ ] Stays accurate when the app is backgrounded.
-- [ ] Rest-over alarm as a local notification.
-- [ ] Superset round rest.
-- [ ] Per-exercise-type defaults, and memory of the last value used.
+- [x] Stays accurate when the app is backgrounded.
+  - *The countdown runs on the clock and refreshes the moment the app comes back. A rest that ended while the app was away clears with no late buzz. A paused rest survives closing the app.*
+- [x] Rest-over alarm as a local notification.
+  - *"Rest over · Squat, set 3", rescheduled on every adjust, pause, skip, or finish, never more than one pending. Silent while the app is open.*
+  - *The first rest after a completed set offers the alarm once (user's pick); Allow asks iOS and turns it on.*
+- [x] Superset round rest.
+  - *A round finishes when every exercise with a set in it is done, so uneven set counts and any order work. Mid-round, the workout jumps to the next exercise and the bar says what's next (user's pick).*
+- [x] Per-exercise-type defaults, and memory of the last value used.
+  - *Adjusting a rest teaches the exercise its rest (user's pick). The exercise page shows it, with Reset. A rest typed into a plan still wins.*
+  - *Plan rests now start on Auto, so plan workouts use the remembered or default rest (user's pick). Rests the app had filled into existing plans were cleared once; typed ones were kept.*
+
+**Done when:** the rest rules, memory, supersets, background behaviour and the alarm's schedule have automated tests. *Done: 499 tests. Not yet checked on an iPhone: the alarm ringing on the lock screen, the first-rest sheet, and the auto-scroll with the number pad open.*
 
 ### G3.9 Progression rules
 

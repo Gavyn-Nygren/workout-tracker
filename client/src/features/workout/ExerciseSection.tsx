@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
 import { AppText, Button, Icon } from '@/components/ui';
 import type { Exercise, LoggedSet, SessionExercise, UnitSystem } from '@/data/types';
@@ -27,6 +27,9 @@ type Props = {
   onOpenMenu: () => void;
   onCamera: () => void;
   onUnskip: () => void;
+  /** The section's place in its card, and each set row's place in the section, for scrolling to a set. */
+  onLayout?: (e: LayoutChangeEvent) => void;
+  onSetLayout?: (setId: string, e: LayoutChangeEvent) => void;
 };
 
 /** "3 × 8-12 · Rest 1:30"; `spoken` says "Rest 1 minute 30 seconds" so VoiceOver doesn't read a time of day. */
@@ -44,7 +47,7 @@ function targetSummary(entry: SessionExercise, spoken = false): string {
 
 /** One exercise in the active workout: header, set table, and Add set. */
 export function ExerciseSection(props: Props) {
-  const { entry, exercise, label, previous, units, effortScale, prSetIds, onChangeSet, onToggleSet, onOpenSet, onAddSet, onOpenMenu, onCamera, onUnskip } = props;
+  const { entry, exercise, label, previous, units, effortScale, prSetIds, onChangeSet, onToggleSet, onOpenSet, onAddSet, onOpenMenu, onCamera, onUnskip, onLayout, onSetLayout } = props;
   const { colors } = useAppTheme();
   const cols = useSetColumns();
   const name = exercise?.name ?? 'Exercise';
@@ -52,7 +55,7 @@ export function ExerciseSection(props: Props) {
   const head = { variant: 'caption', tone: 'secondary', weight: '700', maxFontSizeMultiplier: DENSE_TEXT_MAX } as const;
 
   return (
-    <View style={styles.section}>
+    <View style={styles.section} onLayout={onLayout}>
       <View style={styles.header}>
         {label && (
           // The letter is part of the heading's spoken label below.
@@ -141,6 +144,7 @@ export function ExerciseSection(props: Props) {
               onChange={(patch) => onChangeSet(set.id, patch)}
               onToggle={() => onToggleSet(set)}
               onOpenDetail={() => onOpenSet(set.id)}
+              onLayout={onSetLayout && ((e) => onSetLayout(set.id, e))}
             />
           ))}
 

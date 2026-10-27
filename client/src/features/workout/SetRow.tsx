@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
 import { AppText, Icon, NumberField, PRBadge, SetTag, setTagLabel } from '@/components/ui';
 import type { Exercise, LoggedSet, UnitSystem } from '@/data/types';
@@ -54,6 +54,8 @@ type Props = {
   onChange: (patch: Partial<LoggedSet>) => void;
   onToggle: () => void;
   onOpenDetail: () => void;
+  /** The row's place in its exercise section, for scrolling to it. */
+  onLayout?: (e: LayoutChangeEvent) => void;
 };
 
 const toDisplay = (kg: number | undefined, units: UnitSystem) =>
@@ -80,7 +82,7 @@ function spokenPrevious(prev: LoggedSet, exercise: Exercise | undefined, units: 
 }
 
 /** One row of the dense set table (spec 2.13): set, previous, load, reps, complete. */
-export function SetRow({ set, number, previous, exercise, exerciseName, units, effortScale, isPR, onChange, onToggle, onOpenDetail }: Props) {
+export function SetRow({ set, number, previous, exercise, exerciseName, units, effortScale, isPR, onChange, onToggle, onOpenDetail, onLayout }: Props) {
   const { colors } = useAppTheme();
   const cols = useSetColumns();
   const done = Boolean(set.completedAt);
@@ -136,7 +138,7 @@ export function SetRow({ set, number, previous, exercise, exerciseName, units, e
 
 
   return (
-    <View style={styles.wrap}>
+    <View style={styles.wrap} onLayout={onLayout}>
       <Animated.View pointerEvents="none" style={[styles.tint, { backgroundColor: colors.successSubtle, opacity: tint }]} />
       <View style={[styles.row, { gap: cols.gap }]}>
         <Pressable

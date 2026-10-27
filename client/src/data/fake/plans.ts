@@ -4,12 +4,17 @@ import type { PlannedBlock, PlannedExercise, Plan, PlanWorkout, SetPrescription,
 
 const STAMP = '2026-08-01T12:00:00.000Z';
 
-function working(count: number, reps: SetPrescription['targetReps'], restSec: number, extra: Partial<SetPrescription> = {}): SetPrescription[] {
-  return Array.from({ length: count }, () => ({ kind: 'normal' as const, modifiers: [], targetReps: reps, restSec, targetRir: 2, ...extra }));
+// Starter sets leave rest blank, so each exercise rests the way it does anywhere else: the rest
+// remembered for it, or its type's default from Settings (spec 2.6). Supersets and circuits set
+// their own rest after each round. Plans made before G3.8 had a rest on every set; see
+// db/blankPlanRests.ts for how those were cleared.
+
+function working(count: number, reps: SetPrescription['targetReps'], extra: Partial<SetPrescription> = {}): SetPrescription[] {
+  return Array.from({ length: count }, () => ({ kind: 'normal' as const, modifiers: [], targetReps: reps, targetRir: 2, ...extra }));
 }
 
 function warmups(loadsLb: number[], reps: number): SetPrescription[] {
-  return loadsLb.map((lb) => ({ kind: 'warmup' as const, modifiers: [], targetReps: reps, targetLoadKg: lbToKg(lb), restSec: 60 }));
+  return loadsLb.map((lb) => ({ kind: 'warmup' as const, modifiers: [], targetReps: reps, targetLoadKg: lbToKg(lb) }));
 }
 
 function single(id: string, exercise: PlannedExercise): PlannedBlock {
@@ -30,18 +35,18 @@ const upperA: PlanWorkout = {
     single('pb_ua_1', {
       id: 'pe_ua_bench',
       exerciseId: 'ex_bench_press',
-      sets: [...warmups([95, 135], 5), ...working(3, { min: 5, max: 8 }, 180)],
+      sets: [...warmups([95, 135], 5), ...working(3, { min: 5, max: 8 })],
       progression: repRange(5),
     }),
-    single('pb_ua_2', { id: 'pe_ua_row', exerciseId: 'ex_barbell_row', sets: working(3, { min: 6, max: 10 }, 150), progression: repRange(5) }),
-    single('pb_ua_3', { id: 'pe_ua_ohp', exerciseId: 'ex_overhead_press', sets: working(3, { min: 6, max: 10 }, 150, { tempo: '2-0-1-0' }) }),
+    single('pb_ua_2', { id: 'pe_ua_row', exerciseId: 'ex_barbell_row', sets: working(3, { min: 6, max: 10 }), progression: repRange(5) }),
+    single('pb_ua_3', { id: 'pe_ua_ohp', exerciseId: 'ex_overhead_press', sets: working(3, { min: 6, max: 10 }, { tempo: '2-0-1-0' }) }),
     {
       id: 'pb_ua_4',
       type: 'superset',
       roundRestSec: 90,
       exercises: [
-        { id: 'pe_ua_curl', exerciseId: 'ex_db_curl', sets: working(3, { min: 10, max: 12 }, 0) },
-        { id: 'pe_ua_pushdown', exerciseId: 'ex_triceps_pushdown', sets: working(3, { min: 10, max: 12 }, 0) },
+        { id: 'pe_ua_curl', exerciseId: 'ex_db_curl', sets: working(3, { min: 10, max: 12 }) },
+        { id: 'pe_ua_pushdown', exerciseId: 'ex_triceps_pushdown', sets: working(3, { min: 10, max: 12 }) },
       ],
     },
   ],
@@ -55,12 +60,12 @@ const lowerA: PlanWorkout = {
     single('pb_la_1', {
       id: 'pe_la_squat',
       exerciseId: 'ex_back_squat',
-      sets: [...warmups([135, 185], 5), ...working(3, { min: 5, max: 8 }, 180)],
+      sets: [...warmups([135, 185], 5), ...working(3, { min: 5, max: 8 })],
       progression: repRange(5),
     }),
-    single('pb_la_2', { id: 'pe_la_rdl', exerciseId: 'ex_rdl', sets: working(3, { min: 8, max: 10 }, 150), progression: repRange(10) }),
-    single('pb_la_3', { id: 'pe_la_bss', exerciseId: 'ex_bulgarian_split_squat', sets: working(3, { min: 8, max: 12 }, 90) }),
-    single('pb_la_4', { id: 'pe_la_curl', exerciseId: 'ex_lying_leg_curl', sets: working(3, { min: 10, max: 15 }, 90) }),
+    single('pb_la_2', { id: 'pe_la_rdl', exerciseId: 'ex_rdl', sets: working(3, { min: 8, max: 10 }), progression: repRange(10) }),
+    single('pb_la_3', { id: 'pe_la_bss', exerciseId: 'ex_bulgarian_split_squat', sets: working(3, { min: 8, max: 12 }) }),
+    single('pb_la_4', { id: 'pe_la_curl', exerciseId: 'ex_lying_leg_curl', sets: working(3, { min: 10, max: 15 }) }),
   ],
 };
 
@@ -69,13 +74,13 @@ const upperB: PlanWorkout = {
   name: 'Upper B',
   estimatedMinutes: 60,
   blocks: [
-    single('pb_ub_1', { id: 'pe_ub_pullup', exerciseId: 'ex_pull_up', sets: working(4, { min: 5, max: 8 }, 150) }),
-    single('pb_ub_2', { id: 'pe_ub_incline', exerciseId: 'ex_incline_db_press', sets: working(3, { min: 8, max: 12 }, 120), progression: repRange(5) }),
-    single('pb_ub_3', { id: 'pe_ub_cablerow', exerciseId: 'ex_seated_cable_row', sets: working(3, { min: 10, max: 12 }, 90) }),
+    single('pb_ub_1', { id: 'pe_ub_pullup', exerciseId: 'ex_pull_up', sets: working(4, { min: 5, max: 8 }) }),
+    single('pb_ub_2', { id: 'pe_ub_incline', exerciseId: 'ex_incline_db_press', sets: working(3, { min: 8, max: 12 }), progression: repRange(5) }),
+    single('pb_ub_3', { id: 'pe_ub_cablerow', exerciseId: 'ex_seated_cable_row', sets: working(3, { min: 10, max: 12 }) }),
     single('pb_ub_4', {
       id: 'pe_ub_lateral',
       exerciseId: 'ex_lateral_raise',
-      sets: [...working(2, { min: 12, max: 15 }, 60), { kind: 'drop', modifiers: ['to_failure'], targetReps: 12, restSec: 60 }],
+      sets: [...working(2, { min: 12, max: 15 }), { kind: 'drop', modifiers: ['to_failure'], targetReps: 12 }],
     }),
   ],
 };
@@ -88,12 +93,12 @@ const lowerB: PlanWorkout = {
     single('pb_lb_1', {
       id: 'pe_lb_deadlift',
       exerciseId: 'ex_deadlift',
-      sets: [...warmups([135, 225], 3), ...working(3, { min: 3, max: 5 }, 210)],
+      sets: [...warmups([135, 225], 3), ...working(3, { min: 3, max: 5 })],
       progression: repRange(10),
     }),
-    single('pb_lb_2', { id: 'pe_lb_frontsquat', exerciseId: 'ex_front_squat', sets: working(3, { min: 6, max: 8 }, 150) }),
-    single('pb_lb_3', { id: 'pe_lb_legpress', exerciseId: 'ex_leg_press', sets: working(3, { min: 10, max: 12 }, 120) }),
-    single('pb_lb_4', { id: 'pe_lb_ext', exerciseId: 'ex_leg_extension', sets: working(3, { min: 12, max: 15 }, 60) }),
+    single('pb_lb_2', { id: 'pe_lb_frontsquat', exerciseId: 'ex_front_squat', sets: working(3, { min: 6, max: 8 }) }),
+    single('pb_lb_3', { id: 'pe_lb_legpress', exerciseId: 'ex_leg_press', sets: working(3, { min: 10, max: 12 }) }),
+    single('pb_lb_4', { id: 'pe_lb_ext', exerciseId: 'ex_leg_extension', sets: working(3, { min: 12, max: 15 }) }),
   ],
 };
 
@@ -105,16 +110,16 @@ const calvesCore: PlanWorkout = {
   name: 'Calves & Core',
   estimatedMinutes: 20,
   blocks: [
-    single('pb_cc_1', { id: 'pe_cc_standing', exerciseId: 'ex_standing_calf_raise', sets: working(4, { min: 10, max: 15 }, 60, { tempo: '2-2-1-1' }) }),
+    single('pb_cc_1', { id: 'pe_cc_standing', exerciseId: 'ex_standing_calf_raise', sets: working(4, { min: 10, max: 15 }, { tempo: '2-2-1-1' }) }),
     {
       id: 'pb_cc_2',
       type: 'circuit',
       roundRestSec: 90,
       transitionRestSec: 15,
       exercises: [
-        { id: 'pe_cc_seated', exerciseId: 'ex_seated_calf_raise', sets: working(3, 15, 0) },
-        { id: 'pe_cc_legraise', exerciseId: 'ex_hanging_leg_raise', sets: working(3, { min: 8, max: 12 }, 0) },
-        { id: 'pe_cc_plank', exerciseId: 'ex_plank', sets: [1, 2, 3].map(() => ({ kind: 'timed_hold' as const, modifiers: [], targetDurationSec: 45, restSec: 0 })) },
+        { id: 'pe_cc_seated', exerciseId: 'ex_seated_calf_raise', sets: working(3, 15) },
+        { id: 'pe_cc_legraise', exerciseId: 'ex_hanging_leg_raise', sets: working(3, { min: 8, max: 12 }) },
+        { id: 'pe_cc_plank', exerciseId: 'ex_plank', sets: [1, 2, 3].map(() => ({ kind: 'timed_hold' as const, modifiers: [], targetDurationSec: 45 })) },
       ],
     },
   ],
@@ -172,16 +177,16 @@ const pplPush: PlanWorkout = {
   name: 'Push',
   estimatedMinutes: 60,
   blocks: [
-    single('tb_push_1', { id: 'tp_push_bench', exerciseId: 'ex_bench_press', sets: [...warmups([95, 135], 5), ...working(4, { min: 6, max: 10 }, 150)], progression: repRange(5) }),
-    single('tb_push_2', { id: 'tp_push_incline', exerciseId: 'ex_incline_db_press', sets: working(3, { min: 8, max: 12 }, 120) }),
-    single('tb_push_3', { id: 'tp_push_ohp', exerciseId: 'ex_overhead_press', sets: working(3, { min: 8, max: 10 }, 120) }),
+    single('tb_push_1', { id: 'tp_push_bench', exerciseId: 'ex_bench_press', sets: [...warmups([95, 135], 5), ...working(4, { min: 6, max: 10 })], progression: repRange(5) }),
+    single('tb_push_2', { id: 'tp_push_incline', exerciseId: 'ex_incline_db_press', sets: working(3, { min: 8, max: 12 }) }),
+    single('tb_push_3', { id: 'tp_push_ohp', exerciseId: 'ex_overhead_press', sets: working(3, { min: 8, max: 10 }) }),
     {
       id: 'tb_push_4',
       type: 'superset',
       roundRestSec: 75,
       exercises: [
-        { id: 'tp_push_lateral', exerciseId: 'ex_lateral_raise', sets: working(3, { min: 12, max: 15 }, 0) },
-        { id: 'tp_push_pushdown', exerciseId: 'ex_triceps_pushdown', sets: working(3, { min: 10, max: 15 }, 0) },
+        { id: 'tp_push_lateral', exerciseId: 'ex_lateral_raise', sets: working(3, { min: 12, max: 15 }) },
+        { id: 'tp_push_pushdown', exerciseId: 'ex_triceps_pushdown', sets: working(3, { min: 10, max: 15 }) },
       ],
     },
   ],
@@ -192,16 +197,16 @@ const pplPull: PlanWorkout = {
   name: 'Pull',
   estimatedMinutes: 60,
   blocks: [
-    single('tb_pull_1', { id: 'tp_pull_pullup', exerciseId: 'ex_pull_up', sets: working(4, { min: 6, max: 10 }, 150) }),
-    single('tb_pull_2', { id: 'tp_pull_row', exerciseId: 'ex_barbell_row', sets: working(4, { min: 6, max: 10 }, 120), progression: repRange(5) }),
-    single('tb_pull_3', { id: 'tp_pull_pulldown', exerciseId: 'ex_lat_pulldown', sets: working(3, { min: 10, max: 12 }, 90) }),
+    single('tb_pull_1', { id: 'tp_pull_pullup', exerciseId: 'ex_pull_up', sets: working(4, { min: 6, max: 10 }) }),
+    single('tb_pull_2', { id: 'tp_pull_row', exerciseId: 'ex_barbell_row', sets: working(4, { min: 6, max: 10 }), progression: repRange(5) }),
+    single('tb_pull_3', { id: 'tp_pull_pulldown', exerciseId: 'ex_lat_pulldown', sets: working(3, { min: 10, max: 12 }) }),
     {
       id: 'tb_pull_4',
       type: 'superset',
       roundRestSec: 75,
       exercises: [
-        { id: 'tp_pull_facepull', exerciseId: 'ex_face_pull', sets: working(3, { min: 12, max: 15 }, 0) },
-        { id: 'tp_pull_curl', exerciseId: 'ex_db_curl', sets: working(3, { min: 10, max: 12 }, 0) },
+        { id: 'tp_pull_facepull', exerciseId: 'ex_face_pull', sets: working(3, { min: 12, max: 15 }) },
+        { id: 'tp_pull_curl', exerciseId: 'ex_db_curl', sets: working(3, { min: 10, max: 12 }) },
       ],
     },
   ],
@@ -212,11 +217,11 @@ const pplLegs: PlanWorkout = {
   name: 'Legs',
   estimatedMinutes: 70,
   blocks: [
-    single('tb_legs_1', { id: 'tp_legs_squat', exerciseId: 'ex_back_squat', sets: [...warmups([135, 185], 5), ...working(4, { min: 6, max: 10 }, 180)], progression: repRange(5) }),
-    single('tb_legs_2', { id: 'tp_legs_rdl', exerciseId: 'ex_rdl', sets: working(3, { min: 8, max: 10 }, 150) }),
-    single('tb_legs_3', { id: 'tp_legs_press', exerciseId: 'ex_leg_press', sets: working(3, { min: 10, max: 15 }, 120) }),
-    single('tb_legs_4', { id: 'tp_legs_curl', exerciseId: 'ex_lying_leg_curl', sets: working(3, { min: 10, max: 15 }, 90) }),
-    single('tb_legs_5', { id: 'tp_legs_calf', exerciseId: 'ex_standing_calf_raise', sets: working(4, { min: 10, max: 15 }, 60) }),
+    single('tb_legs_1', { id: 'tp_legs_squat', exerciseId: 'ex_back_squat', sets: [...warmups([135, 185], 5), ...working(4, { min: 6, max: 10 })], progression: repRange(5) }),
+    single('tb_legs_2', { id: 'tp_legs_rdl', exerciseId: 'ex_rdl', sets: working(3, { min: 8, max: 10 }) }),
+    single('tb_legs_3', { id: 'tp_legs_press', exerciseId: 'ex_leg_press', sets: working(3, { min: 10, max: 15 }) }),
+    single('tb_legs_4', { id: 'tp_legs_curl', exerciseId: 'ex_lying_leg_curl', sets: working(3, { min: 10, max: 15 }) }),
+    single('tb_legs_5', { id: 'tp_legs_calf', exerciseId: 'ex_standing_calf_raise', sets: working(4, { min: 10, max: 15 }) }),
   ],
 };
 
@@ -225,9 +230,9 @@ const foundationsA: PlanWorkout = {
   name: 'Day A',
   estimatedMinutes: 55,
   blocks: [
-    single('tb_fa_1', { id: 'tp_fa_squat', exerciseId: 'ex_back_squat', sets: [...warmups([45, 95, 135], 5), ...working(5, 5, 180)], progression: percent(2.5) }),
-    single('tb_fa_2', { id: 'tp_fa_bench', exerciseId: 'ex_bench_press', sets: [...warmups([45, 95], 5), ...working(5, 5, 180)], progression: percent(2.5) }),
-    single('tb_fa_3', { id: 'tp_fa_row', exerciseId: 'ex_barbell_row', sets: working(3, 8, 120) }),
+    single('tb_fa_1', { id: 'tp_fa_squat', exerciseId: 'ex_back_squat', sets: [...warmups([45, 95, 135], 5), ...working(5, 5)], progression: percent(2.5) }),
+    single('tb_fa_2', { id: 'tp_fa_bench', exerciseId: 'ex_bench_press', sets: [...warmups([45, 95], 5), ...working(5, 5)], progression: percent(2.5) }),
+    single('tb_fa_3', { id: 'tp_fa_row', exerciseId: 'ex_barbell_row', sets: working(3, 8) }),
   ],
 };
 
@@ -236,9 +241,9 @@ const foundationsB: PlanWorkout = {
   name: 'Day B',
   estimatedMinutes: 55,
   blocks: [
-    single('tb_fb_1', { id: 'tp_fb_squat', exerciseId: 'ex_back_squat', sets: [...warmups([45, 95, 135], 5), ...working(3, 5, 180)], progression: percent(2.5) }),
-    single('tb_fb_2', { id: 'tp_fb_ohp', exerciseId: 'ex_overhead_press', sets: [...warmups([45], 5), ...working(5, 5, 150)], progression: percent(2.5) }),
-    single('tb_fb_3', { id: 'tp_fb_deadlift', exerciseId: 'ex_deadlift', sets: [...warmups([135, 185], 3), ...working(1, 5, 210)], progression: percent(2.5) }),
+    single('tb_fb_1', { id: 'tp_fb_squat', exerciseId: 'ex_back_squat', sets: [...warmups([45, 95, 135], 5), ...working(3, 5)], progression: percent(2.5) }),
+    single('tb_fb_2', { id: 'tp_fb_ohp', exerciseId: 'ex_overhead_press', sets: [...warmups([45], 5), ...working(5, 5)], progression: percent(2.5) }),
+    single('tb_fb_3', { id: 'tp_fb_deadlift', exerciseId: 'ex_deadlift', sets: [...warmups([135, 185], 3), ...working(1, 5)], progression: percent(2.5) }),
   ],
 };
 
@@ -253,9 +258,9 @@ const bodyweightA: PlanWorkout = {
       roundRestSec: 120,
       transitionRestSec: 20,
       exercises: [
-        { id: 'tp_bwa_pushup', exerciseId: 'ex_push_up', sets: working(3, { min: 8, max: 15 }, 0, { modifiers: ['amrap'] }) },
-        { id: 'tp_bwa_lunge', exerciseId: 'ex_reverse_lunge', sets: working(3, { min: 10, max: 12 }, 0) },
-        { id: 'tp_bwa_plank', exerciseId: 'ex_plank', sets: [1, 2, 3].map(() => ({ kind: 'timed_hold' as const, modifiers: [], targetDurationSec: 30, restSec: 0 })) },
+        { id: 'tp_bwa_pushup', exerciseId: 'ex_push_up', sets: working(3, { min: 8, max: 15 }, { modifiers: ['amrap'] }) },
+        { id: 'tp_bwa_lunge', exerciseId: 'ex_reverse_lunge', sets: working(3, { min: 10, max: 12 }) },
+        { id: 'tp_bwa_plank', exerciseId: 'ex_plank', sets: [1, 2, 3].map(() => ({ kind: 'timed_hold' as const, modifiers: [], targetDurationSec: 30 })) },
       ],
     },
   ],
@@ -266,10 +271,10 @@ const bodyweightB: PlanWorkout = {
   name: 'Bodyweight B',
   estimatedMinutes: 35,
   blocks: [
-    single('tb_bwb_1', { id: 'tp_bwb_pullup', exerciseId: 'ex_pull_up', sets: working(3, { min: 3, max: 8 }, 120, { modifiers: ['amrap'] }) }),
-    single('tb_bwb_2', { id: 'tp_bwb_dips', exerciseId: 'ex_dips', sets: working(3, { min: 6, max: 12 }, 120) }),
-    single('tb_bwb_3', { id: 'tp_bwb_bss', exerciseId: 'ex_bulgarian_split_squat', sets: working(3, { min: 8, max: 12 }, 90) }),
-    single('tb_bwb_4', { id: 'tp_bwb_legraise', exerciseId: 'ex_hanging_leg_raise', sets: working(3, { min: 8, max: 12 }, 60) }),
+    single('tb_bwb_1', { id: 'tp_bwb_pullup', exerciseId: 'ex_pull_up', sets: working(3, { min: 3, max: 8 }, { modifiers: ['amrap'] }) }),
+    single('tb_bwb_2', { id: 'tp_bwb_dips', exerciseId: 'ex_dips', sets: working(3, { min: 6, max: 12 }) }),
+    single('tb_bwb_3', { id: 'tp_bwb_bss', exerciseId: 'ex_bulgarian_split_squat', sets: working(3, { min: 8, max: 12 }) }),
+    single('tb_bwb_4', { id: 'tp_bwb_legraise', exerciseId: 'ex_hanging_leg_raise', sets: working(3, { min: 8, max: 12 }) }),
   ],
 };
 
