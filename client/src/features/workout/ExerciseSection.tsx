@@ -4,10 +4,11 @@ import { AppText, Button, Icon } from '@/components/ui';
 import type { Exercise, LoggedSet, SessionExercise, UnitSystem } from '@/data/types';
 import { formatRepTarget, unitLabel } from '@/lib/format';
 import { formatClock, spokenDuration } from '@/hooks/useNow';
-import { DENSE_TEXT_MAX } from '@/theme/layout';
+import { DENSE_TEXT_MAX, useTextScale } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
-import { radius, spacing } from '@/theme/tokens';
+import { opacity, radius, spacing } from '@/theme/tokens';
 import { isFormAnalysisSupported } from '../form/capability';
+import { suggestionLine, type SuggestionLine } from './progression';
 import { SetRow, useSetColumns } from './SetRow';
 import { setNumber } from './workoutReducer';
 
@@ -27,6 +28,8 @@ type Props = {
   onOpenMenu: () => void;
   onCamera: () => void;
   onUnskip: () => void;
+  /** Tapping the progression reason line, while "Use last time's weight" can still apply. */
+  onSuggestion: () => void;
   /** The section's place in its card, and each set row's place in the section, for scrolling to a set. */
   onLayout?: (e: LayoutChangeEvent) => void;
   onSetLayout?: (setId: string, e: LayoutChangeEvent) => void;
@@ -47,10 +50,12 @@ function targetSummary(entry: SessionExercise, spoken = false): string {
 
 /** One exercise in the active workout: header, set table, and Add set. */
 export function ExerciseSection(props: Props) {
-  const { entry, exercise, label, previous, units, effortScale, prSetIds, onChangeSet, onToggleSet, onOpenSet, onAddSet, onOpenMenu, onCamera, onUnskip, onLayout, onSetLayout } = props;
+  const { entry, exercise, label, previous, units, effortScale, prSetIds, onChangeSet, onToggleSet, onOpenSet, onAddSet, onOpenMenu, onCamera, onUnskip, onSuggestion, onLayout, onSetLayout } = props;
   const { colors } = useAppTheme();
   const cols = useSetColumns();
   const name = exercise?.name ?? 'Exercise';
+  // Hidden once undone, and while the exercise is skipped.
+  const reason = suggestionLine(entry, units);
   // Header labels grow with the set numbers, but no further.
   const head = { variant: 'caption', tone: 'secondary', weight: '700', maxFontSizeMultiplier: DENSE_TEXT_MAX } as const;
 
@@ -79,6 +84,7 @@ export function ExerciseSection(props: Props) {
           <AppText variant="footnote" tone="secondary" accessibilityLabel={entry.skipped ? undefined : targetSummary(entry, true)}>
             {entry.skipped ? 'Skipped' : targetSummary(entry)}
           </AppText>
+          {reason && <ReasonLine line={reason} onPress={onSuggestion} />}
         </View>
         {/* Hidden on phones older than iPhone 12 (spec 2.2). */}
         {exercise?.formAnalysis && !entry.skipped && isFormAnalysisSupported() && (
@@ -157,6 +163,49 @@ export function ExerciseSection(props: Props) {
   );
 }
 
+/**
+ * The progression rule's reason line (G3.9 decision A): what changed and why. Increases read in
+ * the positive green, deloads and holds stay neutral (decreases are never red), with the same
+ * arrows as the Progress changes. While a set can still go back, tapping it offers last time's
+ * weight; otherwise it's one VoiceOver element with the same words.
+ */
+function ReasonLine({ line, onPress }: { line: SuggestionLine; onPress: () => void }) {
+  const { colors } = useAppTheme();
+  const { fontScale } = useTextScale();
+  const up = line.direction === 'up';
+  const content = (
+    <>
+      <Icon
+        name={up ? 'arrowtriangle.up.fill' : line.direction === 'down' ? 'arrowtriangle.down.fill' : 'equal'}
+        color={up ? colors.successFill : colors.textTertiary}
+        size={Math.round(10 * Math.min(Math.max(fontScale, 1), 2))}
+      />
+      <AppText variant="footnote" weight={line.direction === 'same' ? undefined : '600'} tone={up ? 'success' : 'secondary'} style={styles.reasonText}>
+        {line.text}
+      </AppText>
+    </>
+  );
+  if (!line.undoable) {
+    return (
+      <View accessible accessibilityLabel={line.label} style={styles.reason}>
+        {content}
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={line.label}
+      accessibilityHint="Offers to use last time’s weight instead."
+      hitSlop={{ top: 6, bottom: 6 }}
+      style={({ pressed }) => [styles.reason, pressed && { opacity: opacity.pressed }]}
+    >
+      {content}
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   section: {
     paddingTop: spacing.md,
@@ -183,6 +232,16 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  reason: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: spacing.xs,
+    paddingTop: 2,
+  },
+  reasonText: {
+    flexShrink: 1,
   },
   note: {
     flexDirection: 'row',

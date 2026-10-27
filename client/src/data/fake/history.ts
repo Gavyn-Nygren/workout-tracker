@@ -63,6 +63,25 @@ const REST_TAKEN_SEC: Record<string, number> = {
 };
 const WARMUP_REST_TAKEN_SEC = 60;
 
+/**
+ * How the last few times of some lifts went, so the plan's progression rules (G3.9) have
+ * something to show whichever day the sample is loaded: any two Upper / Lower workouts in a row
+ * suggest more weight on one lift, the same weight after a miss on another, and a deload on a
+ * third (tests/sampleProgression.test.ts).
+ * - `top`: last time, every working set reached the top of its range, so the rule adds weight.
+ * - `misses`: the last N times were all at the best weight so far, each with its last set one rep
+ *   short of the range. Fewer misses than the rule's 3 keeps the weight; 3 in a row deloads it.
+ */
+const LAST_TIMES: Record<string, { top: true } | { misses: number }> = {
+  pe_ua_bench: { top: true }, // Upper A: +5 lb
+  pe_ua_row: { misses: 1 }, // Upper A: same weight, 1 of 3 misses
+  pe_la_squat: { misses: 3 }, // Lower A: −10%
+  pe_la_rdl: { top: true }, // Lower A: +10 lb
+  pe_ub_incline: { misses: 2 }, // Upper B: same weight, 2 of 3 misses
+  pe_lb_deadlift: { misses: 3 }, // Lower B: −10%
+  pe_lb_frontsquat: { top: true }, // Lower B: +5 lb
+};
+
 const HISTORY_DAYS = 56;
 const FUTURE_DAYS = 21;
 
@@ -187,6 +206,40 @@ function logSets(planned: PlannedExercise, ctx: SetContext): LoggedSet[] {
   });
 }
 
+/**
+ * The history with the LAST_TIMES lifts' last few times rewritten (`sessions` oldest first). Only
+ * working sets change; the lifts are all plain loads.
+ */
+function withLastTimes(sessions: WorkoutSession[]): WorkoutSession[] {
+  const rewritten = new Map<string, SessionExercise>();
+  const workingOf = (entry: SessionExercise) => entry.sets.filter((s) => s.kind === 'normal' && s.completedAt);
+  const topKg = (entry: SessionExercise) => Math.max(...workingOf(entry).map((s) => s.loadKg ?? 0));
+  for (const [plannedId, story] of Object.entries(LAST_TIMES)) {
+    const entries = sessions
+      .filter((s) => s.status === 'completed')
+      .flatMap((s) => s.blocks.flatMap((b) => b.exercises))
+      .filter((e) => e.plannedExerciseId === plannedId && workingOf(e).length > 0);
+    const count = 'top' in story ? 1 : story.misses;
+    const recent = entries.slice(-count);
+    const earlier = entries.slice(0, -count);
+    // Stuck at the best weight so far: the generator's weekly gain (and deload week) stops there.
+    const stallKg = Math.max(...(earlier.length ? earlier : recent.slice(0, 1)).map(topKg));
+    for (const entry of recent) {
+      const lastIndex = entry.sets.map((s) => s.kind).lastIndexOf('normal');
+      const sets = entry.sets.map((set, i): LoggedSet => {
+        if (set.kind !== 'normal') return set;
+        const { min, max } = repTop(set.target?.targetReps);
+        if ('top' in story) return { ...set, reps: max };
+        // Reps fade toward the miss on the last set.
+        if (i === lastIndex) return { ...set, loadKg: stallKg, reps: min - 1, rir: 0 };
+        return { ...set, loadKg: stallKg, reps: Math.min(set.reps ?? min, min + lastIndex - i) };
+      });
+      rewritten.set(entry.id, { ...entry, sets });
+    }
+  }
+  return sessions.map((s) => ({ ...s, blocks: s.blocks.map((b) => ({ ...b, exercises: b.exercises.map((e) => rewritten.get(e.id) ?? e) })) }));
+}
+
 type SessionVariant = { completedDate: ISODate; partial?: boolean; repeatedFromSessionId?: string; idSuffix?: string };
 
 function buildSession(
@@ -243,7 +296,8 @@ function buildSession(
 /**
  * Eight weeks of history ending yesterday, plus three weeks of upcoming occurrences.
  * Deliberately includes the states the UI must show: a missed workout, an explicit skip,
- * a partial session, a late completion, and a repeated session.
+ * a partial session, a late completion, a repeated session, and lifts whose last times make the
+ * progression rules suggest more weight, the same weight after a miss, or a deload (LAST_TIMES).
  */
 export function generateHistory(plans: Plan[], isBodyweightExercise: (exerciseId: string) => boolean, today: ISODate): FakeHistory {
   const firstDate = addDays(today, -HISTORY_DAYS);
@@ -300,5 +354,5 @@ export function generateHistory(plans: Plan[], isBodyweightExercise: (exerciseId
   }
 
   sessions.sort((a, b) => (a.completedDate ?? a.scheduledDate ?? '').localeCompare(b.completedDate ?? b.scheduledDate ?? ''));
-  return { occurrences, sessions, bodyweight };
+  return { occurrences, sessions: withLastTimes(sessions), bodyweight };
 }

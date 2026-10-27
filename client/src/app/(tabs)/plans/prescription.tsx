@@ -4,13 +4,15 @@ import { ActionSheetIOS, Alert, Pressable, ScrollView, StyleSheet, TextInput, us
 
 import { AppText, Button, Card, ErrorState, Icon, NotFoundState, NumberField, ScreenSkeleton, SectionHeader, SegmentedControl, SetTag, Stepper, TextField, useToast } from '@/components/ui';
 import { succeeded, useExercises, usePlan, usePreferences, useSavePlan } from '@/data/hooks';
+import { plannedWorkingField } from '@/data/logging';
 import { defaultPreferences } from '@/data/preferences';
 import type { MissBehavior, PlannedExercise, ProgressionRule, RepTarget, SetKind, SetPrescription } from '@/data/types';
 import { kgToLb, lbToKg } from '@/data/units';
 import { plural, unitLabel } from '@/lib/format';
-import { autoRestHint } from '@/features/plans/describe';
+import { autoRestHint, missHint } from '@/features/plans/describe';
 import { updatePlanned, withWarmupSet } from '@/features/plans/planEdits';
 import { TempoField } from '@/features/plans/TempoField';
+import { isProgressionKind, repRange } from '@/features/workout/progression';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing, tabularNums, typography } from '@/theme/tokens';
 import { DENSE_TEXT_MAX, readable, READABLE_MAX, useTextScale } from '@/theme/layout';
@@ -86,8 +88,15 @@ export default function PrescriptionScreen() {
 
   const working = draft.sets.filter((s) => s.kind !== 'warmup');
   const sharedTempo = working[0]?.tempo ?? '';
-  const sharedLoad = working.find((s) => s.kind === 'normal')?.targetLoadKg;
+  // From the first normal or Assisted set, so a pull-up planned all Assisted shows what's typed.
+  const sharedLoad = working.find((s) => isProgressionKind(s.kind))?.targetLoadKg;
   const rule = draft.progression;
+  // The sets a rule reads (progression.ts): a weight typed on any of them turns its suggestions off.
+  const ruleSets = draft.sets.filter((s) => isProgressionKind(s.kind));
+  const typedWeight = ruleSets.some((s) => s.targetLoadKg !== undefined);
+  // Sets that log assistance get harder by taking it away (progression.ts), so the rule says that.
+  const assisted = plannedWorkingField(draft.sets, exercise) === 'assistanceKg';
+  const fixedReps = ruleSets.length > 0 && ruleSets.every((s) => s.targetReps === undefined || typeof s.targetReps === 'number') && ruleSets.some((s) => s.targetReps !== undefined);
 
   const openKind = (index: number) =>
     ActionSheetIOS.showActionSheetWithOptions(
@@ -314,10 +323,17 @@ export default function PrescriptionScreen() {
                 value={rule?.type ?? 'none'}
                 onChange={setRule}
               />
+              {rule && typedWeight && (
+                <AppText variant="footnote" tone="secondary">
+                  A typed target weight turns off this rule’s suggestions. Clear it to use Auto.
+                </AppText>
+              )}
               {rule?.type === 'rep_range' && (
-                <LabeledRow label="Add weight when every set hits the top of the range">
+                <LabeledRow
+                  label={`${assisted ? 'Take off assistance' : 'Add weight'} when every set hits ${fixedReps ? 'its reps' : 'the top of the range'}`}
+                >
                   <Stepper
-                    label="Weight to add"
+                    label={assisted ? 'Assistance to take off' : 'Weight to add'}
                     value={toDisplay(rule.incrementKg)}
                     onChange={(v) => edit((d) => ({ ...d, progression: { ...rule, incrementKg: fromDisplay(v) } }))}
                     step={increment / 2}
@@ -328,9 +344,9 @@ export default function PrescriptionScreen() {
                 </LabeledRow>
               )}
               {rule?.type === 'percent_weekly' && (
-                <LabeledRow label="Increase each week by">
+                <LabeledRow label={assisted ? 'Take off assistance each week by' : 'Increase each week by'}>
                   <Stepper
-                    label="Weekly increase"
+                    label={assisted ? 'Assistance to take off each week' : 'Weekly increase'}
                     value={rule.percent}
                     onChange={(v) => edit((d) => ({ ...d, progression: { ...rule, percent: v } }))}
                     step={0.5}
@@ -340,6 +356,13 @@ export default function PrescriptionScreen() {
                     spokenValue={(v) => `${v} percent`}
                   />
                 </LabeledRow>
+              )}
+              {rule?.type === 'percent_weekly' && (
+                <AppText variant="footnote" tone="secondary">
+                  {assisted
+                    ? 'Takes this % off last time’s assistance each new week, when you hit your reps.'
+                    : 'Adds this to last time’s weight each new week, when you hit your reps.'}
+                </AppText>
               )}
               {rule && (
                 <>
@@ -369,7 +392,7 @@ export default function PrescriptionScreen() {
                           spokenValue={(v) => plural(v, 'miss', 'misses')}
                         />
                       </LabeledRow>
-                      <LabeledRow label="Drop the weight by">
+                      <LabeledRow label={assisted ? 'Add assistance by' : 'Drop the weight by'}>
                         <Stepper
                           label="Deload percent"
                           value={rule.onMiss.percent}
@@ -383,6 +406,9 @@ export default function PrescriptionScreen() {
                       </LabeledRow>
                     </View>
                   )}
+                  <AppText variant="footnote" tone="secondary">
+                    {missHint(ruleSets.map((s) => repRange(s.targetReps)), rule.onMiss.type === 'deload', assisted)}
+                  </AppText>
                 </>
               )}
               {!rule && (

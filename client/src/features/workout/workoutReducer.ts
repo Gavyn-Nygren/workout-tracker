@@ -1,6 +1,7 @@
 import { kindForExercise } from '@/data/logging';
 import type { LoggedSet, SessionBlock, SessionExercise, SetKind, WorkoutSession } from '@/data/types';
 import { newId } from '@/lib/id';
+import { undoSuggestion } from './progression';
 
 export type ActiveWorkout = {
   session: WorkoutSession;
@@ -26,7 +27,9 @@ export type WorkoutAction =
   | { type: 'toggleSkip'; entryId: string }
   | { type: 'removeExercise'; entryId: string }
   | { type: 'moveBlock'; from: number; to: number }
-  | { type: 'setNotes'; entryId: string; notes: string };
+  | { type: 'setNotes'; entryId: string; notes: string }
+  /** "Use last time's weight": undoes the progression suggestion's pre-fill (progression.ts undoSuggestion). */
+  | { type: 'undoSuggestion'; entryId: string };
 
 function mapEntry(session: WorkoutSession, entryId: string, fn: (entry: SessionExercise) => SessionExercise): WorkoutSession {
   return {
@@ -113,10 +116,10 @@ export function workoutReducer(state: ActiveWorkout | null, action: WorkoutActio
       return update({ ...session, blocks: [...session.blocks, block] });
     }
     case 'swapExercise':
-      // Same number of sets and reps. Loads, the bodyweight they were logged with, and recordings
-      // are cleared because they belonged to the old exercise.
+      // Same number of sets and reps. Loads, the bodyweight they were logged with, recordings, and
+      // the progression suggestion are cleared because they belonged to the old exercise.
       return update(
-        mapEntry(session, action.entryId, (entry) => ({
+        mapEntry(session, action.entryId, ({ suggestion: _, ...entry }) => ({
           ...entry,
           exerciseId: action.exerciseId,
           skipped: false,
@@ -151,6 +154,8 @@ export function workoutReducer(state: ActiveWorkout | null, action: WorkoutActio
     }
     case 'setNotes':
       return update(mapEntry(session, action.entryId, (entry) => ({ ...entry, notes: action.notes || undefined })));
+    case 'undoSuggestion':
+      return update(mapEntry(session, action.entryId, undoSuggestion));
   }
 }
 

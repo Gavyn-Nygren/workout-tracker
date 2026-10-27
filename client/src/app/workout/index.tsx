@@ -4,10 +4,10 @@ import { AccessibilityInfo, ActionSheetIOS, Alert, ScrollView, StyleSheet, View,
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Card, EmptyState, ToastViewport, useToast } from '@/components/ui';
-import { usePreferences } from '@/data/hooks';
+import { usePlans, usePreferences } from '@/data/hooks';
 import { missingForCompletion } from '@/data/logging';
 import { defaultPreferences } from '@/data/preferences';
-import type { LoggedSet, SessionExercise } from '@/data/types';
+import type { LoggedSet, SessionExercise, WorkoutSession } from '@/data/types';
 import { useHaptics } from '@/hooks/useHaptics';
 import { keyboardHeightNow } from '@/hooks/useKeyboardFrame';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -18,7 +18,8 @@ import { BlockCard } from '@/features/workout/BlockCard';
 import { ExerciseSection } from '@/features/workout/ExerciseSection';
 import { RestTimerBar } from '@/features/workout/RestTimerBar';
 import { WorkoutHeader } from '@/features/workout/WorkoutHeader';
-import { lastEntryFor, previousSets } from '@/features/workout/history';
+import { lastTimes, previousSets } from '@/features/workout/history';
+import { canUndoSuggestion } from '@/features/workout/progression';
 import { coveredBelow, scrollOffsetToShow, settleDelayMs, SETTLE_MAX_MS } from '@/features/workout/scrollTarget';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -106,16 +107,22 @@ export default function ActiveWorkoutScreen() {
     [settle],
   );
 
-  // Last time's sets per exercise, for the PREVIOUS column.
-  const lastByExercise = useMemo(() => {
-    const map = new Map<string, SessionExercise | undefined>();
-    for (const block of workout?.session.blocks ?? []) {
-      for (const entry of block.exercises) {
-        if (!map.has(entry.exerciseId)) map.set(entry.exerciseId, lastEntryFor(entry.exerciseId, history));
-      }
-    }
-    return map;
-  }, [workout?.session.blocks, history]);
+  // Last time's sets per entry, for the PREVIOUS column: the same last time its pre-fill and
+  // progression built on (this plan workout's, or the exercise's anywhere). It matches against the
+  // plan workout's planned exercises, as the start did, so removing one of two bench entries
+  // partway never hands the other one its last time.
+  const planId = workout?.session.planId;
+  const planWorkoutId = workout?.session.planWorkoutId;
+  const blocks = workout?.session.blocks;
+  const plans = usePlans().data;
+  const planIds = useMemo(
+    () => plans?.find((p) => p.id === planId)?.workouts.find((w) => w.id === planWorkoutId)?.blocks.flatMap((b) => b.exercises.map((e) => e.id)) ?? [],
+    [plans, planId, planWorkoutId],
+  );
+  const lastByEntry = useMemo(() => {
+    const session: Pick<WorkoutSession, 'planId' | 'planWorkoutId' | 'blocks'> = { planId, planWorkoutId, blocks: blocks ?? [] };
+    return lastTimes(session, history, planIds);
+  }, [planId, planWorkoutId, blocks, history, planIds]);
 
   if (!workout) {
     return (
@@ -170,6 +177,27 @@ export default function ActiveWorkoutScreen() {
             { text: 'Remove', style: 'destructive', onPress: () => dispatch({ type: 'removeExercise', entryId: entry.id }) },
           ]);
         }
+      },
+    );
+  };
+
+  // Decision A: the reason line offers last time's weight back in one tap (progression.ts
+  // undoSuggestion). The reducer applies it, and auto-save keeps it like any other edit.
+  const openSuggestion = (entry: SessionExercise) => {
+    const name = exercisesById.get(entry.exerciseId)?.name ?? 'Exercise';
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        title: name,
+        message: 'Sets you’ve done or changed yourself stay as they are.',
+        options: ['Use last time’s weight', 'Cancel'],
+        cancelButtonIndex: 1,
+        userInterfaceStyle: scheme,
+      },
+      (index) => {
+        // Only when a weight goes back, so the toast is true.
+        if (index !== 0 || !canUndoSuggestion(entry)) return;
+        dispatch({ type: 'undoSuggestion', entryId: entry.id });
+        toast.show({ message: 'Back to last time’s weight.' });
       },
     );
   };
@@ -262,7 +290,7 @@ export default function ActiveWorkoutScreen() {
                   entry={entry}
                   exercise={exercisesById.get(entry.exerciseId)}
                   label={label}
-                  previous={previousSets(entry, lastByExercise.get(entry.exerciseId))}
+                  previous={previousSets(entry, lastByEntry.get(entry.id))}
                   units={preferences.units}
                   effortScale={preferences.effortScale}
                   prSetIds={prSetIds}
@@ -277,6 +305,7 @@ export default function ActiveWorkoutScreen() {
                     router.push({ pathname: '/form/setup', params: { exercise: entry.exerciseId, entry: entry.id, set: next?.id } });
                   }}
                   onUnskip={() => dispatch({ type: 'toggleSkip', entryId: entry.id })}
+                  onSuggestion={() => openSuggestion(entry)}
                   onLayout={(e) => {
                     layout.current.entries.set(entry.id, { blockId: block.id, y: e.nativeEvent.layout.y });
                     settle();

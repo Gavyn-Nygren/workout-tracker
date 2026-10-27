@@ -4,8 +4,19 @@ import { AccessibilityInfo, AppState } from 'react-native';
 
 import { useRepository } from '@/data/DataProvider';
 
-import { completionStamp } from '@/data/dates';
-import { succeeded, useBodyweight, useDeleteSession, useExercises, useLatestPreferences, usePreferences, useSavePreferences, useSaveSession, useSessions } from '@/data/hooks';
+import { completionStamp, todayISO } from '@/data/dates';
+import {
+  succeeded,
+  useBodyweight,
+  useDeleteSession,
+  useExercises,
+  useLatestPreferences,
+  usePlanShifts,
+  usePreferences,
+  useSavePreferences,
+  useSaveSession,
+  useSessions,
+} from '@/data/hooks';
 import { defaultPreferences, withRememberedRests } from '@/data/preferences';
 import { deriveRecordBests, livePRSetIds, sessionsBefore, type RecordBests } from '@/data/records';
 import type { Exercise, SessionBlock, SessionExercise, WorkoutSession } from '@/data/types';
@@ -14,7 +25,7 @@ import { spokenDuration } from '@/hooks/useNow';
 import { createLocalStore } from '@/lib/localStore';
 import type { DayItem } from '../today/agenda';
 import { sessionForReopen, sessionFromPlan } from './buildSession';
-import { bodyweightForSet, completedNewestFirst, recordsAddedByReopen } from './history';
+import { bodyweightForSet, completedNewestFirst, recordsAddedByReopen, withSessionWrite, type SessionWrite } from './history';
 import { continueAs, discardPlan, restoredRest, sessionToResume, type ActiveWorkoutMeta } from './persistence';
 import {
   adjustedRest,
@@ -92,7 +103,10 @@ type ContextValue = {
    */
   prSetIds: ReadonlySet<string>;
   exercisesById: Map<string, Exercise>;
-  /** Completed sessions other than the active one, newest first. */
+  /**
+   * Completed sessions other than the active one, newest first; for a reopened workout, only
+   * those finished before it.
+   */
   history: WorkoutSession[];
   dispatch: (action: WorkoutAction) => void;
   startFromItem: (item: DayItem, position?: Position) => void;
@@ -157,19 +171,28 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
   const generation = useRef(0);
 
   const sessions = useSessions();
+  const planShifts = usePlanShifts();
   const exercises = useExercises();
   const bodyweight = useBodyweight();
   const preferencesQuery = usePreferences();
   const preferences = preferencesQuery.data ?? defaultPreferences;
 
   const exercisesById = useMemo(() => new Map((exercises.data ?? []).map((e) => [e.id, e])), [exercises.data]);
-  const history = useMemo(() => completedNewestFirst(sessions.data ?? [], workout?.session.id), [sessions.data, workout?.session.id]);
-  // Bests from the workouts before this one (for a reopened workout, those finished before it).
   // Only what sessionsBefore reads, so editing a set doesn't re-derive every best.
   const activeId = workout?.session.id;
   const activeCompletedAt = workout?.session.completedAt;
   const activeCompletedDate = workout?.session.completedDate;
   const activeMode = workout?.mode;
+  // Last time for the PREVIOUS column: for a reopened workout, the workouts finished before it,
+  // which is what its pre-fill and progression suggestion were built on.
+  const history = useMemo(
+    () =>
+      activeId && activeMode
+        ? completedNewestFirst(sessionsBefore(sessions.data ?? [], { id: activeId, completedAt: activeCompletedAt, completedDate: activeCompletedDate }, activeMode))
+        : completedNewestFirst(sessions.data ?? []),
+    [sessions.data, activeId, activeCompletedAt, activeCompletedDate, activeMode],
+  );
+  // Bests from the workouts before this one (for a reopened workout, those finished before it).
   const beforeBests = useMemo<RecordBests>(
     () =>
       activeId && activeMode
@@ -183,6 +206,20 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
     [activeSession, beforeBests, exercisesById],
   );
   const weighIns = useMemo(() => [...(bodyweight.data ?? [])].sort((a, b) => a.date.localeCompare(b.date)), [bodyweight.data]);
+
+  /**
+   * The saved sessions as last known: the query's, with this provider's own Finish and Discard
+   * writes applied as soon as they're saved. A workout started straight after "Discard it and
+   * start" reads its history from here, so a reopened workout that was just restored counts, even
+   * before the query catches up (and from a screen holding an older copy of this context).
+   */
+  const knownSessions = useRef<WorkoutSession[]>([]);
+  useEffect(() => {
+    knownSessions.current = sessions.data ?? [];
+  }, [sessions.data]);
+  const noteWrite = useCallback((write: SessionWrite) => {
+    knownSessions.current = withSessionWrite(knownSessions.current, write);
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Rest timer (the rules live in rest.ts)
@@ -502,6 +539,18 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       finishing.current = false;
       if (current.current) scheduleAutosave(current.current.session);
     };
+    /**
+     * What a new workout is built from. History is read when it starts, not when this render
+     * happened, so a start right after Discard or Finish includes what they saved.
+     */
+    const startInput = (item: DayItem) => ({
+      item,
+      history: completedNewestFirst(knownSessions.current),
+      exercisesById,
+      preferences,
+      today: todayISO(),
+      shifts: planShifts.data,
+    });
 
     return {
       workout,
@@ -514,7 +563,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       history,
       dispatch,
       startFromItem: (item, position) => {
-        const session = sessionFromPlan({ item, history, exercisesById, preferences });
+        const session = sessionFromPlan(startInput(item));
         // "Start anyway" on a skipped workout turns that skip into the workout itself.
         const skipped = item.session?.status === 'skipped' ? item.session : undefined;
         open({ mode: 'new', position, session: skipped ? { ...session, id: skipped.id, createdAt: skipped.createdAt } : session });
@@ -524,7 +573,8 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
         const { mode, original: restorePoint } = continueAs(session);
         open({ mode, position, session }, restorePoint);
       },
-      repeat: (item, source) => open({ mode: 'new', session: sessionFromPlan({ item, history, exercisesById, preferences, repeatOf: source }) }),
+      // A repeat follows the progression rules like any other start.
+      repeat: (item, source) => open({ mode: 'new', session: sessionFromPlan({ ...startInput(item), repeatOf: source }) }),
       completeSet,
       uncompleteSet: (entryId, setId) => {
         const entry = workout ? locate(workout.session, entryId)?.entry : undefined;
@@ -544,6 +594,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
         const plan = discardPlan({ mode: workout.mode, original: original.current }, workout.session.id);
         const write = plan.kind === 'restore' ? saveSession.mutateAsync(plan.session) : deleteSession.mutateAsync(plan.sessionId);
         const ok = await succeeded(write);
+        if (ok) noteWrite(plan.kind === 'restore' ? { kind: 'save', session: plan.session } : { kind: 'delete', sessionId: plan.sessionId });
         if (generation.current !== opened) return ok;
         if (ok) close();
         else keepOpen();
@@ -569,6 +620,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
         finishing.current = true;
         cancelAutosave();
         const ok = await succeeded(saveSession.mutateAsync(finished));
+        if (ok) noteWrite({ kind: 'save', session: finished });
         if (generation.current === opened) {
           if (ok) close();
           else keepOpen();
@@ -585,6 +637,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
     exercisesById,
     history,
     sessions.data,
+    planShifts.data,
     preferences,
     completeSet,
     pickRestPreset,
@@ -600,6 +653,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
     deleteSession,
     cancelAutosave,
     scheduleAutosave,
+    noteWrite,
   ]);
 
   return <Context.Provider value={value}>{children}</Context.Provider>;

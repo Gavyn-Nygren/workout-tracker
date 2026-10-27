@@ -240,6 +240,62 @@ export type LoggedSet = {
   recordingId?: ID;
 };
 
+/**
+ * A pre-filled set the progression suggestion changed, with what it would have started at without
+ * the rule (last time's weight, and last time's reps kept inside the range), so "Use last time's
+ * weight" can put it back. Weights are in the set's own weight field.
+ */
+export type SuggestedSet = {
+  setId: ID;
+  /** The kind it was pre-filled as: changing it makes the set the lifter's. Older saves lack it. */
+  kind?: SetKind;
+  /** What the suggestion pre-filled. */
+  kg?: number;
+  reps?: number;
+  /** What the pre-fill would have been without the rule. */
+  lastKg?: number;
+  lastReps?: number;
+};
+
+/**
+ * What an exercise's progression rule suggested when the workout started (G3.9), kept with the
+ * entry so the workout can say what changed and why, and undo it. Progression only suggests: the
+ * sets start at the suggested weight and the lifter can change anything. Saved before G3.9,
+ * entries don't have one.
+ */
+export type ProgressionSuggestion = {
+  /** Up after a good last time, down after enough misses in a row, or the same weight after a miss. */
+  kind: 'increase' | 'deload' | 'hold_after_miss';
+  rule: ProgressionRule['type'];
+  /** The weight field it's in: plain load, load added to bodyweight, or assistance. */
+  field: 'loadKg' | 'addedLoadKg' | 'assistanceKg';
+  /**
+   * Last time's top working weight as lifted, which the rule built on. It can sit off the
+   * increment (82.5 lb on a 5 lb one); the sets without the rule start at it rounded.
+   */
+  fromKg: number;
+  /** The suggested weight; for 'hold_after_miss', last time's weight rounded. */
+  toKg: number;
+  /** A rep-range increase: the top of the range every set hit, when the sets share one. */
+  topReps?: number;
+  /** A weekly-% increase: the weekly percent. A deload: the deload percent. */
+  percent?: number;
+  /**
+   * The change is the exercise's smallest step (or stopped at zero), not `percent`: the percent
+   * alone rounded to no change at all, as 10% off 20 lb dumbbells does. The reason line then says
+   * the weight change rather than a percent that didn't happen.
+   */
+  minimumStep?: boolean;
+  /** After a miss: misses in a row at last time's weight, last time included. */
+  missCount?: number;
+  /** A rule that deloads: how many misses in a row it takes. */
+  deloadAfter?: number;
+  /** The pre-filled sets it changed. Empty for 'hold_after_miss'. */
+  sets: SuggestedSet[];
+  /** Set once the lifter chose last time's weight instead. */
+  dismissed?: boolean;
+};
+
 export type SessionExercise = {
   id: ID;
   exerciseId: ID;
@@ -247,6 +303,8 @@ export type SessionExercise = {
   skipped: boolean;
   sets: LoggedSet[];
   notes?: string;
+  /** The progression rule's suggestion when the workout started, if it made one (G3.9). */
+  suggestion?: ProgressionSuggestion;
 };
 
 export type SessionBlock = {

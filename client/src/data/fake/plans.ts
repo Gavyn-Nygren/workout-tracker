@@ -96,7 +96,7 @@ const lowerB: PlanWorkout = {
       sets: [...warmups([135, 225], 3), ...working(3, { min: 3, max: 5 })],
       progression: repRange(10),
     }),
-    single('pb_lb_2', { id: 'pe_lb_frontsquat', exerciseId: 'ex_front_squat', sets: working(3, { min: 6, max: 8 }) }),
+    single('pb_lb_2', { id: 'pe_lb_frontsquat', exerciseId: 'ex_front_squat', sets: working(3, { min: 6, max: 8 }), progression: repRange(5) }),
     single('pb_lb_3', { id: 'pe_lb_legpress', exerciseId: 'ex_leg_press', sets: working(3, { min: 10, max: 12 }) }),
     single('pb_lb_4', { id: 'pe_lb_ext', exerciseId: 'ex_leg_extension', sets: working(3, { min: 12, max: 15 }) }),
   ],

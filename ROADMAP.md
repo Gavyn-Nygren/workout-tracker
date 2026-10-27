@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G3.9 (progression rules).
+**Current goal:** G3.10 (goals, badges, streaks).
 
 ## How we work
 
@@ -329,10 +329,17 @@ Everything works on one phone, offline, with no server.
 
 ### G3.9 Progression rules
 
-- [ ] Rep-range and percentage rules.
-- [ ] Missed-rep behaviour set per rule.
+- [x] Rep-range and percentage rules.
+  - *Rep range adds the rule's weight once every set hits the top of its range. Weekly % adds its percent in the first workout of a new week, building on what you lifted, when every set was done with no miss (user's pick).*
+  - *Suggestions build on the same plan workout's last time, so heavy and light days progress separately, else the exercise anywhere (user's pick). The PREVIOUS column shows the same workout.*
+  - *Suggestions round to the equipment's increment and always move at least one step. Assisted exercises progress by taking off assistance. A typed plan weight turns the rule off.*
+  - *A short reason line under the exercise says what changed and why; tapping it offers "Use last time's weight" (user's pick).*
+- [x] Missed-rep behaviour set per rule.
+  - *A set below the bottom of its range is a miss (user's pick). "Repeat weight" holds the weight; "Deload" drops it by its percent after N misses in a row at the same weight.*
 
-*From the G3.6 check: after Home's "Discard it and start" on a reopened workout, the new workout's pre-fill still skips the workout just restored (start uses history from before the discard). Low impact; fix with the pre-fill work.*
+*From the G3.6 check: "Discard it and start" on a reopened workout now pre-fills from the workout just restored (fixed in G3.9).*
+
+*Done: 626 tests, covering both rules, misses and deloads, rounding, assisted and bodyweight exercises, which workout a suggestion builds on, undo, and the reason line's wording. The sample data now shows an increase, a same-weight-after-a-miss and a deload in the Upper / Lower plan. Not yet checked on an iPhone: the reason line's look, tapping it, and its action sheet.*
 
 ### G3.10 Goals, badges, streaks
 

@@ -315,7 +315,7 @@ Every set has exactly one **kind** and any number of **modifiers**.
 
 **Logging behaviour**
 
-- **Pre-fill:** weight and reps start filled with the plan target, or the progression rule's suggestion. Last session's values appear alongside in muted text. One tap confirms.
+- **Pre-fill:** weight and reps start filled with the plan target, or the progression rule's suggestion. Last session's values appear alongside in muted text. One tap confirms. For a plan workout, "last session" is the last time that same plan workout was done (see Progression).
 - **Changes during a workout:** users can add or remove exercises and sets, reorder exercises by dragging, and swap an exercise for an alternative (suggested from the same base movement or muscle group). When the workout finishes, the app offers to **save those changes back to the plan**.
 - **Active workout screen layout:**
   - **Opening and minimizing:** it opens as a **full-height sheet**. Swiping it down minimizes it to a **mini bar above the tab bar** showing the name, elapsed time, sets done, and rest remaining; tapping the bar brings the workout back.
@@ -350,6 +350,18 @@ Every set has exactly one **kind** and any number of **modifiers**.
 - Each exercise in a plan can have an optional rule, such as "add X lb when all sets hit the top of the rep range" or a fixed weekly percentage for fixed-length programs.
 - **What happens after missed target reps is set per rule.** Options include repeating the weight, or suggesting a deload of about 10% after N consecutive misses.
 - Progression only ever produces suggestions; the user can always override them.
+- **What it builds on** (user's pick: the same plan workout): the last time this plan workout was done, so a heavy day and a light day progress separately. If it hasn't been done yet, the exercise's last time anywhere. The PREVIOUS column shows the same workout.
+- **Which sets count:** completed working sets (normal and assisted), each judged against the plan's rep target for that set. Warm-ups, drop sets, and timed holds never count.
+  - **Top:** every working set done, each at the top of its range.
+  - **Miss** (user's pick: below the bottom): any set below the bottom of its range, for example fewer than 8 reps for 8–12. Getting 9–11 isn't a miss: the weight stays and you push for reps. When the last time came from another workout, a miss is judged against that workout's own targets.
+- **Rep range:** hitting the top adds the rule's weight. Anything else keeps the weight, and a miss follows the miss setting.
+- **Weekly %** (user's pick: what you lifted): the first workout of a new week adds the percent to last time's weight, when every set was done with no miss. Weeks are the program's weeks in a fixed-length plan, otherwise calendar weeks. A gap of several weeks still adds only one step.
+- **Misses:** "Repeat weight" keeps it. "Deload" counts misses in a row at the same weight, and after N it drops the weight by its percent. A new weight starts a fresh count.
+- **Rounding:** suggestions round to the exercise's increment (below) and always move at least one increment from the weight lifted, so light dumbbells still progress and a deload always drops. Never below zero.
+- **Assisted exercises** progress by taking off assistance, and a deload adds assistance; percentages apply to the assistance. Bodyweight exercises progress the added weight.
+- **A typed target weight** in the plan turns the rule's suggestions off; Auto uses them.
+- **Reps** start at the bottom of the range after the rule moves the weight. Otherwise they start at last time's reps, kept inside the range.
+- **Reason line** (user's pick): when the rule moved the weight, or held it after a miss, a short line under the exercise's target says why, for example "+5 lb · every set hit 12 last time", "−10% · 3 misses in a row at 205", or "Same weight · 2 of 3 misses before a deload". Increases are green; deloads and holds are neutral. Tapping an increase or a deload offers **Use last time's weight**, which puts back the sets you haven't done or changed yourself.
 
 **Rounding**
 

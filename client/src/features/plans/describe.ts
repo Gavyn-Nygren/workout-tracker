@@ -1,3 +1,4 @@
+import { plannedWorkingField } from '@/data/logging';
 import { trainingDays, weekdaysByWorkout } from '@/data/schedule';
 import type { Exercise, Plan, PlannedExercise, PlanSchedule, PlanWorkout, ProgressionRule, SetPrescription, StarterTemplate, UnitSystem, Weekday } from '@/data/types';
 import { formatLoad, formatRepTarget, plural, sortWeekdays, WEEKDAY_LONG, WEEKDAY_SHORT } from '@/lib/format';
@@ -55,10 +56,46 @@ export function workoutStats(workout: PlanWorkout, spoken = false): string {
   return [plural(exercises, 'exercise'), plural(sets, 'working set'), minutes].filter(Boolean).join(spoken ? ', ' : ' · ');
 }
 
-export function describeProgression(rule: ProgressionRule | undefined, units: UnitSystem): string {
+/**
+ * A progression rule in a few words, for the plan workout's exercise list: "+5 lb at top of range
+ * · deload 10% after 3 misses", "+5 lb when every set hits 5 · repeat on a miss" (fixed reps, from
+ * `sets`), "+2.5% a week · repeat on a miss". When the working sets log assistance (`exercise`
+ * assisted, or sets planned as Assisted), progress takes assistance away, so it says that: "5 lb
+ * less assistance at top of range · 10% more assistance after 3 misses".
+ */
+export function describeProgression(
+  rule: ProgressionRule | undefined,
+  units: UnitSystem,
+  sets: readonly SetPrescription[] = [],
+  exercise?: Pick<Exercise, 'isBodyweight' | 'isAssisted'>,
+): string {
   if (!rule) return 'No auto progression';
-  const miss = rule.onMiss.type === 'repeat' ? 'repeat on a miss' : `deload ${rule.onMiss.percent}% after ${rule.onMiss.afterConsecutiveMisses} misses`;
-  return rule.type === 'rep_range' ? `+${formatLoad(rule.incrementKg, units)} at top of range · ${miss}` : `+${rule.percent}% a week · ${miss}`;
+  const { onMiss } = rule;
+  const assisted = plannedWorkingField(sets, exercise) === 'assistanceKg';
+  const misses = onMiss.type === 'deload' ? (onMiss.afterConsecutiveMisses === 1 ? 'a miss' : `${onMiss.afterConsecutiveMisses} misses`) : '';
+  const miss = onMiss.type === 'repeat' ? 'repeat on a miss' : assisted ? `${onMiss.percent}% more assistance after ${misses}` : `deload ${onMiss.percent}% after ${misses}`;
+  if (rule.type === 'percent_weekly') return `${assisted ? `${rule.percent}% less assistance` : `+${rule.percent}%`} a week · ${miss}`;
+  // The sets the rule reads: normal and assisted ones (features/workout/progression.ts).
+  const targets = sets.filter((s) => s.kind === 'normal' || s.kind === 'assisted').flatMap((s) => (s.targetReps === undefined ? [] : [s.targetReps]));
+  const fixed = targets.length > 0 && targets.every((t) => typeof t === 'number');
+  const when = !fixed ? 'at top of range' : new Set(targets).size === 1 ? `when every set hits ${targets[0]}` : 'when every set hits its reps';
+  return `${assisted ? `${formatLoad(rule.incrementKg, units)} less assistance` : `+${formatLoad(rule.incrementKg, units)}`} ${when} · ${miss}`;
+}
+
+/**
+ * The plan editor's note under "If you miss the target reps" (G3.9 decision D): what counts as a
+ * miss, from the working sets' rep targets (a fixed target of n is n to n). A set below the bottom
+ * of its range is a miss; inside the range it isn't. With a deload, only misses in a row at the
+ * same weight (or assistance, for `assisted` sets) count.
+ */
+export function missHint(ranges: readonly ({ min: number; max: number } | undefined)[], deload: boolean, assisted = false): string {
+  const targets = ranges.filter((r) => r !== undefined);
+  if (!targets.length) return 'Add target reps to the sets so the rule can tell when you hit or miss them.';
+  const range = targets.find((r) => r.min < r.max);
+  const what = range
+    ? `A set below the bottom of its range counts as a miss: fewer than ${plural(range.min, 'rep')} for ${range.min}–${range.max}.`
+    : 'A set with fewer reps than its target counts as a miss.';
+  return deload ? `${what} Only misses in a row at the same ${assisted ? 'assistance' : 'weight'} count toward a deload.` : what;
 }
 
 /**

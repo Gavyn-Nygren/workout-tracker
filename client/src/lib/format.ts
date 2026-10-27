@@ -58,9 +58,10 @@ export function formatLoad(kg: number, units: UnitSystem): string {
   return `${formatLoadValue(kg, units)} ${unitLabel(units)}`;
 }
 
-/** VoiceOver version of formatLoad: "225 pounds". */
+/** VoiceOver version of formatLoad: "225 pounds", "1 kilogram". */
 export function spokenLoad(kg: number, units: UnitSystem): string {
-  return `${formatLoadValue(kg, units)} ${units === 'imperial' ? 'pounds' : 'kilograms'}`;
+  const value = formatLoadValue(kg, units);
+  return `${value} ${units === 'imperial' ? 'pound' : 'kilogram'}${value === '1' ? '' : 's'}`;
 }
 
 /** Whether a load shows as 0 in the user's unit. */

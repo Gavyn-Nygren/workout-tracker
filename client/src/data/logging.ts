@@ -1,6 +1,6 @@
 // Logging rules from spec 2.6 (roadmap G3.5). Pure, so they're unit-tested.
 import { defaultRounding } from './preferences';
-import type { Equipment, Exercise, LoggedSet, Preferences, SetKind } from './types';
+import type { Equipment, Exercise, LoggedSet, Preferences, SetKind, SetPrescription } from './types';
 
 /**
  * The increment suggested weights round to. Equipment without its own setting (bodyweight added
@@ -24,6 +24,16 @@ export function loadField(exercise: Pick<Exercise, 'isBodyweight'> | undefined, 
 /** A planned set's kind at workout time: assisted exercises log assistance by default. */
 export function kindForExercise(kind: SetKind, exercise: Pick<Exercise, 'isAssisted'> | undefined): SetKind {
   return kind === 'normal' && exercise?.isAssisted ? 'assisted' : kind;
+}
+
+/**
+ * The field a planned exercise's working sets log their weight in, from its first normal or
+ * assisted set at workout time: a pull-up planned as Assisted logs assistance, though the exercise
+ * itself is plain bodyweight. Progression rules (G3.9) read and suggest this field.
+ */
+export function plannedWorkingField(sets: readonly Pick<SetPrescription, 'kind'>[], exercise: Pick<Exercise, 'isBodyweight' | 'isAssisted'> | undefined): LoadField {
+  const kinds = sets.map((s) => kindForExercise(s.kind, exercise));
+  return loadField(exercise, kinds.find((k) => k === 'normal' || k === 'assisted') ?? kindForExercise('normal', exercise));
 }
 
 /**

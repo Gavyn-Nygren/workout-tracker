@@ -129,7 +129,7 @@ export default function PlanWorkoutScreen() {
                   name={exerciseName(exercisesById, planned.exerciseId)}
                   summary={prescriptionSummary(planned)}
                   spokenSummary={spokenPrescription(planned)}
-                  progression={planned.progression && describeProgression(planned.progression, units)}
+                  progression={planned.progression && describeProgression(planned.progression, units, planned.sets, exercisesById.get(planned.exerciseId))}
                   onPress={() => router.push({ pathname: '/plans/prescription', params: { plan: plan.id, workout: workout.id, pe: planned.id } })}
                   onMenu={() => openMenu(block, blockIndex, planned)}
                 />
