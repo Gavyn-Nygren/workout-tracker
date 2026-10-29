@@ -60,13 +60,15 @@ describe('what each write refreshes', () => {
       'saveGoal',
       'deleteGoal',
       'saveBodyweight',
+      'updateBodyweight',
       'deleteBodyweight',
       'deleteFormReport',
       'savePreferences',
     ];
     for (const mutation of reads) includes(mutation, ['badges']);
-    // Only a recording's video goes; its report, which badges count, stays.
-    assert.deepEqual(writes.filter((m) => !reads.includes(m)), ['deleteRecordingVideo']);
+    // Only a recording's video goes; its report, which badges count, stays. Progress's pins and
+    // graphs are only read by Progress.
+    assert.deepEqual(writes.filter((m) => !reads.includes(m)), ['deleteRecordingVideo', 'saveProgressPreferences']);
   });
 
   test('the streak refreshes after writes to workouts, plans, pushes, goals, and the week start', () => {

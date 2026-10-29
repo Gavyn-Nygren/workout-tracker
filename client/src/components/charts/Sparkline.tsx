@@ -1,52 +1,81 @@
-import { useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
-import { fromISODate } from '@/data/dates';
+import type { Point } from '@/features/progress/series';
 import { useAppTheme } from '@/theme/ThemeProvider';
+import { areaPath, lineRuns, linePath, placeX, timeDomain, type ChartGaps } from './chartMath';
 
 type Props = {
-  points: { date: string; value: number }[];
+  /** Oldest first. `at` (the finish time) keeps same-day workouts apart. */
+  points: Pick<Point, 'date' | 'value' | 'at'>[];
   height?: number;
   /**
    * Read by VoiceOver, e.g. "Back Squat e1RM rising from 290 to 330 lb" (`describeTrend` builds the
    * direction part). Inside a tappable card it isn't reached, so put the trend in the card's label.
    */
   label: string;
+  /**
+   * Long gaps between points: by default a dashed, faded segment across gaps of more than 28 days,
+   * as the full graph draws them. The bodyweight trend passes `{ days: 7, draw: 'none' }` to break
+   * its line instead; `false` joins every point.
+   */
+  gaps?: ChartGaps | false;
 };
 
 const PAD = 5;
+const DEFAULT_GAPS: ChartGaps = { days: 28, draw: 'dashed' };
 
 /** Tiny trend line (dataviz specs: 2px line, ~10% area wash, ringed end dot). No axes. */
-export function Sparkline({ points, height = 44, label }: Props) {
+function SparklineView({ points, height = 44, label, gaps = DEFAULT_GAPS }: Props) {
   const { colors } = useAppTheme();
   const [width, setWidth] = useState(0);
 
-  const times = points.map((p) => fromISODate(p.date).getTime());
-  const values = points.map((p) => p.value);
-  const t0 = Math.min(...times);
-  const t1 = Math.max(...times);
-  const v0 = Math.min(...values);
-  const v1 = Math.max(...values);
-  const x = (t: number) => PAD + (t1 === t0 ? (width - 2 * PAD) / 2 : ((t - t0) / (t1 - t0)) * (width - 2 * PAD));
-  const y = (v: number) => PAD + (v1 === v0 ? (height - 2 * PAD) / 2 : (1 - (v - v0) / (v1 - v0)) * (height - 2 * PAD));
+  const shape = useMemo(() => {
+    const domain = timeDomain([points]);
+    if (width <= 0 || !domain) return undefined;
+    let v0 = Infinity;
+    let v1 = -Infinity;
+    for (const p of points) {
+      if (p.value < v0) v0 = p.value;
+      if (p.value > v1) v1 = p.value;
+    }
+    const xs = placeX(points, domain, PAD, width - 2 * PAD, 3);
+    const ys = points.map((p) => PAD + (v1 === v0 ? (height - 2 * PAD) / 2 : (1 - (p.value - v0) / (v1 - v0)) * (height - 2 * PAD)));
+    return { xs, ys, runs: lineRuns(points, gaps) };
+  }, [points, width, height, gaps]);
 
-  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(times[i]).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
   const last = points.length - 1;
 
   return (
     <View style={{ height }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)} accessible accessibilityRole="image" accessibilityLabel={label}>
-      {width > 0 && points.length > 0 && (
+      {shape && (
         <Svg width={width} height={height}>
-          {points.length > 1 && (
-            <>
-              <Path d={`${line} L${x(times[last]).toFixed(1)},${height} L${x(times[0]).toFixed(1)},${height} Z`} fill={colors.chartPrimary} fillOpacity={0.1} />
-              <Path d={line} stroke={colors.chartPrimary} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" fill="none" />
-            </>
+          {shape.runs.map((r, i) =>
+            r.to > r.from && !r.gap ? <Path key={`a${i}`} d={areaPath(shape.xs, shape.ys, r.from, r.to, height)} fill={colors.chartPrimary} fillOpacity={0.1} /> : null,
           )}
-          <Circle cx={x(times[last])} cy={y(values[last])} r={4} fill={colors.chartPrimary} stroke={colors.card} strokeWidth={2} />
+          {shape.runs.map((r, i) =>
+            r.to > r.from ? (
+              <Path
+                key={`l${i}`}
+                d={linePath(shape.xs, shape.ys, r.from, r.to)}
+                stroke={colors.chartPrimary}
+                strokeWidth={2}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                fill="none"
+                {...(r.gap ? { strokeDasharray: '3 4', strokeOpacity: 0.45 } : null)}
+              />
+            ) : // A point standing alone between gaps still shows.
+            r.from !== last ? (
+              <Circle key={`p${i}`} cx={shape.xs[r.from]} cy={shape.ys[r.from]} r={2.5} fill={colors.chartPrimary} />
+            ) : null,
+          )}
+          <Circle cx={shape.xs[last]} cy={shape.ys[last]} r={4} fill={colors.chartPrimary} stroke={colors.card} strokeWidth={2} />
         </Svg>
       )}
     </View>
   );
 }
+
+export const Sparkline = memo(SparklineView);

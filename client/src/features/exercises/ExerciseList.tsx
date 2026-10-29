@@ -50,6 +50,10 @@ type Props = {
   similarTo?: Exercise;
   /** Library mode groups your custom exercises first. */
   groupCustom?: boolean;
+  /** Lists these exercises first under their own header, the rest under `restTitle` (graph builder: the logged ones). */
+  firstGroup?: { title: string; ids: ReadonlySet<string>; restTitle: string };
+  /** A row's subtitle in place of equipment and muscles, when it returns one (e.g. "12 workouts · last Oct 20"). */
+  subtitleFor?: (exercise: Exercise) => string | undefined;
   /** Shown under the search field, e.g. a "New exercise" button. */
   accessory?: ReactNode;
   /** The exercises are still loading: placeholder rows show under the search and filters. */
@@ -60,7 +64,7 @@ type Props = {
 };
 
 /** Search, muscle filters, and a tappable list. Shared by the workout picker, plan editor, and library. */
-export function ExerciseList({ exercises, onPick, similarTo, groupCustom, accessory, loading, error, onRetry }: Props) {
+export function ExerciseList({ exercises, onPick, similarTo, groupCustom, firstGroup, subtitleFor, accessory, loading, error, onRetry }: Props) {
   const [query, setQuery] = useState('');
   const [muscle, setMuscle] = useState<MuscleGroup | null>(null);
 
@@ -71,6 +75,8 @@ export function ExerciseList({ exercises, onPick, similarTo, groupCustom, access
   if (similarTo) {
     const similar = filtered.filter((e) => isSimilar(e, similarTo));
     groups.push(['Suggested swaps', similar], ['All exercises', filtered.filter((e) => !similar.includes(e))]);
+  } else if (firstGroup) {
+    groups.push([firstGroup.title, filtered.filter((e) => firstGroup.ids.has(e.id))], [firstGroup.restTitle, filtered.filter((e) => !firstGroup.ids.has(e.id))]);
   } else if (groupCustom) {
     groups.push(['My exercises', filtered.filter((e) => e.source === 'custom')], ['Library', filtered.filter((e) => e.source === 'builtin')]);
   } else {
@@ -119,7 +125,7 @@ export function ExerciseList({ exercises, onPick, similarTo, groupCustom, access
                   <ListRow
                     key={exercise.id}
                     title={exercise.name}
-                    subtitle={exerciseSubtitle(exercise)}
+                    subtitle={subtitleFor?.(exercise) ?? exerciseSubtitle(exercise)}
                     icon={EQUIPMENT_ICON[exercise.equipment ?? 'other']}
                     onPress={() => onPick(exercise)}
                     separator={i < list.length - 1}

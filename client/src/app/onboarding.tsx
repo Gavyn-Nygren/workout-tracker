@@ -17,6 +17,7 @@ import { onboardingAnswers, type Answers } from '@/features/onboarding/answers';
 import { recommendTemplates, type Goal } from '@/features/onboarding/recommend';
 import { nextWeekStart, planFromTemplate } from '@/features/plans/planEdits';
 import { templateMeta } from '@/features/plans/TemplateCard';
+import { canContinueWithWeight, canSaveWeight, weightProblem } from '@/features/progress/logWeight';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { DENSE_TEXT_MAX, readable, useTextScale } from '@/theme/layout';
@@ -66,6 +67,8 @@ export default function OnboardingScreen() {
   // added later from Profile. The setup questions that follow are all optional.
   const [phase, setPhase] = useState<'weight' | 'questions' | 'recommend' | 'tour'>('weight');
   const [weight, setWeight] = useState<number>();
+  // The typo guard Log weight uses: the reason waits until typing ends for a weight still too small.
+  const [typingWeight, setTypingWeight] = useState(false);
   const preferences = usePreferences().data;
   const units = preferences?.units ?? 'imperial';
   const weekStartsOn = preferences?.weekStartsOn ?? 1;
@@ -97,9 +100,9 @@ export default function OnboardingScreen() {
 
   /** Saves the weigh-in straight away (in the user's units), then moves on to the optional setup. */
   const saveWeight = () => {
-    if (weight && weight > 0) {
+    if (weight !== undefined && canSaveWeight(weight, units)) {
       const now = new Date().toISOString();
-      saveBodyweight.mutate({ id: newId('bw'), date: today, weightKg: units === 'imperial' ? lbToKg(weight) : weight, createdAt: now, updatedAt: now });
+      saveBodyweight.mutate({ id: newId('bw'), date: today, weightKg: units === 'imperial' ? lbToKg(weight) : weight, createdAt: now, updatedAt: now, source: 'onboarding' });
     }
     setPhase('questions');
   };
@@ -180,9 +183,15 @@ export default function OnboardingScreen() {
                   decimal
                   width={110}
                   placeholder={units === 'imperial' ? '180' : '82'}
+                  onFocusChange={setTypingWeight}
                 />
               </View>
             </Card>
+            {weightProblem(weight, units, { editing: typingWeight }) && (
+              <AppText variant="footnote" tone="error">
+                {weightProblem(weight, units)}
+              </AppText>
+            )}
           </Question>
         )}
 
@@ -346,13 +355,13 @@ export default function OnboardingScreen() {
         {phase === 'weight' &&
           (large ? (
             <>
-              <Button title="Continue" onPress={saveWeight} fullWidth />
+              <Button title="Continue" onPress={saveWeight} fullWidth disabled={!canContinueWithWeight(weight, units)} accessibilityHint={weightProblem(weight, units)} />
               <Button title="Skip" accessibilityLabel="Skip bodyweight" variant="ghost" onPress={() => setPhase('questions')} style={styles.centerSelf} />
             </>
           ) : (
             <View style={styles.row}>
               <Button title="Skip" accessibilityLabel="Skip bodyweight" variant="ghost" onPress={() => setPhase('questions')} />
-              <Button title="Continue" onPress={saveWeight} style={styles.flex} fullWidth />
+              <Button title="Continue" onPress={saveWeight} style={styles.flex} fullWidth disabled={!canContinueWithWeight(weight, units)} accessibilityHint={weightProblem(weight, units)} />
             </View>
           ))}
         {phase === 'questions' && step === -1 && (

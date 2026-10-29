@@ -1,9 +1,21 @@
-import type { Equipment, ID, Preferences, UnitSystem } from './types';
+import type { Equipment, ID, Preferences, ProgressGraph, ProgressPin, ProgressPreferences, UnitSystem } from './types';
 
 /** Rounding defaults per unit system (spec 2.6): barbell 5 lb / 2.5 kg, dumbbell 5 lb / 2 kg, machine 5 lb / 2.5 kg. */
 export const defaultRounding: Record<UnitSystem, Partial<Record<Equipment, number>>> = {
   imperial: { barbell: 5, dumbbell: 5, machine: 5, cable: 5, kettlebell: 5 },
   metric: { barbell: 2.5, dumbbell: 2, machine: 2.5, cable: 2.5, kettlebell: 4 },
+};
+
+/** Progress's default Key exercise pins (spec 2.10): Squat, Bench, and Deadlift. */
+export const DEFAULT_PIN_IDS: readonly ID[] = ['ex_back_squat', 'ex_bench_press', 'ex_deadlift'];
+
+/**
+ * Progress for a new account (G3.11, user's pick): the default pins, which show once logged, and
+ * no saved graphs.
+ */
+export const defaultProgress: ProgressPreferences = {
+  pins: DEFAULT_PIN_IDS.map((exerciseId) => ({ exerciseId, isDefault: true })),
+  graphs: [],
 };
 
 /** Settings for a new account (spec 2.4): lb/in, RPE, per-equipment rounding, rest by exercise type. */
@@ -27,6 +39,7 @@ export const defaultPreferences: Preferences = {
     reminderTime: '17:00',
     weeklySummaryAt: { weekday: 7, time: '19:00' },
   },
+  progress: defaultProgress,
 };
 
 /** The range and step for rest lengths set in Settings, on an exercise, or learned from the timer. */
@@ -47,6 +60,51 @@ function cleanRestMemory(stored: unknown): Record<ID, number> {
   return clean;
 }
 
+const isId = (value: unknown): value is ID => typeof value === 'string' && value.length > 0;
+
+/**
+ * Progress pins and graphs as stored, minus anything unusable, so a bad value never crashes
+ * Progress. Missing (saved before G3.11) or not an object: the defaults. Pins: a list (a missing
+ * one is the default pins; an empty one stays empty), one per exercise, first kept; only a default
+ * pin's id can be marked a default. Graphs: each needs an id, an exercise and a metric, one per id
+ * and per exercise and metric, first kept. Whether the metric is one Progress knows is checked by
+ * Progress itself (features/progress/progressPrefs.ts).
+ */
+export function cleanProgress(stored: unknown): ProgressPreferences {
+  if (!stored || typeof stored !== 'object') return defaultProgress;
+  const { pins: storedPins, graphs: storedGraphs } = stored as { pins?: unknown; graphs?: unknown };
+
+  let pins = defaultProgress.pins;
+  if (Array.isArray(storedPins)) {
+    const seen = new Set<ID>();
+    pins = [];
+    for (const item of storedPins as unknown[]) {
+      const exerciseId = typeof item === 'string' ? item : item && typeof item === 'object' ? (item as { exerciseId?: unknown }).exerciseId : undefined;
+      if (!isId(exerciseId) || seen.has(exerciseId)) continue;
+      seen.add(exerciseId);
+      const isDefault = typeof item === 'object' && (item as ProgressPin).isDefault === true && DEFAULT_PIN_IDS.includes(exerciseId);
+      pins.push(isDefault ? { exerciseId, isDefault: true } : { exerciseId });
+    }
+  }
+
+  const graphs: ProgressGraph[] = [];
+  if (Array.isArray(storedGraphs)) {
+    const ids = new Set<ID>();
+    const pairs = new Set<string>();
+    for (const item of storedGraphs as unknown[]) {
+      if (!item || typeof item !== 'object') continue;
+      const { id, exerciseId, metric } = item as Partial<Record<keyof ProgressGraph, unknown>>;
+      if (!isId(id) || !isId(exerciseId) || !isId(metric)) continue;
+      const pair = `${exerciseId}\u0000${metric}`;
+      if (ids.has(id) || pairs.has(pair)) continue;
+      ids.add(id);
+      pairs.add(pair);
+      graphs.push({ id, exerciseId, metric });
+    }
+  }
+  return { pins, graphs };
+}
+
 /**
  * Saved preferences as the app uses them: settings added in later versions fall back to their
  * defaults, so rows saved by an older version still load.
@@ -58,6 +116,7 @@ export function withPreferenceDefaults(stored: Partial<Preferences> | null | und
     ...stored,
     notifications: { ...defaultPreferences.notifications, ...stored.notifications },
     restByExerciseSec: cleanRestMemory(stored.restByExerciseSec),
+    progress: cleanProgress(stored.progress),
   };
 }
 

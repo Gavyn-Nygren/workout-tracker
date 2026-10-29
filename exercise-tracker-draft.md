@@ -81,7 +81,7 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
   - Logged sets are stored one row per set, so sync can merge per set.
   - Every change is also written to an outbox table for the sync worker.
   - Personal records, streaks, and badges are calculated from the stored history rather than stored, so edits never leave them stale.
-  - Small UI state (pinned graphs, theme, sign-in state) lives in expo-sqlite's key-value store.
+  - Small on-device UI state (the Progress range, theme, sign-in state) lives in expo-sqlite's key-value store. Progress's pinned exercises and saved graphs are saved with the preferences, so they're exported, reset, and synced with them.
 - Charts: **custom react-native-svg charts** for now. Victory Native XL was the plan, but its current release needs Skia 2.15+ while Expo SDK 58 / Expo Go ships Skia 2.14. The charts follow the dataviz rules (one axis, hairline grid, 2px lines, ringed markers, labelled endpoints, drag-to-read crosshair). Revisit Victory once on development builds (roadmap Phase 4).
 - Form analysis: Vision Camera, MediaPipe Pose Landmarker, and Skia overlays, **all running on-device**.
 - Live Activity rest timer: a native iOS widget extension.
@@ -381,7 +381,7 @@ Every set has exactly one **kind** and any number of **modifiers**.
 - Form analysis is flagged only on the verified variations in 2.8.
 - How-to instructions are added later, together with demonstration media (user's pick).
 - Custom exercises are available from day one. Only the name is required; equipment, muscle groups, instructions, and demonstration media/link are optional.
-- A custom exercise can **link to a built-in base movement** (for example "My Safety Bar Squat" → Squat). Linking makes it eligible for form analysis and grouped stats.
+- A custom exercise can **link to a built-in base movement** (for example "My Safety Bar Squat" → Squat). Linking makes it eligible for form analysis, and its history lists the other logged exercises of that movement. Each keeps its own numbers: a safety-bar squat's e1RM isn't a back squat's (user's pick).
 - History is tied to exercise IDs, so **renaming never breaks history**.
 
 **Bodyweight and effective load**
@@ -581,28 +581,48 @@ Sumo deadlifts are excluded because they are hard to read from a side view.
 
 ### 2.10 Progress analytics
 
-- **Automatic analytics** show user-pinned exercises plus the most-logged exercises from the last 8 weeks, up to about 6 in total.
-- **Custom graphs:** the user picks an exercise and plots volume, reps, top weight, sets, e1RM, and related history.
-- **Several loaded graphs** appear as a scrollable list of compact sparkline cards. Tapping a card opens the full interactive graph, and swiping left or right moves between loaded graphs.
+- **Key exercises (automatic analytics):** pinned exercises first, then automatic picks, up to 6 cards in total. Pins are never dropped to make room.
+  - Squat, Bench, and Deadlift are pinned by default but **show only once they're logged** (user's pick). An exercise the user pins always shows, with "Not logged yet" until it's logged.
+  - **Automatic picks need an e1RM** (user's pick): lifts with e1RM data in the last 8 weeks, compound lifts first, then by how often they're logged, ties to the most recently logged. A lift with nothing in the selected range is left out.
+  - Each card shows the latest e1RM of all time, its change, and a sparkline for the range. A pinned exercise without e1RM data shows its own best metric instead, labelled ("Top set", "Longest hold").
+  - Long-press a card to pin or unpin it, or to open its history. A pinned exercise that's deleted drops out of the pins.
+  - With no cards, one "Nothing to chart yet" empty state shows.
+- **The change line** (Key cards and the graph readout) compares the latest value with the most recent session at least 28 days before it: "+5 kg since Oct 1". A change that rounds to zero reads "No change", in neutral.
+  - "Last logged <date>" when the exercise was last logged more than 28 days before today. "First logged <date>" when nothing is 28 days older.
+  - When the exercise is recent but the metric isn't (for example, only sets over 12 reps lately): "Last e1RM <date>". When the exercise was logged before the metric's first value: "First e1RM <date>".
+- **Custom graphs (Your graphs):** the user picks an exercise and a metric. The list starts empty. Several graphs show as compact sparkline cards; tapping one opens the full graph, and swiping left or right moves between them. Removing a graph asks first. A graph whose exercise was deleted reads "Deleted exercise", with Remove.
+- **Metrics:** e1RM, Top set, Volume, Reps, Sets, and Longest hold. Only metrics that fit the exercise are offered: rep sets give e1RM, Top set, Volume, and Reps; timed holds give Longest hold; Sets always fits. A metric that fits but has no data says why: "Logged without a weigh-in", "Only sets of 12 reps or fewer", "Partial-rep sets don't count", or "Warm-ups don't count".
+  - Values are counted by the 2.7 rules. e1RM uses working sets of 12 reps or fewer on effective load. Top set is the heaviest working set as records compare it. Volume is reps × effective load. Partial-rep sets don't count toward e1RM or Top set.
+  - **Top set on bodyweight and assisted lifts is the added weight** ("+20 lb", "Bodyweight", "−20 lb"), as records show it, so a weigh-in never moves it.
+  - Top set shows one decimal, dropping a trailing ".0". e1RM and volume are whole numbers.
+- **One point per finished workout**, in the order they were finished; two workouts on the same day are two points. A reopened workout shows as it was before the reopen until it's finished again.
+- **Dates** show the year when it isn't the current year, in text and for VoiceOver.
 - **Progress layout:** **one scrolling page**. A row of range chips at the top (1M / 3M / 6M / 1Y / All, default 3M) scopes everything below it. Then, in order:
-  1. **Key exercises:** **full-width cards** showing **estimated 1RM**, the change over about 4 weeks, and a sparkline.
-     - Pinned exercises come first (Squat, Bench, and Deadlift by default), then compound lifts by how often they're logged.
-     - Long-press a card to pin or unpin it.
-  2. **Your graphs:** custom exercise × metric graphs. Metrics are e1RM, top set, volume, reps, and sets. "New" opens the builder.
-  3. **Bodyweight:** a card with the 7-day trend.
-  4. **All exercises:** every logged exercise, each opening its history.
+  1. **Key exercises:** **full-width cards** (above).
+  2. **Your graphs:** custom exercise × metric graphs. "New" opens the builder. It lists logged exercises first ("12 workouts · last Oct 20") and offers only metrics that fit; for a graph that already exists it offers "Open graph".
+  3. **Bodyweight:** a card with the 7-day trend at the latest weigh-in and its change in the range, in neutral grey. It reads "Last weigh-in <date>" when the latest is more than 7 days old.
+  4. **All exercises:** every exercise logged, all time, last logged first. The page shows the 8 most recent, and "Show all" opens the full list.
+  - Each section loads on its own, so one failed read doesn't blank the page.
 - **Graph screen:**
-  - A big readout of the latest value and its change. Dragging across the chart scrubs it, and the readout follows.
-  - A table of every session underneath, which also serves as the chart's accessible view.
+  - A big readout of the latest value (all time) and its change. A horizontal drag across the chart scrubs it, and the readout follows; a vertical drag scrolls the page.
+  - Gaps of more than 28 days between points draw as a dashed, faded line. 1Y and All label months and years. Axis labels never repeat.
+  - "Nothing in this range", with **Show all time**, when the range has no points.
+  - A table of every session underneath, which also serves as the chart's accessible view. Tapping a row opens that workout's summary.
   - From Key exercises: chips to switch the metric, and **Add to Your graphs**.
   - From Your graphs: swipe between graphs, or remove one.
   - The header's pin button pins or unpins the exercise.
-- **Exercise history:** personal records (heaviest weight, e1RM, best session volume, longest hold) and every session's sets. Tapping a session opens its workout summary.
+- **Exercise history:**
+  - A records card: heaviest weight, most reps at the heaviest weight, e1RM, best session volume, and longest hold. When partial-rep sets were logged, a note says they don't count toward records.
+  - Every finished session with a working set of the exercise, grouped by month. Every set is listed, with warm-ups dimmed and markers for drop sets, partial-rep sets, and AMRAP sets. Each session shows its top set (or longest hold), and a star when it set a record the card lists.
+  - Tapping a session opens its workout summary.
+  - **Variations stay separate** (user's pick): the history lists the other logged exercises of the same base movement, each with its own numbers and its own history.
 - **Bodyweight screen:**
-  - **Weigh-ins as dots plus a 7-day trend line**, with a legend.
+  - **Weigh-ins as dots plus a 7-day trend line**, with a legend. **The trend line breaks where weigh-ins are more than 7 days apart** (user's pick) instead of drawing through the gap. No value is labelled "Best".
   - Lowest, highest, and average for the range.
-  - The full log, where a long press deletes an entry.
-  - **Log weight** allows one entry per day; logging again that day replaces it.
+  - The full log. Tapping an entry opens it to fix its weight or date; a long press deletes it.
+- **Log weight:** **Today, Yesterday, or any earlier date** (user's pick). There's one entry per day: logging on a day that has one replaces it, and moving a weigh-in onto such a day asks first.
+  - **Typo guard** (user's pick): Save is off outside 25–350 kg (55–770 lb), and the reason shows under the field. A weight more than 10% from the nearest earlier weigh-in asks "Save anyway?". The onboarding weigh-in uses the same range.
+- **Storage:** pinned exercises and saved graphs are saved with the preferences, so they're in the JSON export and reset with the data. The selected range is on-device UI state.
 
 ### 2.11 Notifications
 

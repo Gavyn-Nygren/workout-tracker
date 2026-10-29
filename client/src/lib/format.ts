@@ -44,6 +44,18 @@ export const formatMonthYear = (date: ISODate) => monthYear.format(fromISODate(d
 /** "Thursday, October 22" (for VoiceOver labels) */
 export const formatLongDate = (date: ISODate) => longDate.format(fromISODate(date));
 
+// The same dates with the year added when it isn't the year of `today` (a local date): "Oct 20" this
+// year, "Oct 20, 2025" before it. For history that can reach back past this year, in text and speech.
+const monthDayYear = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+const longDateYear = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+const thisYear = (date: ISODate, today: ISODate) => date.slice(0, 4) === today.slice(0, 4);
+/** "Oct 20", or "Oct 20, 2025" in another year. */
+export const formatMonthDayYear = (date: ISODate, today: ISODate) => (thisYear(date, today) ? formatMonthDay(date) : monthDayYear.format(fromISODate(date)));
+/** "Tue, Oct 20", or "Tue, Oct 20, 2025" in another year. */
+export const formatShortDateYear = (date: ISODate, today: ISODate) => `${formatWeekdayShort(date)}, ${formatMonthDayYear(date, today)}`;
+/** "Tuesday, October 20", or "Tuesday, October 20, 2025" in another year (for VoiceOver labels). */
+export const formatLongDateYear = (date: ISODate, today: ISODate) => (thisYear(date, today) ? formatLongDate(date) : longDateYear.format(fromISODate(date)));
+
 export function unitLabel(units: UnitSystem): 'lb' | 'kg' {
   return units === 'imperial' ? 'lb' : 'kg';
 }

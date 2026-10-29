@@ -20,6 +20,7 @@ export default function ProgressLayout() {
       <Stack.Screen name="graph" options={{ title: 'Graph' }} />
       <Stack.Screen name="history" options={{ title: 'History' }} />
       <Stack.Screen name="bodyweight" options={{ title: 'Bodyweight' }} />
+      <Stack.Screen name="exercises" options={{ title: 'All exercises' }} />
     </Stack>
   );
 }

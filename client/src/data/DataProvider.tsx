@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
+import { resetLocalStores } from '@/lib/localStore';
 import { todayISO } from './dates';
 import { openAppDatabase } from './db/openDatabase';
 import { eraseAllData, holdsSampleData, loadSampleData } from './db/sampleData';
@@ -15,11 +16,17 @@ import type { ISODate } from './types';
 type DevDataTools = {
   /** Whether the database holds the sample data rather than the user's own. */
   holdsSampleData: () => boolean;
-  /** Removes every workout, plan, weigh-in, goal, and recording; settings stay. */
+  /** Removes every workout, plan, weigh-in (but the one from onboarding), goal, and recording; settings stay. */
   eraseAll: () => Promise<void>;
   /** Replaces everything with eight weeks of sample history ending today. */
   loadSample: () => Promise<void>;
 };
+
+/**
+ * On-device values that go with the data, so Erase all data and Load sample data reset them too:
+ * the Progress range chip (RANGE_KEY in features/progress/useProgressPrefs.ts).
+ */
+const LOCAL_STATE_WITH_DATA = ['progress.range'];
 
 type DataContextValue = { repository: DataRepository; dev: DevDataTools; today: ISODate };
 
@@ -69,6 +76,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     // Every screen reloads from the database after the contents are swapped.
     const reload = () => {
       store.forgetCache();
+      resetLocalStores(LOCAL_STATE_WITH_DATA);
       return queryClient.resetQueries();
     };
     return {

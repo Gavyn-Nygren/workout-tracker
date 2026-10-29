@@ -108,7 +108,7 @@ function ExerciseForm({ exercises, existing }: { exercises: Exercise[]; existing
               <Card padding="none">
                 <ListRow
                   title={base.name}
-                  subtitle={base.formAnalysis ? 'Stats group together, and form analysis works for this exercise.' : 'Stats group together with this movement.'}
+                  subtitle={`Listed with ${base.name} in your history${base.formAnalysis ? ', and form analysis works for it' : ''}.`}
                   icon="link"
                   // Large text: the button moves under the card so the text keeps the row's width.
                   trailing={large ? undefined : <Button title="Unlink" variant="ghost" size="sm" accessibilityLabel={`Unlink ${base.name}`} onPress={() => setBaseId(undefined)} />}

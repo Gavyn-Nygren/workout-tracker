@@ -63,12 +63,16 @@ export const INVALIDATES: Record<Mutation, readonly QueryRoot[]> = {
   // Sets keep the bodyweight snapshot taken when they were done, so a weigh-in never changes records.
   // Bodyweight-ratio badges fall back to the latest weigh-in when a set has no snapshot.
   saveBodyweight: ['bodyweight', 'badges'],
+  // Fixing a weigh-in (its weight or its date) is the same kind of change.
+  updateBodyweight: ['bodyweight', 'badges'],
   deleteBodyweight: ['bodyweight', 'badges'],
   deleteRecordingVideo: ['formReports', 'recordings'],
   // The set loses its link to the recording, and form reports earn badges.
   deleteFormReport: ['formReports', 'recordings', 'sessions', 'badges'],
   // The week-start setting decides which workouts share a streak week; badge thresholds follow units.
   savePreferences: ['preferences', 'streak', 'badges'],
+  // Progress's pins and graphs live in the preferences; nothing else reads them.
+  saveProgressPreferences: ['preferences'],
 };
 
 /**

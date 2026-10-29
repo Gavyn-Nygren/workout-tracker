@@ -12,6 +12,7 @@ import type {
   PlanShift,
   PlannedBlock,
   Preferences,
+  ProgressPreferences,
   Recording,
   ScheduledOccurrence,
   StarterTemplate,
@@ -89,12 +90,20 @@ export interface DataRepository {
   deleteGoal(goalId: ID): Promise<void>;
   /** One weigh-in per day: saving on a date that already has one replaces it. */
   saveBodyweight(entry: BodyweightEntry): Promise<void>;
+  /**
+   * Fixes a weigh-in: its weight, its date, or both, in one write. It keeps its id, when it was
+   * created, and where it came from. Moving it onto a date that already has a weigh-in replaces that
+   * one (one per day). Fails if the weigh-in has been deleted.
+   */
+  updateBodyweight(entryId: ID, change: { date?: ISODate; weightKg?: number }): Promise<void>;
   deleteBodyweight(entryId: ID): Promise<void>;
   /** Deletes a recording's video and annotated replay; its metrics and report stay (spec 2.8). */
   deleteRecordingVideo(recordingId: ID): Promise<void>;
   /** Deletes a form report, its recording, and the set's link to it. */
   deleteFormReport(reportId: ID): Promise<void>;
   savePreferences(preferences: Preferences): Promise<void>;
+  /** Saves Progress's pins and graphs (Preferences.progress) alone; every other setting stays as saved. */
+  saveProgressPreferences(progress: ProgressPreferences): Promise<void>;
 }
 
 /** How far ahead the calendar is generated, in days. */

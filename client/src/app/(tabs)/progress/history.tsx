@@ -1,159 +1,126 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Fragment, memo, useCallback, useMemo } from 'react';
+import { Pressable, SectionList, StyleSheet, View, type SectionListRenderItem } from 'react-native';
 
 import { AppText, Button, Card, EmptyState, ErrorState, Icon, ListRow, NotFoundState, PRBadge, ScreenSkeleton, SectionHeader } from '@/components/ui';
-import { useExercises, useFormReports, usePersonalRecords, useSessions } from '@/data/hooks';
-import { signedAddedKg, usesBodyweight } from '@/data/calculations';
+import { useToday } from '@/data/DataProvider';
 import { localDateOf } from '@/data/dates';
-import { deriveRecordBests, exerciseBests, type RecordBest } from '@/data/records';
-import type { LoggedSet, PRType } from '@/data/types';
-import { spokenDuration } from '@/hooks/useNow';
-import { formatAddedLoad, formatLoad, formatLoadValue, formatLongDate, formatShortDate, plural, spokenAddedLoad, spokenLoad } from '@/lib/format';
+import { useExercises, useFormReports, usePreferences, useSessions } from '@/data/hooks';
+import { defaultPreferences } from '@/data/preferences';
+import type { Exercise, WorkoutSession } from '@/data/types';
+import { formatMonthDayYear, formatShortDateYear, plural } from '@/lib/format';
 import { reportAngle } from '@/features/home/goals';
-import { useProgressData } from '@/features/progress/useProgressData';
-import { bestSet } from '@/features/summary/summarize';
+import { cardSegment } from '@/features/progress/cardSegment';
+import {
+  exerciseRecords,
+  hasPartialRepSets,
+  historyMonths,
+  historySessions,
+  markLegend,
+  recordRows,
+  type HistoryMonth,
+  type HistorySession,
+} from '@/features/progress/exerciseHistory';
+import { availabilityFromLogs } from '@/features/progress/metrics';
+import { exerciseLogs, type ExerciseLog } from '@/features/progress/series';
+import { loggedVariations } from '@/features/progress/variations';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { readable, useTextScale } from '@/theme/layout';
 
-const RECORD_ROWS: { type: PRType; label: string; spoken: string }[] = [
-  { type: 'heaviest_weight', label: 'Heaviest weight', spoken: 'Heaviest weight' },
-  { type: 'e1rm', label: 'Est. 1RM', spoken: 'Estimated one-rep max' },
-  { type: 'volume', label: 'Best session volume', spoken: 'Best session volume' },
-  { type: 'longest_hold', label: 'Longest hold', spoken: 'Longest hold' },
-];
+const NO_SESSIONS: WorkoutSession[] = [];
+const NO_EXERCISES: Exercise[] = [];
+const NO_LOGS: ExerciseLog[] = [];
 
-/** Everything logged for one exercise: its all-time bests and every session's sets. */
+/**
+ * Everything logged for one exercise (spec 2.10): its records, its logged variations, and every
+ * session's sets, newest first by month. The sessions are a virtualized list, so years of history
+ * open quickly. Reopened workouts count as they were before the reopen.
+ */
 export default function ExerciseHistoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { colors } = useAppTheme();
-  const { fontScale } = useTextScale();
-  // The badge and the date crowd the record value out early, so record rows stack from XXXL.
-  const stackRecords = fontScale >= 1.3;
-  const data = useProgressData();
-  // Same queries as useProgressData (shared cache), read here for their loading and error state.
+  const today = useToday();
   const sessionsQuery = useSessions();
   const exercisesQuery = useExercises();
-  const recordsQuery = usePersonalRecords();
-  const exercise = data.exercisesById.get(id);
-
-  const sessions = useMemo(
-    () =>
-      data.sessions
-        .filter((s) => s.status === 'completed' && s.completedDate)
-        .map((s) => ({ session: s, sets: s.blocks.flatMap((b) => b.exercises).filter((e) => e.exerciseId === id).flatMap((e) => e.sets).filter((x) => x.completedAt) }))
-        .filter((x) => x.sets.length)
-        .sort((a, b) => (b.session.completedAt ?? '').localeCompare(a.session.completedAt ?? '')),
-    [data.sessions, id],
-  );
-
+  const preferences = usePreferences();
   const reportsQuery = useFormReports({ exerciseId: id });
-  const reports = [...(reportsQuery.data ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const units = (preferences.data ?? defaultPreferences).units;
+  const sessions = sessionsQuery.data ?? NO_SESSIONS;
+  const exercises = exercisesQuery.data ?? NO_EXERCISES;
+  const exercisesById = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
+  const exercise = exercisesById.get(id);
 
-  // All-time bests, including ones set in the exercise's first workout and never beaten since.
-  const bests = useMemo(() => {
-    const ex = data.exercisesById.get(id);
-    return ex ? exerciseBests(deriveRecordBests(data.sessions, data.exercisesById), ex) : {};
-  }, [data.sessions, data.exercisesById, id]);
-  // Sessions that set a record (beat an earlier best) get a star.
-  const prSessions = new Set(data.records.filter((r) => r.exerciseId === id).map((r) => r.sessionId));
+  const logs = useMemo(() => exerciseLogs(sessions).get(id) ?? NO_LOGS, [sessions, id]);
+  const model = useMemo(() => {
+    if (!exercise) return undefined;
+    const records = exerciseRecords(logs, exercise);
+    const listed = historySessions(logs, exercise, units, today, records.bySession);
+    return {
+      records: recordRows(records.bests, units, today),
+      months: historyMonths(listed),
+      count: listed.length,
+      legend: markLegend(logs),
+      partials: hasPartialRepSets(logs),
+      // "Open graph" opens on the first useful metric: e1RM, else the lift's own best.
+      metric: availabilityFromLogs(exercise, logs).defaultMetric,
+    };
+  }, [logs, exercise, units, today]);
+  const variations = useMemo(() => (exercise ? loggedVariations(id, exercisesById, sessions) : []), [exercise, id, exercisesById, sessions]);
+  const reports = useMemo(() => [...(reportsQuery.data ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [reportsQuery.data]);
 
-  const queries = [sessionsQuery, exercisesQuery, recordsQuery, reportsQuery];
+  const renderItem = useCallback<SectionListRenderItem<HistorySession, HistoryMonth>>(
+    ({ item, index, section }) => <SessionRow item={item} first={index === 0} last={index === section.data.length - 1} />,
+    [],
+  );
+  const renderSectionHeader = useCallback(({ section }: { section: HistoryMonth }) => <MonthHeader title={section.title} />, []);
+
+  // Only the reads this screen uses; form recordings have their own error state below.
+  const queries = [sessionsQuery, exercisesQuery, preferences];
   const failed = queries.filter((q) => q.error);
   if (failed.length) return <ErrorState fill title="Couldn't load this exercise" onRetry={() => failed.forEach((q) => q.refetch())} />;
-  if (queries.some((q) => q.isLoading)) return <ScreenSkeleton />;
-  if (!exercise) return <NotFoundState thing="Exercise" icon="dumbbell" />;
+  // Recordings too (a local read), so their section doesn't push the sessions down as it arrives.
+  if (queries.some((q) => q.isLoading) || reportsQuery.isLoading) return <ScreenSkeleton />;
+  if (!exercise || !model) return <NotFoundState thing="Exercise" icon="dumbbell" />;
 
-  // Bodyweight sets show what was added: "+20", "−20" for assistance, or "BW".
-  const loadText = (s: LoggedSet) => {
-    if (!usesBodyweight(s, exercise)) return formatLoadValue(s.loadKg ?? 0, data.units);
-    const added = signedAddedKg(s);
-    const shown = formatLoadValue(Math.abs(added), data.units);
-    return shown === '0' ? 'BW' : `${added > 0 ? '+' : '−'}${shown}`;
-  };
-  const setText = (s: LoggedSet) => {
-    if (s.kind === 'timed_hold') return `${s.durationSec ?? 0} s`;
-    return `${loadText(s)}×${s.reps ?? 0}${s.kind === 'warmup' ? 'w' : ''}`;
-  };
+  const header = (
+    <View style={styles.header}>
+      <RecordsCard rows={model.records} partials={model.partials} />
 
-  // VoiceOver versions: "185 pounds for 5 reps", and repeats read once with a count.
-  const spokenSet = (s: LoggedSet) => {
-    if (s.kind === 'timed_hold') return `a ${spokenDuration(s.durationSec ?? 0)} hold`;
-    const load = usesBodyweight(s, exercise) ? spokenAddedLoad(signedAddedKg(s), data.units) : spokenLoad(s.loadKg ?? 0, data.units);
-    return `${load} for ${plural(s.reps ?? 0, 'rep')}`;
-  };
-  const spokenSets = (sets: LoggedSet[]) => {
-    const groups: { text: string; count: number }[] = [];
-    for (const text of sets.map(spokenSet)) {
-      const last = groups[groups.length - 1];
-      if (last?.text === text) last.count += 1;
-      else groups.push({ text, count: 1 });
-    }
-    return groups.map((g) => (g.count > 1 ? `${g.count} sets of ${g.text}` : g.text)).join(', ');
-  };
+      <Button
+        title="Open graph"
+        variant="secondary"
+        icon="chart.xyaxis.line"
+        fullWidth
+        onPress={() => router.push({ pathname: '/progress/graph', params: { exercise: id, metric: model.metric } })}
+      />
 
-  // A best's value: seconds for holds, and added load for a bodyweight lift's heaviest weight.
-  const bestText = (b: RecordBest) => (b.type === 'longest_hold' ? `${b.value} s` : b.addedLoad ? formatAddedLoad(b.value, data.units) : formatLoad(b.value, data.units));
-  const spokenBestValue = (b: RecordBest) =>
-    b.type === 'longest_hold' ? spokenDuration(b.value) : b.addedLoad ? spokenAddedLoad(b.value, data.units) : spokenLoad(b.value, data.units);
-  const recordRows = RECORD_ROWS.flatMap((row) => {
-    const best = bests[row.type];
-    return best ? [{ ...row, best }] : [];
-  });
-
-  return (
-    <>
-      <Stack.Screen options={{ title: exercise.name }} />
-      <ScrollView contentContainerStyle={[styles.content, readable]}>
+      {variations.length > 0 && (
         <View style={styles.section}>
-          <SectionHeader title="Personal records" />
+          <SectionHeader title="Variations" />
           <Card padding="none">
-            {recordRows.map((row, i, arr) => {
-              const r = row.best;
-              const value = (
-                <AppText variant="subhead" weight="700" numeric style={stackRecords ? styles.shrink : styles.flex}>
-                  {bestText(r)}
-                </AppText>
-              );
-              const date = (
-                <AppText variant="footnote" tone="secondary" style={styles.shrink}>
-                  {formatShortDate(r.achievedDate)}
-                </AppText>
-              );
-              return (
-                <View
-                  key={row.type}
-                  accessible
-                  accessibilityLabel={`${row.spoken}: ${spokenBestValue(r)}, ${formatLongDate(r.achievedDate)}`}
-                  style={[stackRecords ? styles.rowStacked : styles.row, i < arr.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
-                >
-                  <PRBadge label={row.label} />
-                  {stackRecords ? (
-                    <View style={styles.wrapLine}>
-                      {value}
-                      {date}
-                    </View>
-                  ) : (
-                    <>
-                      {value}
-                      {date}
-                    </>
-                  )}
-                </View>
-              );
-            })}
-            {!recordRows.length && (
-              <AppText variant="subhead" tone="secondary" style={styles.none}>
-                Your bests show here once you log a working set.
-              </AppText>
-            )}
+            {variations.map((v, i) => (
+              <ListRow
+                key={v.exerciseId}
+                title={v.exercise.name}
+                subtitle={`${v.isBase ? 'Main movement · ' : ''}${plural(v.sessions, 'session')} · Last ${formatMonthDayYear(v.lastDate, today)}`}
+                onPress={() => router.push({ pathname: '/progress/history', params: { id: v.exerciseId } })}
+                accessibilityHint="Opens its history"
+                separator={i < variations.length - 1}
+              />
+            ))}
           </Card>
         </View>
+      )}
 
-        <Button title="Open graph" variant="secondary" icon="chart.xyaxis.line" fullWidth onPress={() => router.push({ pathname: '/progress/graph', params: { exercise: id, metric: 'e1rm' } })} />
-
-        {reports.length > 0 && (
+      {reportsQuery.error ? (
+        <View style={styles.section}>
+          <SectionHeader title="Form recordings" />
+          <Card>
+            <ErrorState title="Couldn't load your recordings" onRetry={() => reportsQuery.refetch()} />
+          </Card>
+        </View>
+      ) : (
+        reports.length > 0 && (
           <View style={styles.section}>
             <SectionHeader title={`Form recordings · ${reports.length}`} />
             <Card padding="none">
@@ -162,8 +129,8 @@ export default function ExerciseHistoryScreen() {
                 return (
                   <ListRow
                     key={r.id}
-                    title={formatShortDate(localDateOf(r.createdAt))}
-                    subtitle={`${angle !== undefined ? `${Math.round(angle)}° average ${r.primaryJoint} angle` : 'Analyzed'} · ${r.detectedReps} reps${r.hasReplay ? '' : ' · video deleted'}`}
+                    title={formatShortDateYear(localDateOf(r.createdAt), today)}
+                    subtitle={`${angle !== undefined ? `${Math.round(angle)}° average ${r.primaryJoint} angle` : 'Analyzed'} · ${plural(r.detectedReps, 'rep')}${r.hasReplay ? '' : ' · video deleted'}`}
                     icon={r.hasReplay ? 'video.fill' : 'video.slash'}
                     onPress={() => router.push({ pathname: '/form/report', params: { id: r.id } })}
                     separator={i < reports.length - 1}
@@ -172,59 +139,172 @@ export default function ExerciseHistoryScreen() {
               })}
             </Card>
           </View>
-        )}
+        )
+      )}
 
-        <View style={styles.section}>
-          <SectionHeader title={`Sessions · ${sessions.length}`} />
-          <Card padding="none">
-            {sessions.map(({ session, sets }, i) => {
-              const working = sets.filter((s) => s.kind !== 'warmup');
-              // The same best set the workout summary shows.
-              const top = bestSet({ sets: working }, exercise);
-              const pr = prSessions.has(session.id);
-              return (
-                <Pressable
-                  key={session.id}
-                  onPress={() => router.push({ pathname: '/summary', params: { session: session.id } })}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${formatLongDate(session.completedDate!)}, ${session.name}${pr ? ', personal record' : ''}. ${plural(working.length, 'set')}: ${spokenSets(working)}.`}
-                  accessibilityHint="Opens the workout summary"
-                  style={({ pressed }) => [styles.session, i < sessions.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }, pressed && { backgroundColor: colors.input }]}
-                >
-                  <View style={styles.sessionTop}>
-                    <AppText variant="subhead" weight="700" style={styles.flex}>
-                      {`${formatShortDate(session.completedDate!)} · ${session.name}`}
-                    </AppText>
-                    {pr && <Icon name="star.fill" color={colors.prOnSurface} size={13} />}
-                    <Icon name="chevron.right" color={colors.textTertiary} size={12} />
-                  </View>
-                  <AppText variant="footnote" tone="secondary" numeric>
-                    {working.map(setText).join('  ·  ')}
-                  </AppText>
-                  {top?.kind === 'load' && (
-                    <AppText variant="caption" tone="secondary" numeric>
-                      {`Top set ${formatLoad(top.loadKg, data.units)} × ${top.reps}`}
-                    </AppText>
-                  )}
-                </Pressable>
-              );
-            })}
-            {!sessions.length && <EmptyState icon="clock" title="Not logged yet" message="Log a set of it in a workout and it shows up here." />}
+      <View style={styles.section}>
+        <SectionHeader title={`Sessions · ${model.count}`} />
+        {model.legend && (
+          <AppText variant="caption" tone="secondary" style={styles.legend}>
+            {model.legend}
+          </AppText>
+        )}
+      </View>
+    </View>
+  );
+
+  return (
+    <>
+      <Stack.Screen options={{ title: exercise.name }} />
+      <SectionList
+        sections={model.months}
+        keyExtractor={(item) => item.sessionId}
+        renderItem={renderItem}
+        renderSectionHeader={renderSectionHeader}
+        stickySectionHeadersEnabled={false}
+        ListHeaderComponent={header}
+        ListEmptyComponent={
+          <Card style={styles.empty}>
+            <EmptyState icon="clock" title="Not logged yet" message="Log a set of it in a workout and it shows up here." />
           </Card>
-        </View>
-      </ScrollView>
+        }
+        contentContainerStyle={[styles.content, readable]}
+        initialNumToRender={10}
+        windowSize={7}
+      />
     </>
   );
 }
+
+/** The records card: the spec's records plus Most reps, each with the day it was set. */
+function RecordsCard({ rows, partials }: { rows: ReturnType<typeof recordRows>; partials: boolean }) {
+  const { colors } = useAppTheme();
+  const { fontScale } = useTextScale();
+  // The badge and the date crowd the record value out early, so record rows stack from XXXL.
+  const stack = fontScale >= 1.3;
+  return (
+    <View style={styles.section}>
+      <SectionHeader title="Personal records" />
+      <Card padding="none">
+        {rows.map((row, i) => {
+          const value = (
+            <AppText variant="subhead" weight="700" numeric style={stack ? styles.shrink : styles.flex}>
+              {row.value}
+            </AppText>
+          );
+          const date = (
+            <AppText variant="footnote" tone="secondary" style={styles.shrink}>
+              {row.dateText}
+            </AppText>
+          );
+          return (
+            <View
+              key={row.type}
+              accessible
+              accessibilityLabel={row.accessibilityLabel}
+              style={[stack ? styles.rowStacked : styles.row, i < rows.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
+            >
+              <PRBadge label={row.label} />
+              {stack ? (
+                <View style={styles.wrapLine}>
+                  {value}
+                  {date}
+                </View>
+              ) : (
+                <>
+                  {value}
+                  {date}
+                </>
+              )}
+            </View>
+          );
+        })}
+        {!rows.length && (
+          <AppText variant="subhead" tone="secondary" style={styles.none}>
+            Your bests show here once you log a working set.
+          </AppText>
+        )}
+      </Card>
+      {partials && (
+        <AppText variant="footnote" tone="secondary" style={styles.legend}>
+          Partial-rep sets don’t count toward records.
+        </AppText>
+      )}
+    </View>
+  );
+}
+
+function MonthHeader({ title }: { title: string }) {
+  return (
+    <AppText variant="footnote" weight="700" tone="secondary" accessibilityRole="header" style={styles.month}>
+      {title}
+    </AppText>
+  );
+}
+
+/** One session: its date and name, every set (warm-ups dimmed, markers after), and its best set. */
+const SessionRow = memo(function SessionRow({ item, first, last }: { item: HistorySession; first: boolean; last: boolean }) {
+  const { colors } = useAppTheme();
+  return (
+    <Pressable
+      onPress={() => router.push({ pathname: '/summary', params: { session: item.sessionId } })}
+      accessibilityRole="button"
+      accessibilityLabel={item.accessibilityLabel}
+      accessibilityHint="Opens the workout summary"
+      style={({ pressed }) => [styles.session, cardSegment(colors, first, last), pressed && { backgroundColor: colors.input }]}
+    >
+      <View style={styles.sessionTop}>
+        <AppText variant="subhead" weight="700" style={styles.flex}>
+          {item.title}
+        </AppText>
+        {item.records.length > 0 && <Icon name="star.fill" color={colors.prOnSurface} size={13} />}
+        <Icon name="chevron.right" color={colors.textTertiary} size={12} />
+      </View>
+      <AppText variant="footnote" tone="secondary" numeric>
+        {item.sets.map((s, i) => (
+          <Fragment key={i}>
+            {i > 0 ? '  ·  ' : ''}
+            <AppText variant="footnote" tone={s.warmup ? 'tertiary' : 'secondary'} numeric>
+              {s.text}
+              {s.mark ? (
+                <AppText variant="caption" weight="700" tone={s.warmup ? 'tertiary' : 'accent'}>
+                  {s.mark}
+                </AppText>
+              ) : null}
+            </AppText>
+          </Fragment>
+        ))}
+      </AppText>
+      {item.best && (
+        <AppText variant="caption" tone="secondary" numeric>
+          {item.best}
+        </AppText>
+      )}
+    </Pressable>
+  );
+});
 
 const styles = StyleSheet.create({
   content: {
     padding: spacing.lg,
     paddingBottom: spacing.huge,
+  },
+  header: {
     gap: spacing.xl,
   },
   section: {
     gap: spacing.sm,
+  },
+  legend: {
+    paddingHorizontal: spacing.xs,
+  },
+  empty: {
+    marginTop: spacing.sm,
+  },
+  month: {
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
   },
   row: {
     flexDirection: 'row',

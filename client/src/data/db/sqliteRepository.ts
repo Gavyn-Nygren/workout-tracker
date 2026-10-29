@@ -1,8 +1,8 @@
 import { badgeState, type BadgeInput } from '../badges';
 import { countsAsWorkout } from '../calculations';
 import { builtinExercises, starterTemplates } from '../content';
-import { addDays, daysBetween, startOfWeek, todayISO } from '../dates';
-import { withPreferenceDefaults } from '../preferences';
+import { addDays, daysBetween, isISODate, startOfWeek, todayISO } from '../dates';
+import { cleanProgress, withPreferenceDefaults } from '../preferences';
 import { deriveStreak } from '../progress';
 import { derivePersonalRecords } from '../records';
 import { SCHEDULE_AHEAD_DAYS, type DataRepository, type DateRange } from '../repository';
@@ -28,11 +28,10 @@ import type {
 } from '../types';
 import { plannedPerWeek, weekTargetsFromHistory, type WeekTarget, type WeekTargetLookup } from '../weekTargets';
 import { blankAutoFilledPlanRests } from './blankPlanRests';
-import { insertRowIfMissing, joinSessions, nowISO, putRow, readAll, readAllSync, readOne, readOneSync, splitSession, tombstone } from './rows';
+import { insertRowIfMissing, joinSessions, nowISO, PREFERENCES_ID, putRow, readAll, readAllSync, readOne, readOneSync, splitSession, tombstone } from './rows';
 import type { SqlDb, SqlValue } from './sql';
 import { legacyStreakRule, upgradeToG310 } from './upgradeG310';
 
-const PREFERENCES_ID = 'me';
 
 /**
  * After a week-start switch: the week stored under another setting that a week starting `week`
@@ -145,15 +144,32 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
     streakCache = null;
   };
 
-  /** Runs a write atomically, then drops cached reads. */
-  const write = (task: () => void): Promise<void> => {
+  /**
+   * Runs a write atomically, then drops cached reads. `keepCaches`: for a write that can't change
+   * workouts, records, or the streak (weigh-ins, since sets keep their own bodyweight; Progress's
+   * pins and graphs), so the next read doesn't rebuild them from every workout.
+   */
+  const write = (task: () => void, { keepCaches = false } = {}): Promise<void> => {
     try {
       db.withTransactionSync(task);
       return Promise.resolve();
     } catch (error) {
       return Promise.reject(error);
     } finally {
-      dropCaches();
+      if (!keepCaches) dropCaches();
+    }
+  };
+
+  /** A weigh-in's weight must be a real weight and its date a calendar date (the screens check the plausible range). */
+  const checkWeighIn = (entry: Pick<BodyweightEntry, 'date' | 'weightKg'>) => {
+    if (!isISODate(entry.date)) throw new Error('A weigh-in needs a date');
+    if (!Number.isFinite(entry.weightKg) || entry.weightKg <= 0) throw new Error('A weigh-in needs a weight');
+  };
+
+  /** One weigh-in per day: any other live weigh-in on `date` is replaced (tombstoned). */
+  const replaceWeighInsOn = (date: ISODate, keepId: ID) => {
+    for (const { id } of db.getAllSync<{ id: string }>('SELECT id FROM bodyweight WHERE date = ? AND id != ? AND deleted_at IS NULL', [date, keepId])) {
+      tombstone(db, 'bodyweight', id);
     }
   };
 
@@ -620,15 +636,38 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
     saveGoal: (goal) => writeAfterFreeze(() => void putRow(db, 'goals', goal.id, goal)),
     deleteGoal: (goalId) => writeAfterFreeze(() => void tombstone(db, 'goals', goalId)),
 
+    // Weigh-ins keep the workout caches: a set keeps the bodyweight saved with it, so records and
+    // the streak never read the log (badges read it fresh).
     saveBodyweight: (entry) =>
-      write(() => {
-        // One weigh-in per day: a new one on the same date replaces it.
-        for (const { id } of db.getAllSync<{ id: string }>('SELECT id FROM bodyweight WHERE date = ? AND id != ? AND deleted_at IS NULL', [entry.date, entry.id])) {
-          tombstone(db, 'bodyweight', id);
-        }
-        putRow(db, 'bodyweight', entry.id, entry, { date: entry.date });
-      }),
-    deleteBodyweight: (entryId) => write(() => void tombstone(db, 'bodyweight', entryId)),
+      write(
+        () => {
+          checkWeighIn(entry);
+          // One weigh-in per day: a new one on the same date replaces it.
+          replaceWeighInsOn(entry.date, entry.id);
+          putRow(db, 'bodyweight', entry.id, entry, { date: entry.date });
+        },
+        { keepCaches: true },
+      ),
+    updateBodyweight: (entryId, change) =>
+      write(
+        () => {
+          const existing = readOneSync<BodyweightEntry>(db, 'bodyweight', entryId);
+          if (!existing) throw new Error('That weigh-in was deleted');
+          const updated: BodyweightEntry = {
+            ...existing,
+            ...(change.date !== undefined && { date: change.date }),
+            ...(change.weightKg !== undefined && { weightKg: change.weightKg }),
+            updatedAt: nowISO(),
+          };
+          checkWeighIn(updated);
+          if (updated.date === existing.date && updated.weightKg === existing.weightKg) return;
+          // Moved onto a day that has a weigh-in: this one replaces it, as a new one would.
+          replaceWeighInsOn(updated.date, entryId);
+          putRow(db, 'bodyweight', entryId, updated, { date: updated.date });
+        },
+        { keepCaches: true },
+      ),
+    deleteBodyweight: (entryId) => write(() => void tombstone(db, 'bodyweight', entryId), { keepCaches: true }),
 
     deleteRecordingVideo: (recordingId) =>
       write(() => {
@@ -666,5 +705,15 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
         putRow(db, 'preferences', PREFERENCES_ID, preferences);
         freezeEndedWeeks({ carry: true });
       }),
+
+    // Pins and graphs can't change a streak or a record, so nothing is frozen and the caches stay.
+    saveProgressPreferences: (progress) =>
+      write(
+        () => {
+          const stored = readOneSync<Partial<Preferences>>(db, 'preferences', PREFERENCES_ID);
+          putRow(db, 'preferences', PREFERENCES_ID, { ...stored, progress: cleanProgress(progress) });
+        },
+        { keepCaches: true },
+      ),
   };
 }

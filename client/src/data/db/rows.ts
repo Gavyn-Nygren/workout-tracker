@@ -21,6 +21,9 @@ const ENTITY: Record<UserTable, string> = {
 
 export const nowISO = () => new Date().toISOString();
 
+/** The id of the one preferences row (the signed-in user's settings). */
+export const PREFERENCES_ID = 'me';
+
 function recordChange(db: SqlDb, table: UserTable, id: string, op: 'upsert' | 'delete', at: string) {
   db.runSync('INSERT INTO outbox (entity, entity_id, op, at) VALUES (?, ?, ?, ?)', [ENTITY[table], id, op, at]);
 }

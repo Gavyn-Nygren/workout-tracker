@@ -18,6 +18,8 @@ type Props = {
   width?: number;
   /** How far the text (and the field with it) grows with Dynamic Type. Dense tables pass 1.5. */
   maxScale?: number;
+  /** Called when the field gains (true) or loses (false) focus, e.g. to hold a message until typing ends. */
+  onFocusChange?: (focused: boolean) => void;
 };
 
 const SPOKEN_UNITS: Record<string, string> = { s: 'seconds', sec: 'seconds', min: 'minutes', lb: 'pounds', lbs: 'pounds', kg: 'kilograms', in: 'inches', cm: 'centimeters', '%': 'percent', '°': 'degrees' };
@@ -37,7 +39,7 @@ function formatNumber(value: number | undefined): string {
 
 /** Compact numeric input for weights, reps, and times. Uses the number or decimal keypad. */
 /** Compact numeric input. Text grows up to `maxScale` with Dynamic Type and the field widens to match. */
-export function NumberField({ label, value, onChange, unit, decimal = false, placeholder, width = 88, maxScale = 2 }: Props) {
+export function NumberField({ label, value, onChange, unit, decimal = false, placeholder, width = 88, maxScale = 2, onFocusChange }: Props) {
   const { colors, scheme } = useAppTheme();
   const { fontScale } = useWindowDimensions();
   const [text, setText] = useState(formatNumber(value));
@@ -62,8 +64,14 @@ export function NumberField({ label, value, onChange, unit, decimal = false, pla
           setText(cleaned);
           onChange(parseNumber(cleaned, decimal));
         }}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
+        onFocus={() => {
+          setFocused(true);
+          onFocusChange?.(true);
+        }}
+        onBlur={() => {
+          setFocused(false);
+          onFocusChange?.(false);
+        }}
         keyboardType={decimal ? 'decimal-pad' : 'number-pad'}
         selectTextOnFocus
         placeholder={placeholder}

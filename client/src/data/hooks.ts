@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { useRepository } from './DataProvider';
 import { invalidateAfter, invalidateKeys, preferencesSaveInvalidates } from './invalidation';
 import type { DateRange } from './repository';
-import type { BodyweightEntry, Exercise, Goal, ID, Plan, PlannedBlock, Preferences, WorkoutSession } from './types';
+import type { BodyweightEntry, Exercise, Goal, ID, ISODate, Plan, PlannedBlock, Preferences, ProgressPreferences, WorkoutSession } from './types';
 
 // Writes. Each one refreshes the reads it affects, as listed in invalidation.ts. A failed write shows
 // its `meta.errorMessage` as an error toast (see SaveErrorToasts), so call sites only decide whether
@@ -110,6 +110,17 @@ export function useSaveBodyweight() {
   });
 }
 
+/** Fixes a weigh-in's weight or date (see DataRepository.updateBodyweight). */
+export function useUpdateBodyweight() {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorMessage: "Couldn't save your weight. Try again." },
+    mutationFn: ({ entryId, change }: { entryId: ID; change: { date?: ISODate; weightKg?: number } }) => repo.updateBodyweight(entryId, change),
+    onSuccess: () => invalidateAfter(client, 'updateBodyweight'),
+  });
+}
+
 export function useDeleteBodyweight() {
   const repo = useRepository();
   const client = useQueryClient();
@@ -157,6 +168,37 @@ export function useSavePreferences() {
     // The streak and badges only when the week start or units changed (not for a remembered rest).
     onSettled: (_data, _error, preferences, context) => invalidateKeys(client, preferencesSaveInvalidates(context?.previous, preferences)),
   });
+}
+
+/**
+ * Changes Progress's pins and graphs (Preferences.progress); features/progress/useProgressPrefs.ts
+ * wraps it for screens. `update` gets the pins and graphs as the app has them this moment (with any
+ * change still saving) and returns the new ones. The cached preferences change before this returns,
+ * so a screen opened straight after (a graph just added) already finds the change; a failed save
+ * shows its toast and the saved preferences are read back. Returns false, changing nothing, before
+ * the preferences have loaded, so a tap can't overwrite them.
+ */
+export function useSaveProgressPreferences(): (update: (current: ProgressPreferences) => ProgressPreferences) => boolean {
+  const repo = useRepository();
+  const client = useQueryClient();
+  const { mutate } = useMutation({
+    meta: { errorMessage: "Couldn't save that change to Progress. Try again." },
+    mutationFn: (progress: ProgressPreferences) => repo.saveProgressPreferences(progress),
+    // Read back what's saved either way, which also undoes a change that failed to save.
+    onSettled: () => invalidateAfter(client, 'saveProgressPreferences'),
+  });
+  return useCallback(
+    (update) => {
+      const current = client.getQueryData<Preferences>(['preferences']);
+      if (!current) return false;
+      const progress = update(current.progress);
+      if (progress === current.progress) return true;
+      client.setQueryData<Preferences>(['preferences'], { ...current, progress });
+      mutate(progress);
+      return true;
+    },
+    [client, mutate],
+  );
 }
 
 // Reads. One hook per repository read; screens use these and never touch the repository directly.

@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G3.11 (progress on real data).
+**Current goal:** G3.12 (local notifications).
 
 ## How we work
 
@@ -376,7 +376,15 @@ Everything works on one phone, offline, with no server.
 
 ### G3.11 Progress on real data
 
-- [ ] Auto-analytics selection, custom graphs, and history.
+- [x] Auto-analytics selection, custom graphs, and history.
+  - *Key exercises: pins first, then lifts with an e1RM in the last 8 weeks, compound lifts first, up to 6; pins are never dropped. Squat, Bench, and Deadlift are default pins that show once logged; a pin the user adds always shows (user's picks).*
+  - *Graphs offer only the metrics that fit the exercise, including a new Longest hold, and say why one has no data. Top set on bodyweight lifts is the added weight, as records show it. The change line compares with a session at least 4 weeks back, and says "Last logged" or "First logged" when there isn't one.*
+  - *History shows every set with markers, a records card with stars, and the exercise's linked variations, which keep their own numbers (user's pick).*
+  - *Bodyweight: log or fix a weigh-in on any date, a typo guard, and a trend line that breaks across gaps of more than a week (user's picks).*
+  - *Pins and graphs moved from the phone's key-value store into the preferences, so they're exported and reset; Your graphs starts empty. Long lists are virtualized, dates show the year when it isn't this year, and gaps of more than 4 weeks draw dashed.*
+  - *Development builds still start with the sample data; a release build starts empty. Erase all data and Load sample data keep the onboarding weigh-in (one saved before this update is marked once, at the first launch after it).*
+
+*Done: 1074 tests, covering points and metrics for every kind of exercise, Key exercise picks, the change rule, number and axis formatting, history records and stars, the bodyweight trend and typo guard, editing weigh-ins, storing pins and graphs (with the one-time move), and the sample-data tools. One review round: 14 findings, all fixed and re-checked. Not yet checked on an iPhone: the Progress page, the graph screen (drag to scrub versus scroll, swiping between graphs), the graph builder, History, the Bodyweight screen, and Log weight's date picker and typo guard.*
 
 ### G3.12 Local notifications
 

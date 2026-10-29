@@ -344,6 +344,11 @@ export type BodyweightEntry = Timestamps & {
   id: ID;
   date: ISODate;
   weightKg: number;
+  /**
+   * 'onboarding': the weigh-in asked for at first sign-in, which the app never asks for again
+   * (spec 2.6). The developer tools that erase or replace the data keep it (db/sampleData.ts).
+   */
+  source?: 'onboarding';
 };
 
 export type PRType = 'heaviest_weight' | 'reps_at_weight' | 'e1rm' | 'volume' | 'longest_hold';
@@ -586,4 +591,32 @@ export type Preferences = {
     /** No notifications between these times ("HH:MM"), wrapping past midnight. */
     quietHours?: { start: string; end: string };
   };
+  /**
+   * What the user keeps on Progress (spec 2.10). Saved with the preferences, so it's in the JSON
+   * export, reset by Erase all data and Load sample data, and synced with the other settings.
+   */
+  progress: ProgressPreferences;
+};
+
+/**
+ * A Key exercises pin on Progress. `isDefault` marks one of the default pins (Squat, Bench, and
+ * Deadlift; DEFAULT_PIN_IDS in preferences.ts) that the user hasn't touched: its card shows only
+ * once that lift has been logged. A pin the user added always shows ("Not logged yet" until then).
+ */
+export type ProgressPin = { exerciseId: ID; isDefault?: boolean };
+
+/**
+ * A "Your graphs" graph: one exercise and one metric. The metric is stored as text and checked
+ * against the metrics Progress knows when read (features/progress/progressPrefs.ts).
+ */
+export type ProgressGraph = { id: ID; exerciseId: ID; metric: string };
+
+export type ProgressPreferences = {
+  /**
+   * Key exercises pins in card order: the default pins first, then the user's in the order pinned.
+   * Every pin shows (no limit); the most-logged lifts only fill the slots left up to 6.
+   */
+  pins: ProgressPin[];
+  /** Your graphs, in the order added. */
+  graphs: ProgressGraph[];
 };

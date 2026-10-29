@@ -130,7 +130,12 @@ export default function ProfileScreen() {
                     subtitle="Replace everything with eight weeks of sample workouts ending today"
                     icon="tray.and.arrow.down"
                     onPress={() =>
-                      Alert.alert('Load sample data?', 'Every workout, plan, weigh-in, goal, and recording is replaced with sample data. Settings stay.', [
+                      Alert.alert(
+                        'Load sample data?',
+                        devData.holdsSampleData()
+                          ? 'The sample data starts over, ending today. Weigh-ins you entered yourself stay. Settings stay, but Progress gets the sample’s pins and graphs again.'
+                          : 'Every workout, plan, goal, and recording is replaced with sample data, and so is every weigh-in except the one from setup. Settings stay, but Progress gets the sample’s pins and graphs.',
+                        [
                         { text: 'Cancel', style: 'cancel' },
                         {
                           text: 'Load sample data',
@@ -145,11 +150,16 @@ export default function ProfileScreen() {
                   />
                   <ListRow
                     title="Erase all data"
-                    subtitle={devData.holdsSampleData() ? 'Remove the sample data and start using the app for real' : 'Remove every workout, plan, weigh-in, goal, and recording'}
+                    subtitle={devData.holdsSampleData() ? 'Remove the sample data and start using the app for real' : 'Remove your workouts, plans, goals, recordings, and weigh-ins'}
                     icon="trash"
                     destructive
                     onPress={() =>
-                      Alert.alert('Erase all data?', 'Every workout, plan, weigh-in, goal, and recording is deleted from this phone. Settings stay. This can’t be undone.', [
+                      Alert.alert(
+                        'Erase all data?',
+                        devData.holdsSampleData()
+                          ? 'The sample workouts, plans, weigh-ins, goals, and recordings are deleted from this phone. Weigh-ins you entered yourself stay. Settings stay, but Progress goes back to its default pins and graphs.'
+                          : 'Every workout, plan, goal, and recording is deleted from this phone, and so is every weigh-in except the one from setup. Settings stay, but Progress goes back to its default pins and graphs. This can’t be undone.',
+                        [
                         { text: 'Cancel', style: 'cancel' },
                         {
                           text: 'Erase',
