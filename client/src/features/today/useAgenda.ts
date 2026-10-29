@@ -3,11 +3,25 @@ import { useMemo } from 'react';
 import { useToday } from '@/data/DataProvider';
 import { addDays } from '@/data/dates';
 import { useExercises, useOccurrences, usePersonalRecords, usePlans, usePlanVersions, usePreferences, useSessions } from '@/data/hooks';
+import type { Exercise } from '@/data/types';
 import { buildAgenda, type Agenda } from './agenda';
 
 /** Days of history and future the calendar strip can browse. */
 export const AGENDA_PAST_DAYS = 70;
 export const AGENDA_FUTURE_DAYS = 28;
+
+const NO_EXERCISES: Exercise[] = [];
+const exerciseMaps = new WeakMap<Exercise[], Map<string, Exercise>>();
+
+/** One map per exercises read, shared by every screen, so work keyed on it can be shared too (useHomeData). */
+function exerciseMapOf(exercises: Exercise[]): Map<string, Exercise> {
+  let map = exerciseMaps.get(exercises);
+  if (!map) {
+    map = new Map(exercises.map((e) => [e.id, e]));
+    exerciseMaps.set(exercises, map);
+  }
+  return map;
+}
 
 export function useAgenda() {
   const today = useToday();
@@ -32,7 +46,7 @@ export function useAgenda() {
         : new Map(),
     [occurrences.data, sessions.data, plans.data, planVersions.data, today],
   );
-  const exercisesById = useMemo(() => new Map((exercises.data ?? []).map((e) => [e.id, e])), [exercises.data]);
+  const exercisesById = exerciseMapOf(exercises.data ?? NO_EXERCISES);
 
   return {
     today,

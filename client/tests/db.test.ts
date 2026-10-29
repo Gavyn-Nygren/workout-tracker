@@ -66,7 +66,7 @@ describe('sample data', () => {
     await repo.deleteGoal((await repo.listGoals())[0].id);
     seedOnFirstRun(db, TODAY);
     assert.equal((await repo.listSessions()).length, before);
-    assert.equal((await repo.listGoals()).length, 3);
+    assert.equal((await repo.listGoals()).length, 4);
   });
 
   test('erase leaves an empty app with settings intact; load brings the samples back', async () => {
@@ -87,7 +87,8 @@ describe('sample data', () => {
   test('derived progress (PRs, streak, badges) comes from the stored history', async () => {
     assert.ok((await repo.listPersonalRecords()).length > 0);
     const streak = await repo.getStreak();
-    assert.equal(streak.thisWeekTarget, 4);
+    // The sample weekly goal, 5 a week.
+    assert.deepEqual([streak.thisWeekTarget, streak.thisWeekSource], [5, 'goal']);
     assert.ok((await repo.listBadges()).some((b) => b.badgeKey === 'first_workout'));
   });
 });
@@ -103,6 +104,8 @@ describe('sessions', () => {
 
   test('saving records only what changed, and removed sets become tombstones', async () => {
     const original = (await repo.listSessions()).find((s) => s.status === 'completed' && s.blocks[0].exercises[0].sets.length > 2)!;
+    // Finished weeks are stored on the first streak read or workout save (G3.10); that's done here first.
+    await repo.getStreak();
     const queued = outboxCount();
     await repo.saveSession(original);
     assert.equal(outboxCount(), queued, 'an unchanged save writes nothing');

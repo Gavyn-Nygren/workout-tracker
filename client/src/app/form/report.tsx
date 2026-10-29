@@ -6,12 +6,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LineChart } from '@/components/charts/LineChart';
 import { AppText, Button, Card, Chip, EmptyState, ErrorState, Icon, NotFoundState, ScreenSkeleton, ScreenState, SectionHeader, ToastViewport, useToast } from '@/components/ui';
+import { useToday } from '@/data/DataProvider';
 import { localDateOf } from '@/data/dates';
-import { succeeded, useDeleteFormReport, useDeleteRecordingVideo, useExercises, useFormReport, useFormReports, usePreferences, useSessions } from '@/data/hooks';
+import { succeeded, useDeleteFormReport, useDeleteRecordingVideo, useExercises, useFormReport, useFormReports, useGoals, usePreferences, useSessions } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import type { FormReport, Joint, Observation } from '@/data/types';
 import { formatLoad, formatShortDate } from '@/lib/format';
 import { reportAngle } from '@/features/home/goals';
+import { goalReachedMessage, goalsReachedByFormReport } from '@/features/summary/goalsReached';
 import { RepDotChart } from '@/features/form/RepDotChart';
 import { SkeletonFigure, useRepLoop } from '@/features/form/SkeletonFigure';
 import { Change, Legend } from '@/features/progress/ProgressParts';
@@ -39,6 +41,9 @@ export default function FormReportScreen() {
   const reportsQuery = useFormReports();
   const sessionsQuery = useSessions();
   const exercisesQuery = useExercises();
+  // Only for the "Goal reached" line, so it never holds up the report.
+  const goals = useGoals().data;
+  const today = useToday();
   const deleteVideo = useDeleteRecordingVideo();
   const deleteReport = useDeleteFormReport();
   // Holds the report on screen while the modal closes after a delete, so "not found" doesn't flash.
@@ -54,6 +59,7 @@ export default function FormReportScreen() {
     [reports, report],
   );
   const [compareId, setCompareId] = useState<string | null | undefined>(undefined);
+  const reachedGoals = useMemo(() => (report && goals ? goalsReachedByFormReport(goals, report.id, reports ?? [], today) : []), [goals, report, reports, today]);
   const comparison = compareId === null ? undefined : (earlier.find((r) => r.id === compareId) ?? earlier[0]);
 
   // A custom bar for the modal: like a native nav bar it grows only to the dense cap.
@@ -238,6 +244,14 @@ export default function FormReportScreen() {
                 }
                 delta={Math.abs(improvement) < 5 ? 0 : improvement}
               />
+            )}
+            {reachedGoals.length > 0 && (
+              <View style={[styles.goalLine, { backgroundColor: colors.successSubtle }]} accessible accessibilityLabel={goalReachedMessage(reachedGoals)}>
+                <Icon name="target" color={colors.successText} size={14} />
+                <AppText variant="footnote" weight="600" tone="success" style={styles.flex}>
+                  {goalReachedMessage(reachedGoals)}
+                </AppText>
+              </View>
             )}
             {/* Three equal columns get too narrow at accessibility sizes, so the stats stack. */}
             <View style={[large ? styles.statsStacked : styles.stats, { borderTopColor: colors.border }]}>
@@ -523,6 +537,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderRadius: radius.md,
     padding: spacing.md,
+  },
+  goalLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
   stack: {
     gap: spacing.md,

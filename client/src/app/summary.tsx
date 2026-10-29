@@ -4,11 +4,13 @@ import { AccessibilityInfo, ActionSheetIOS, Alert, ScrollView, StyleSheet, View 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Confetti, ErrorState, NotFoundState, ScreenSkeleton, ToastViewport, useToast } from '@/components/ui';
-import { succeeded, useDeleteSession, useExercises, usePlans, usePreferences, useSessions, useUpdatePlanWorkout } from '@/data/hooks';
+import { useToday } from '@/data/DataProvider';
+import { succeeded, useDeleteSession, useExercises, useGoals, usePlans, usePreferences, useSessions, useUpdatePlanWorkout } from '@/data/hooks';
 import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
 import { defaultPreferences } from '@/data/preferences';
 import { diffAgainstPlan } from '@/features/summary/planDiff';
-import { ComparisonCard, ExercisesCard, RecordsCard, SavePlanCard } from '@/features/summary/SummaryCards';
+import { goalReachedMessage, goalsReachedByWorkout } from '@/features/summary/goalsReached';
+import { ComparisonCard, ExercisesCard, GoalsReachedCard, RecordsCard, SavePlanCard } from '@/features/summary/SummaryCards';
 import { SummaryHero } from '@/features/summary/SummaryHero';
 import { buildSummary } from '@/features/summary/summarize';
 import { useHaptics } from '@/hooks/useHaptics';
@@ -21,7 +23,8 @@ import { readable } from '@/theme/layout';
  * Workout summary (roadmap G2.3). Opened right after Finish, from Today's "View summary", or from
  * history. After finishing a new workout (`fresh=1`) it celebrates PRs and offers to save changes
  * to the plan. After finishing a reopened one (`reopened=1`) it celebrates only if the edits set new
- * records (`newRecords` = how many, G3.6) and never offers plan changes.
+ * records (`newRecords` = how many, G3.6) or reached goals (`newGoals` = their ids, comma-separated,
+ * G3.10), and never offers plan changes.
  */
 export default function SummaryScreen() {
   const { colors, scheme } = useAppTheme();
@@ -30,7 +33,7 @@ export default function SummaryScreen() {
   const active = useActiveWorkout();
   const deleteSession = useDeleteSession();
   const haptics = useHaptics();
-  const params = useLocalSearchParams<{ session: string; fresh?: string; reopened?: string; newRecords?: string }>();
+  const params = useLocalSearchParams<{ session: string; fresh?: string; reopened?: string; newRecords?: string; newGoals?: string }>();
   const sessionId = params.session;
   const reopened = params.reopened === '1';
   const fresh = params.fresh === '1' && !reopened;
@@ -39,6 +42,8 @@ export default function SummaryScreen() {
   const sessions = useSessions();
   const exercises = useExercises();
   const plans = usePlans();
+  const goals = useGoals();
+  const today = useToday();
   const preferences = usePreferences().data ?? defaultPreferences;
   const updatePlanWorkout = useUpdatePlanWorkout();
 
@@ -61,7 +66,16 @@ export default function SummaryScreen() {
   // A reopened workout already celebrated its records the first time, so only new ones count.
   const newRecordCount = reopened ? Number(params.newRecords ?? 0) || 0 : (fresh ? (summary?.records.length ?? 0) : 0);
   const newRecords = newRecordCount > 0;
-  const celebrate = newRecords && preferences.celebrations;
+  // Goals this workout reached; after a reopen, only those its edits reached.
+  const reachedGoals = useMemo(() => {
+    if (!session || !sessions.data || !goals.data) return [];
+    const reached = goalsReachedByWorkout(goals.data, session.id, sessions.data, exercisesById, today);
+    if (!reopened) return reached;
+    const added = new Set((params.newGoals ?? '').split(',').filter(Boolean));
+    return reached.filter((g) => added.has(g.id));
+  }, [session, sessions.data, goals.data, exercisesById, today, reopened, params.newGoals]);
+  const newGoals = justFinished && reachedGoals.length > 0;
+  const celebrate = (newRecords || newGoals) && preferences.celebrations;
   useEffect(() => {
     if (celebrate) haptics.success();
   }, [celebrate, haptics]);
@@ -69,14 +83,17 @@ export default function SummaryScreen() {
   // Confetti and haptics are silent to VoiceOver, so say the result once after finishing.
   // Queued, so it follows the screen's first reading instead of cutting it off.
   const announced = useRef(false);
+  // Waits for goals so it can say which were reached.
+  const goalsLoading = goals.isLoading;
   useEffect(() => {
-    if (!justFinished || !summary || !session || announced.current) return;
+    if (!justFinished || !summary || !session || goalsLoading || announced.current) return;
     announced.current = true;
     const saved = reopened ? 'Changes saved.' : session.completion === 'partial' ? 'Partial workout saved.' : 'Workout complete.';
     // After a reopen, only the records the edits added are new.
     const records = newRecords ? ` ${plural(newRecordCount, 'new personal record')}.` : '';
-    AccessibilityInfo.announceForAccessibilityWithOptions(`${saved}${records}`, { queue: true });
-  }, [justFinished, reopened, newRecords, newRecordCount, summary, session]);
+    const reached = reachedGoals.length ? ` ${goalReachedMessage(reachedGoals)}` : '';
+    AccessibilityInfo.announceForAccessibilityWithOptions(`${saved}${records}${reached}`, { queue: true });
+  }, [justFinished, reopened, newRecords, newRecordCount, summary, session, goalsLoading, reachedGoals]);
 
   const failed = [sessions, exercises].filter((q) => q.error);
   if (failed.length) return <ErrorState fill title="Couldn't load this workout" onRetry={() => failed.forEach((q) => q.refetch())} />;
@@ -124,6 +141,7 @@ export default function SummaryScreen() {
             onSave={() => updatePlanWorkout.mutateAsync({ planId: plan.id, workoutId: workout.id, blocks: diff.blocks })}
           />
         )}
+        <GoalsReachedCard goals={reachedGoals} date={session.completedDate} />
         <RecordsCard summary={summary} units={preferences.units} />
         <ComparisonCard summary={summary} units={preferences.units} name={session.name} />
         <ExercisesCard summary={summary} units={preferences.units} />

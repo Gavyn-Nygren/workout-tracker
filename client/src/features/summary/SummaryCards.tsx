@@ -4,12 +4,13 @@ import { AccessibilityInfo, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Card, Icon, PRBadge, SectionHeader } from '@/components/ui';
 import { succeeded } from '@/data/hooks';
-import type { PersonalRecord, PRType, UnitSystem } from '@/data/types';
+import type { Goal, ISODate, PersonalRecord, PRType, UnitSystem } from '@/data/types';
 import { spokenDuration } from '@/hooks/useNow';
 import { formatAddedLoad, formatDuration, formatLoad, formatShortDate, formatSigned, formatSignedLoad, plural, spokenAddedLoad, spokenLoad } from '@/lib/format';
 import { useTextScale } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
-import { spacing } from '@/theme/tokens';
+import { radius, spacing } from '@/theme/tokens';
+import { reachedAfter } from './goalsReached';
 import type { BestSet, ExerciseSummary, WorkoutSummary } from './summarize';
 
 const PR_LABEL: Record<PRType, string> = {
@@ -223,6 +224,48 @@ export function RecordsCard({ summary, units }: { summary: WorkoutSummary; units
   );
 }
 
+/**
+ * Goals this workout reached (G3.10), with how long each took. `date` is the workout's completion
+ * date, which is the day it reached them.
+ */
+export function GoalsReachedCard({ goals, date }: { goals: Goal[]; date?: ISODate }) {
+  const { colors } = useAppTheme();
+  if (!goals.length) return null;
+  return (
+    <View style={styles.section}>
+      <SectionHeader title={goals.length > 1 ? `Goals reached · ${goals.length}` : 'Goal reached'} />
+      <Card padding="none">
+        {goals.map((goal, i) => {
+          const detail = date ? reachedAfter(goal, date) : undefined;
+          return (
+            <View
+              key={goal.id}
+              accessible
+              accessibilityLabel={`Goal reached: ${goal.title}${detail ? `. ${detail}` : ''}`}
+              style={[styles.row, i < goals.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
+            >
+              <View style={[styles.goalIcon, { backgroundColor: colors.successSubtle }]}>
+                <Icon name="target" color={colors.successText} size={16} />
+              </View>
+              <View style={styles.flex}>
+                <AppText variant="body" weight="600">
+                  {goal.title}
+                </AppText>
+                {detail && (
+                  <AppText variant="footnote" tone="secondary" numeric>
+                    {detail}
+                  </AppText>
+                )}
+              </View>
+              <Icon name="checkmark.circle.fill" color={colors.successFill} size={20} />
+            </View>
+          );
+        })}
+      </Card>
+    </View>
+  );
+}
+
 function formatExerciseDelta(e: ExerciseSummary, units: UnitSystem): string | undefined {
   if (!e.delta || Math.abs(e.delta.amount) < 0.01) return undefined;
   return e.delta.kind === 'hold' ? formatSigned(e.delta.amount, 's') : formatSignedLoad(e.delta.amount, units);
@@ -410,6 +453,13 @@ const styles = StyleSheet.create({
   },
   noIndent: {
     paddingLeft: 0,
+  },
+  goalIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   flex: {
     flex: 1,

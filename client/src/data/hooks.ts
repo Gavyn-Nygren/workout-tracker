@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { useRepository } from './DataProvider';
-import { invalidateAfter } from './invalidation';
+import { invalidateAfter, invalidateKeys, preferencesSaveInvalidates } from './invalidation';
 import type { DateRange } from './repository';
 import type { BodyweightEntry, Exercise, Goal, ID, Plan, PlannedBlock, Preferences, WorkoutSession } from './types';
 
@@ -154,7 +154,8 @@ export function useSavePreferences() {
       return { previous };
     },
     onError: (_error, _preferences, context) => context?.previous && client.setQueryData(['preferences'], context.previous),
-    onSettled: () => invalidateAfter(client, 'savePreferences'),
+    // The streak and badges only when the week start or units changed (not for a remembered rest).
+    onSettled: (_data, _error, preferences, context) => invalidateKeys(client, preferencesSaveInvalidates(context?.previous, preferences)),
   });
 }
 
@@ -273,9 +274,10 @@ export function useGoals() {
   return useQuery({ queryKey: ['goals'], queryFn: () => repo.listGoals() });
 }
 
+/** Badges earned, progress toward the rest, and Next up, in one read. */
 export function useBadges() {
   const repo = useRepository();
-  return useQuery({ queryKey: ['badges'], queryFn: () => repo.listBadges() });
+  return useQuery({ queryKey: ['badges'], queryFn: () => repo.getBadges() });
 }
 
 export function useStreak() {

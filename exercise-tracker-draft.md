@@ -267,7 +267,11 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 - **Weeks** are runs of local dates. They start on Monday or Sunday, per the setting. Changing the setting regroups past weeks too.
 - **Daylight saving.** Day math works on calendar dates and never adds 24 hours, so a 23- or 25-hour day can't move a date.
 - **"Today"** is the phone's current local date. It's checked again at midnight and whenever the app comes back to the foreground. After a trip it follows the new time zone. Nothing is rescheduled automatically.
-- **The streak counts consecutive weeks** in which the user completed at least the planned number of workouts, or their weekly frequency goal. Rest days never break it. A **partial workout counts if it has at least one completed working set**; summaries and adherence stats still mark it as partial.
+- **The streak counts consecutive weeks** in which the user hit the week's target. Rest days never break it, and the current week doesn't break it until it ends. A **partial workout counts if it has at least one completed working set**; summaries and adherence stats still mark it as partial.
+  - **Week target** (G3.10, user's pick: what's planned that week): the active weekly goal's workouts per week. Without one, the number of workouts the plans scheduled that week, after pushes, whether done, missed or upcoming. With nothing planned (no plan, or between programs), 1.
+  - **A finished week keeps its target.** It's stored when the week ends, and before any change that could alter it (goals, plans, pushes, workouts, the week-start setting), so later edits never rewrite a past streak. A reopened workout counts as it was until it's finished or discarded.
+  - **Switching the week start** regroups past weeks: each takes the target of the old week it shares most days with, and stays met or not met.
+  - Weeks that ended before G3.10 keep the earlier rule: the weekly goal at the time of the update, else 4.
 
 **Session lifecycle**
 
@@ -425,7 +429,7 @@ Every set has exactly one **kind** and any number of **modifiers**.
 - **Bodyweight lifts:** heaviest weight and most reps at a weight compare the **added weight**, and less assistance counts as heavier. A weigh-in alone therefore never makes a record. They show as "+20 lb", "Bodyweight", or "−20 lb". e1RM and volume use effective load.
 - Weights within 0.05 kg of each other are the same weight, so switching between kg and lb never makes a record.
 - **Longest weekly streak** is account-wide. The first streak is the baseline. A later streak that outlasts the longest before it is a record. The record grows week by week as that streak continues, and it shows in Recent wins and on Profile.
-- Badges are dated by when they were reached. For example, the 4-week streak badge is dated by the workout that completed the 4th week, so later workouts don't move it.
+- Badges are dated by when they were reached. For example, the 4-week streak badge is dated by the workout that completed the 4th week, so later workouts don't move it. The badge catalog is in 2.9.
 
 Editing, deleting, or reopening a workout recalculates the affected PRs, volume, badges, and goals.
 - Finishing a **reopened** workout celebrates only records the edit actually created, and never shows the "update your plan?" prompt.
@@ -525,29 +529,39 @@ Sumo deadlifts are excluded because they are hard to read from a side view.
 - **Home layout:**
   - **Weekly snapshot:** a **dark hero card** with a ring for workouts done against the weekly target and the 🔥 week streak.
     - A message says how many workouts remain this week to keep or start the streak.
+    - A small caption says where the week's target comes from: "Weekly goal: 4", "3 planned this week", or "Nothing planned this week".
     - A Mon–Sun row of status dots shows the week, with today underlined.
     - Tapping the card opens Today.
   - **Goals:** each goal has a **progress bar**, current vs target, and days left.
-    - Goals with a deadline also get an **On track / Behind pace** tag. Pace is compared with a straight line from the goal's start to its deadline, with a little slack.
+    - Goals with a deadline also get an **On track / Behind pace** tag. Pace is compared with a straight line from the goal's progress when the deadline was set to 100% at the deadline, with 5% slack. A goal with no starting value yet (no lift logged, no weigh-in or recording since it was set) shows no pace until it has one.
+    - Past its deadline without being reached, the tag reads **Deadline passed** (neutral) and days left are hidden. Reaching it later still counts.
+    - **Reached goals** (G3.10, user's pick: celebrate, then archive) show a check and "Reached Oct 27" for 7 days, then move to **Completed goals**, a row at the bottom of the Goals card that opens the list. Tapping a completed goal offers Delete. A goal stays reached even if you dip later.
     - Tapping a goal offers Edit or Delete.
-  - **Recent wins:** **one mixed feed** from the last 3 weeks of PRs (one line per exercise per workout), form improvements of 5° or more, and badges earned. Form wins and badges always make the list; minor PRs are dropped first.
-  - **Badges:** a row of **earned** gold medallions, plus **"Next up"** badges shown dimmed with progress rings. Tapping a badge opens its detail sheet.
+  - **Recent wins:** **one mixed feed** from the last 3 weeks of PRs (one line per exercise per workout), form improvements of 5° or more, badges earned, and goals reached. Goals reached, form wins and badges always make the list (goals first); minor PRs are dropped first.
+  - **Badges:** a row of **earned** gold medallions, plus **"Next up"** badges shown dimmed with progress rings. Next up shows the lowest unearned step of each ladder that has some progress (so never a lift you haven't logged), nearest to done first. Tapping a badge opens its detail sheet: how to earn it, progress or the date earned, and the ladder's next step.
 - **Goal form:**
   - Type: Lift, Frequency, Weight, or Form, each with its own fields and an optional deadline of 4, 8, or 12 weeks.
   - The goal title is generated automatically.
-  - A frequency goal also sets the weekly streak target.
-- **Goal types:**
-  - lift target (X × Y reps, or an e1RM target)
-  - frequency (N workouts per week)
-  - bodyweight target
-  - form / range of motion (for example reaching a squat depth angle)
+  - A frequency (weekly) goal also sets the weekly streak target, until it moves to Completed goals.
+  - Lift goals show the best in the last 12 weeks, and say when the target is already within it.
+  - On a bodyweight exercise the field is **Added weight** (0 means bodyweight only), or **Assistance** on an assisted machine, and there's no e1RM option for a new goal.
+  - Changing a goal's type, exercise or joint starts it over today; changing only the target keeps its date. Giving a weekly goal a new deadline starts it over today, and the form says so. Adding or changing a deadline on another goal starts its pace line today.
+- **Goal types** (rules as of G3.10):
+  - **Lift target** (X × Y reps, or an e1RM target): measured from when the goal was set. The start is the best in the 12 weeks before, else the first value after, and only a workout finished after the goal was set can reach it. Bodyweight exercises compare the added weight, like records.
+  - **Frequency** (N workouts per week): without a deadline it shows this week. With one (user's pick: total by the deadline), "4× a week for 8 weeks" means 32 workouts counted from when it was set, so an extra workout makes up for a short week. It's reached at the total.
+  - **Bodyweight target:** the start is the weigh-in when the goal was set, else the first one after; until then there's no progress. Lose or gain comes from start vs target.
+  - **Form / range of motion** (for example reaching a squat depth angle): read from the newest recording with a trusted angle for that joint. Knee and hip goals aim deeper (smaller), ankle goals higher (larger). Without a recording when it was set, the first recording after is the start.
 
-  Each goal has an **optional deadline** with a pace indicator.
-- **Badge categories:**
-  - milestones: first workout, 10/50/100 workouts, total-volume milestones
-  - strength: plate milestones, bodyweight-ratio lifts, PR counts
-  - consistency: week-streak lengths, completing a full program
-  - form: first analyzed set, N recordings of a movement, range-of-motion improvement
+  Each goal has an **optional deadline** with a pace indicator. A goal is reached the first time its target is met after it was set; the workout summary, the weigh-in, or the form report then says "Goal reached".
+- **Badges** (G3.10, user's pick: full ladders, 50 badges). They're worked out from history, never stored, and dated by the workout, record or report that reached them. Where lb and kg differ, kg is in brackets.
+  - **Milestones:** First Rep (first workout); 10, 25, 50, 100, 250 and 500 Workouts; volume: 100K Club, Quarter Million, Half a Million, Millionaire and 2.5 Million lb (50K Club, 100K Club, Quarter Million, Half a Million and Millionaire kg).
+  - **Strength:**
+    - Plates, for one working set of that exact lift: 1, 2 and 3-Plate Bench; 1 to 4-Plate Squat; 2 to 5-Plate Deadlift; 1-Plate Press. The steps are 135, 225, 315, 405 and 495 lb (60, 100, 140, 180 and 220 kg).
+    - Bodyweight ratio: Bodyweight Bench and 1.5× Bodyweight Bench, 1.5× and 2× Bodyweight Squat, 2× and 2.5× Bodyweight Deadlift. Bodyweight is the set's own, else the latest weigh-in by that day.
+    - PRs set: 10, 50, 100 and 250 PRs (records; streak records don't count).
+  - **Consistency:** 4, 8, 12, 26 and 52-Week Streak. Perfect Week: every workout scheduled in a week done (a workout pushed out or deleted with its plan still counts as missed). Program Complete: a fixed-length program with at least 3 in 4 of its workouts done, earned from its final week.
+  - **Form:** Camera Ready (first analysis), Film Study (10 recordings), Director's Cut (50); Squat, Deadlift, Lunge and Calf Raise Study (10 recordings of one movement); 5° and 10° More Range than your first recording of a lift and joint (deeper for knees and hips, higher for ankles).
+  - Thresholds are round numbers in each unit, so switching units can move a badge across one. The artwork is the category medallion.
 - **Profile** owns account, settings, data export, deletion, and (later) subscriptions.
 - **Profile layout** (user's picks):
   - An **account card** with an initial avatar, name, sign-in method, and **lifetime stats**: workouts, current streak, and PRs set.
@@ -788,7 +802,7 @@ any ──delete──▶ tombstone (stats recalculate)
 ### Content still to be produced
 
 - **Template catalog:** the exact list of 6-10+ programs (at least one per category), their durations, and their progression rules. These are AI-drafted and reviewed by the developer.
-- **Badge catalog:** exact thresholds (for example the volume milestones, plate milestones, and bodyweight ratios), names, and artwork.
+- ~~**Badge catalog**~~: thresholds and names done in G3.10 (see 2.9). Still to do: artwork beyond the category medallions.
 - **Tutorial content:** screens and flow.
 - **Onboarding recommendation rules:** the mapping table from onboarding answers to templates.
 - **Form rule library:** the full set of observation and cue templates per movement, with reviewed wording.

@@ -1,13 +1,14 @@
 import type { SFSymbol } from 'expo-symbols';
 
-import { addDays, localDateOf } from '@/data/dates';
-import type { EarnedBadge, Exercise, FormReport, ISODate, Joint, PersonalRecord, PRType, StreakRecord, UnitSystem } from '@/data/types';
+import { badgeEarnedText } from '@/data/badges';
+import { addDays, daysBetween, localDateOf } from '@/data/dates';
+import type { EarnedBadge, Exercise, FormReport, Goal, ISODate, Joint, PersonalRecord, PRType, StreakRecord, UnitSystem } from '@/data/types';
 import { formatAddedLoad, formatLoad, plural } from '@/lib/format';
-import { reportAngle } from './goals';
+import { formGainDeg, formGoalAimsHigher, reportAngle, type GoalStatus } from './goals';
 
 export type Win = {
   id: string;
-  kind: 'pr' | 'form' | 'badge';
+  kind: 'pr' | 'form' | 'badge' | 'goal';
   date: ISODate;
   title: string;
   detail: string;
@@ -42,7 +43,8 @@ function prDetail(r: PersonalRecord, units: UnitSystem): string {
 /**
  * Home's "Recent wins" feed (user's pick: one mixed list): PRs (including the longest weekly
  * streak), form improvements of at least 5° versus the previous recording (the spec's
- * "meaningful change" threshold), and badges earned.
+ * "meaningful change" threshold: deeper knees and hips, a higher ankle, as the form report
+ * compares them), badges earned, and goals reached.
  */
 export function buildWins(input: {
   records: PersonalRecord[];
@@ -50,6 +52,8 @@ export function buildWins(input: {
   streakRecords?: StreakRecord[];
   formReports: FormReport[];
   badges: EarnedBadge[];
+  /** Goals with their status (goals.ts); reached ones are wins on the day they were reached. */
+  goals?: { goal: Goal; progress: Pick<GoalStatus, 'reachedDate'> }[];
   exercisesById: Map<string, Exercise>;
   units: UnitSystem;
   today: ISODate;
@@ -87,17 +91,17 @@ export function buildWins(input: {
       const date = localDateOf(report.createdAt);
       if (!previous || date < since) return;
       // Whole degrees, as shown in the report.
-      const nowRaw = reportAngle(report, report.primaryJoint);
-      const beforeRaw = reportAngle(previous, report.primaryJoint);
-      const now = nowRaw === undefined ? undefined : Math.round(nowRaw);
-      const before = beforeRaw === undefined ? undefined : Math.round(beforeRaw);
-      if (now === undefined || before === undefined || before - now < 5) return;
+      const joint = report.primaryJoint;
+      const gain = formGainDeg(previous, report, joint);
+      if (gain === undefined || gain < 5) return;
+      const now = Math.round(reportAngle(report, joint)!);
+      const before = Math.round(reportAngle(previous, joint)!);
       wins.push({
         id: `form_${report.id}`,
         kind: 'form',
         date,
-        title: `${name(report.exerciseId)} · ${Math.round(before - now)}° deeper`,
-        detail: `${JOINT_LABEL[report.primaryJoint]} angle ${Math.round(now)}° vs ${Math.round(before)}° last recording`,
+        title: `${name(report.exerciseId)} · ${gain}° ${formGoalAimsHigher(joint) ? 'higher' : 'deeper'}`,
+        detail: `${JOINT_LABEL[joint]} angle ${now}° vs ${before}° last recording`,
         icon: 'video.fill',
         reportId: report.id,
       });
@@ -105,13 +109,29 @@ export function buildWins(input: {
   }
 
   for (const badge of input.badges.filter((b) => b.earnedDate >= since)) {
-    wins.push({ id: `badge_${badge.id}`, kind: 'badge', date: badge.earnedDate, title: `Earned: ${badge.title}`, detail: badge.description, icon: 'medal.fill' });
+    // What was done ("Completed 50 workouts."), not the how-to-earn line the badge sheet shows.
+    const detail = badgeEarnedText(badge.badgeKey, input.units) ?? badge.description;
+    wins.push({ id: `badge_${badge.id}`, kind: 'badge', date: badge.earnedDate, title: `Earned: ${badge.title}`, detail, icon: 'medal.fill' });
   }
 
-  // Form wins and badges are rare, so they always make the cut; minor PRs (extra reps or volume) go first.
+  for (const { goal, progress } of input.goals ?? []) {
+    const date = progress.reachedDate;
+    if (!date || date < since) continue;
+    const days = daysBetween(localDateOf(goal.createdAt), date);
+    const detail = days > 0 ? `Reached ${plural(days, 'day')} after you set it` : 'Reached the day you set it';
+    wins.push({ id: `goal_${goal.id}`, kind: 'goal', date, title: `Goal reached: ${goal.title}`, detail, icon: 'target' });
+  }
+
+  // Goals reached always make the cut, then form wins and badges (rare too), newest first; minor PRs
+  // (extra reps or volume) go first.
   const limit = input.limit ?? 8;
   const minor = (w: Win) => minorIds.has(w.id);
   const byDate = (a: Win, b: Win) => b.date.localeCompare(a.date);
-  const keep = [...wins.filter((w) => w.kind !== 'pr'), ...wins.filter((w) => w.kind === 'pr' && !minor(w)).sort(byDate), ...wins.filter(minor).sort(byDate)];
+  const keep = [
+    ...wins.filter((w) => w.kind === 'goal').sort(byDate),
+    ...wins.filter((w) => w.kind === 'form' || w.kind === 'badge').sort(byDate),
+    ...wins.filter((w) => w.kind === 'pr' && !minor(w)).sort(byDate),
+    ...wins.filter(minor).sort(byDate),
+  ];
   return keep.slice(0, limit).sort(byDate);
 }

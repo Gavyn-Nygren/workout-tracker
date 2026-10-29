@@ -228,7 +228,9 @@ const started = (id: string, date: ISODate, occurrence: ScheduledOccurrence): Wo
 /** A scheduled workout skipped from its card's menu. */
 const skipped = (id: string, occurrence: ScheduledOccurrence): WorkoutSession => ({ ...started(id, occurrence.scheduledDate, occurrence), status: 'skipped', startedAt: undefined });
 
-const frequencyGoal = (workoutsPerWeek: number): Goal => ({ id: 'goal_weekly', type: 'frequency', title: 'Train every week', workoutsPerWeek, createdAt: STAMP, updatedAt: STAMP });
+// Set before every test week: a week's weekly goal is the one that existed when the week ended.
+const GOAL_STAMP = '2026-09-01T08:00:00.000Z';
+const frequencyGoal = (workoutsPerWeek: number): Goal => ({ id: 'goal_weekly', type: 'frequency', title: 'Train every week', workoutsPerWeek, createdAt: GOAL_STAMP, updatedAt: GOAL_STAMP });
 const weekStartingOn = (weekStartsOn: Weekday) => repo.savePreferences({ ...defaultPreferences, weekStartsOn });
 
 /** Runs `task` with the process in another time zone. */

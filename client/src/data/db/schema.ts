@@ -101,6 +101,20 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX plan_shifts_by_plan ON plan_shifts (plan_id);
   `,
+  // 4: frozen streak targets (G3.10). Each finished week keeps the target it had when it ended, so
+  // a later goal or plan edit never rewrites a past streak. Stored per week-start setting.
+  // A database that already holds workouts or goals is marked, so the repository can keep what
+  // they meant before G3.10 (upgradeG310.ts).
+  `
+  CREATE TABLE streak_weeks (
+    id TEXT PRIMARY KEY NOT NULL, week_start TEXT NOT NULL, week_starts_on INTEGER NOT NULL,
+    data TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT
+  );
+  CREATE INDEX streak_weeks_by_week ON streak_weeks (week_starts_on, week_start);
+  INSERT INTO meta (key, value)
+    SELECT 'g310_upgrade', 'pending'
+    WHERE EXISTS (SELECT 1 FROM sessions WHERE deleted_at IS NULL) OR EXISTS (SELECT 1 FROM goals WHERE deleted_at IS NULL);
+  `,
 ];
 
 /** The tables that hold the user's data (everything except bookkeeping). */
@@ -117,6 +131,7 @@ export const USER_TABLES = [
   'goals',
   'recordings',
   'form_reports',
+  'streak_weeks',
 ] as const;
 export type UserTable = (typeof USER_TABLES)[number];
 

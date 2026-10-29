@@ -98,6 +98,7 @@ function NavigationRoot() {
             <Stack.Screen name="summary" options={{ presentation: 'modal', headerShown: false }} />
             <Stack.Screen name="plan-picker" options={sheet([0.85, 1])} />
             <Stack.Screen name="goal" options={{ presentation: 'modal', headerShown: false }} />
+            <Stack.Screen name="goals-completed" options={{ presentation: 'modal', headerShown: false }} />
             <Stack.Screen name="badge" options={sheet([0.6])} />
             <Stack.Screen name="graph-builder" options={sheet([0.85, 1])} />
             <Stack.Screen name="log-weight" options={sheet([0.55])} />

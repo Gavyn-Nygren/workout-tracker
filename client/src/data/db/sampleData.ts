@@ -3,6 +3,7 @@ import type { ISODate } from '../types';
 import { putRow, splitSession } from './rows';
 import { USER_TABLES } from './schema';
 import type { SqlDb } from './sql';
+import { G310_UPGRADE_META_KEY, LEGACY_STREAK_META_KEY } from './upgradeG310';
 
 /**
  * Sample data for building and testing Phase 3 (user's pick: start with sample data, erasable).
@@ -18,6 +19,8 @@ export function eraseAllData(db: SqlDb): void {
   db.withTransactionSync(() => {
     for (const table of USER_TABLES) if (table !== 'preferences') db.runSync(`DELETE FROM ${table}`, []);
     db.runSync('DELETE FROM outbox', []);
+    // The workouts and goals from before G3.10 are gone, and with them what they meant then.
+    db.runSync('DELETE FROM meta WHERE key IN (?, ?)', [LEGACY_STREAK_META_KEY, G310_UPGRADE_META_KEY]);
     setMeta(db, 'contents', 'user');
   });
 }

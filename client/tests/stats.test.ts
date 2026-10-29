@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
+import { badgeProgress, type BadgeInput } from '../src/data/badges';
 import { builtinExercises } from '../src/data/content';
 import { derivePersonalRecords, deriveRecordBests, exerciseBests } from '../src/data/records';
 import type { LoggedSet, PersonalRecord, SessionExercise, StreakRecord, WorkoutSession } from '../src/data/types';
 import { lbToKg } from '../src/data/units';
-import { nextBadges } from '../src/features/home/badges';
 import { buildWins } from '../src/features/home/wins';
 import { exerciseSeries } from '../src/features/progress/series';
 import { workoutsCsv } from '../src/features/settings/exportData';
@@ -236,7 +236,20 @@ describe('workout counts', () => {
       session('2026-10-01', [entry('ex_back_squat', [set({ loadKg: 100, reps: 5 })])]),
       session('2026-10-02', [entry('ex_back_squat', [set({ kind: 'warmup', loadKg: 60, reps: 5 }), set({ loadKg: 100, reps: 5, completedAt: undefined })])], { completion: 'partial' }),
     ];
-    const badge = nextBadges({ earned: [], sessions, exercisesById, formReports: [], limit: 20 }).find((b) => b.badgeKey === 'workouts_50');
+    const input: BadgeInput = {
+      sessions,
+      exercisesById,
+      formReports: [],
+      records: [],
+      streak: { currentWeeks: 0, milestoneDates: [] },
+      occurrences: [],
+      plans: [],
+      bodyweight: [],
+      units: 'metric',
+      weekStartsOn: 1,
+      today: '2026-10-02',
+    };
+    const badge = badgeProgress(input).find((b) => b.badgeKey === 'workouts_10');
     assert.equal(badge?.current, 1);
   });
 });

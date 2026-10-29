@@ -4,7 +4,8 @@ import { describe, test } from 'node:test';
 import { addDays } from '../src/data/dates';
 import { migrate } from '../src/data/db/schema';
 import { createSqliteRepository } from '../src/data/db/sqliteRepository';
-import { DATE_DEPENDENT, INVALIDATES, WRITE_NAME, invalidateAfter, msUntilTomorrow, staleOnForeground, type Invalidator, type Mutation, type QueryRoot } from '../src/data/invalidation';
+import { DATE_DEPENDENT, INVALIDATES, WRITE_NAME, invalidateAfter, msUntilTomorrow, preferencesSaveInvalidates, staleOnForeground, type Invalidator, type Mutation, type QueryRoot } from '../src/data/invalidation';
+import { defaultPreferences } from '../src/data/preferences';
 import { openTestDatabase } from './support/nodeSqlite';
 
 const TODAY = '2026-10-21';
@@ -41,6 +42,45 @@ describe('what each write refreshes', () => {
 
   test('plan writes refresh plans, their versions, and the calendar', () => {
     for (const mutation of ['savePlan', 'deletePlan', 'updatePlanWorkout'] as const) includes(mutation, ['plans', 'planVersions', 'occurrences']);
+  });
+
+  test('badges refresh after every write that changes what they read (G3.10)', () => {
+    // Workouts, records, and the streak; plans and their calendar (perfect week, programs); weigh-ins
+    // (bodyweight ratios); form reports; exercises (bodyweight setting, movement); goals (the
+    // streak target); and settings (units, week start).
+    const reads: Mutation[] = [
+      'saveSession',
+      'deleteSession',
+      'updatePlanWorkout',
+      'savePlan',
+      'deletePlan',
+      'pushPlanForward',
+      'undoPlanShift',
+      'saveExercise',
+      'saveGoal',
+      'deleteGoal',
+      'saveBodyweight',
+      'deleteBodyweight',
+      'deleteFormReport',
+      'savePreferences',
+    ];
+    for (const mutation of reads) includes(mutation, ['badges']);
+    // Only a recording's video goes; its report, which badges count, stays.
+    assert.deepEqual(writes.filter((m) => !reads.includes(m)), ['deleteRecordingVideo']);
+  });
+
+  test('the streak refreshes after writes to workouts, plans, pushes, goals, and the week start', () => {
+    const reads: Mutation[] = ['saveSession', 'deleteSession', 'updatePlanWorkout', 'savePlan', 'deletePlan', 'pushPlanForward', 'undoPlanShift', 'saveGoal', 'deleteGoal', 'savePreferences'];
+    for (const mutation of reads) includes(mutation, ['streak']);
+  });
+
+  test("a preferences save refreshes the streak and badges only when the week start or units changed (G3.10 review)", () => {
+    // A rest the timer remembers mid-workout saves preferences: Home shouldn't recompute under the workout.
+    const rest = { ...defaultPreferences, restByExerciseSec: { ex_bench_press: 150 } };
+    assert.deepEqual(preferencesSaveInvalidates(defaultPreferences, rest), ['preferences']);
+    assert.deepEqual(preferencesSaveInvalidates(defaultPreferences, { ...defaultPreferences, weekStartsOn: 7 }), INVALIDATES.savePreferences);
+    assert.deepEqual(preferencesSaveInvalidates(defaultPreferences, { ...defaultPreferences, units: 'metric' }), INVALIDATES.savePreferences);
+    assert.deepEqual(preferencesSaveInvalidates(undefined, rest), INVALIDATES.savePreferences, 'without the settings from before, everything');
   });
 
   test('invalidating marks each key stale once, as a key prefix', async () => {

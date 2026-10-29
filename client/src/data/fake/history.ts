@@ -112,7 +112,10 @@ function generateBodyweight(today: ISODate): BodyweightEntry[] {
     const stamp = isoAt(date, 7, 15);
     entries.push({ id: `bw_${date}`, date, weightKg: lbToKg(Math.round(lb * 10) / 10), createdAt: stamp, updatedAt: stamp });
   }
-  return entries;
+  // Two days ago, the lowest yet: it reaches the sample bodyweight goal (fake/derived.ts).
+  const low = addDays(today, -2);
+  const stamp = isoAt(low, 7, 15);
+  return [...entries.filter((e) => e.date !== low), { id: `bw_${low}`, date: low, weightKg: lbToKg(180.9), createdAt: stamp, updatedAt: stamp }];
 }
 
 function bodyweightOn(entries: BodyweightEntry[], date: ISODate): number | undefined {

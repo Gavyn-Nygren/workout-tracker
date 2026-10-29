@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G3.10 (goals, badges, streaks).
+**Current goal:** G3.11 (progress on real data).
 
 ## How we work
 
@@ -343,7 +343,7 @@ Everything works on one phone, offline, with no server.
 
 ### G3.10 Goals, badges, streaks
 
-*Carried over from the G3.6 audit:*
+*Carried over from the G3.6 audit (all fixed in G3.10):*
 
 - *Streak target:*
   - *The target should be the planned number of workouts when there's no frequency goal; today it defaults to 4.*
@@ -357,11 +357,22 @@ Everything works on one phone, offline, with no server.
   - *The form goal reads only the newest report.*
   - *Frequency goals have no deadline or pace.*
 - *Reopened workouts:*
-  - *While a reopened workout is open, it drops out of the streak until it's finished again. This is accepted for now.*
+  - *While a reopened workout is open, it drops out of the streak until it's finished again. Fixed: it now counts as it was until it's finished or discarded.*
 
-- [ ] Weekly streak rules, including partial workouts. *Partial workouts are done in G3.6: one completed working set (not a warm-up) counts.*
-- [ ] All four goal types, with pace tracking.
-- [ ] Badge catalog thresholds (a content task: propose them for the user to approve).
+- [x] Weekly streak rules, including partial workouts. *Partial workouts are done in G3.6: one completed working set (not a warm-up) counts.*
+  - *A week's target is the active weekly goal, else what the plans scheduled that week after pushes, else 1 (user's pick). Home's top card says which.*
+  - *Finished weeks keep their target: it's stored when the week ends and before any goal, plan, push, workout or week-start change. Switching the week start regroups past weeks without changing which were met.*
+  - *Weeks that ended before this update keep the old rule (the weekly goal at the update, else 4), so existing streaks and their badges stay as they were.*
+- [x] All four goal types, with pace tracking.
+  - *Lift goals measure from when they were set, with the best in the 12 weeks before as the start, and compare added weight on bodyweight exercises. Bodyweight and form goals without a starting value wait for the first weigh-in or recording. Form goals read the newest recording that has the joint, in the joint's direction.*
+  - *Weekly goals can have a deadline: the total by the deadline, so an extra workout makes up for a short week (user's pick).*
+  - *Pace runs from when the deadline was set; no pace until a goal has a start; "Deadline passed" after the deadline.*
+  - *Reached goals celebrate (workout summary, weigh-in, form report, Recent wins), show "Reached …" on Home for 7 days, then move to Completed goals (user's pick).*
+  - *Goals saved before this update were converted once where their meaning changed: lift goals on bodyweight exercises to added weight, and form goals that aimed the wrong way for their joint.*
+- [x] Badge catalog thresholds (a content task: propose them for the user to approve).
+  - *50 badges in ladders (user's pick), listed in spec 2.9. One catalog drives earning and Next up, so every Next up badge can be earned.*
+
+*Done: 814 tests, covering week targets and freezing (goal and plan edits, pushes, deletes, reopened workouts, week-start switches), every goal type's progress, pace and reached date, every badge family, the one-time update of existing data, and the sample data's goals and badges. Three review rounds, with invariant fuzzing of the streak and badges. Not yet checked on an iPhone: Home's Reached tag, Completed goals screen and target caption, the goal form's new hints, the summary's Goal reached card, the weigh-in toast, and the badge sheet.*
 
 ### G3.11 Progress on real data
 

@@ -16,6 +16,7 @@ const ENTITY: Record<UserTable, string> = {
   goals: 'goal',
   recordings: 'recording',
   form_reports: 'form_report',
+  streak_weeks: 'streak_week',
 };
 
 export const nowISO = () => new Date().toISOString();

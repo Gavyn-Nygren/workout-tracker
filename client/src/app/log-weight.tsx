@@ -5,10 +5,12 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { AppText, Button, ErrorState, NumberField, SegmentedControl, Skeleton, ToastViewport, useToast } from '@/components/ui';
 import { useToday } from '@/data/DataProvider';
 import { addDays } from '@/data/dates';
-import { succeeded, useBodyweight, usePreferences, useSaveBodyweight } from '@/data/hooks';
+import { succeeded, useBodyweight, useGoals, usePreferences, useSaveBodyweight } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
-import type { BodyweightEntry, UnitSystem } from '@/data/types';
+import type { BodyweightEntry, Goal, UnitSystem } from '@/data/types';
 import { kgToLb, lbToKg } from '@/data/units';
+import { goalReachedMessage, goalsReachedByNewWeighIn } from '@/features/summary/goalsReached';
+import { useHaptics } from '@/hooks/useHaptics';
 import { formatShortDate, unitLabel } from '@/lib/format';
 import { newId } from '@/lib/id';
 import { useAppTheme } from '@/theme/ThemeProvider';
@@ -19,10 +21,12 @@ export default function LogWeightSheet() {
   const { colors } = useAppTheme();
   const preferences = usePreferences();
   const bodyweight = useBodyweight();
+  // For "Goal reached" after saving; a failed read only skips that.
+  const goals = useGoals();
 
   if (bodyweight.error) return <ErrorState fill title="Couldn't load your weigh-ins" onRetry={() => bodyweight.refetch()} />;
   // Wait for entries and units so the prefilled weight and the "replaces" hint are right.
-  if (bodyweight.isLoading || preferences.isLoading) {
+  if (bodyweight.isLoading || preferences.isLoading || goals.isLoading) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.cardElevated }]} accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }}>
         <AppText variant="title2">Log bodyweight</AppText>
@@ -33,12 +37,14 @@ export default function LogWeightSheet() {
       </View>
     );
   }
-  return <LogWeightForm entries={bodyweight.data ?? []} units={(preferences.data ?? defaultPreferences).units} />;
+  const { units, celebrations } = preferences.data ?? defaultPreferences;
+  return <LogWeightForm entries={bodyweight.data ?? []} goals={goals.data ?? []} units={units} celebrations={celebrations} />;
 }
 
-function LogWeightForm({ entries, units }: { entries: BodyweightEntry[]; units: UnitSystem }) {
+function LogWeightForm({ entries, goals, units, celebrations }: { entries: BodyweightEntry[]; goals: Goal[]; units: UnitSystem; celebrations: boolean }) {
   const { colors } = useAppTheme();
   const toast = useToast();
+  const haptics = useHaptics();
   const today = useToday();
   const save = useSaveBodyweight();
 
@@ -53,9 +59,17 @@ function LogWeightForm({ entries, units }: { entries: BodyweightEntry[]; units: 
     if (!value || save.isPending) return;
     const now = new Date().toISOString();
     const weightKg = units === 'imperial' ? lbToKg(value) : value;
-    if (!(await succeeded(save.mutateAsync({ id: newId('bw'), date, weightKg, createdAt: now, updatedAt: now })))) return;
+    const entry: BodyweightEntry = { id: newId('bw'), date, weightKg, createdAt: now, updatedAt: now };
+    // Bodyweight goals this weigh-in reaches, measured against the weigh-ins from before it.
+    const reached = goalsReachedByNewWeighIn(goals, entries, entry, today);
+    if (!(await succeeded(save.mutateAsync(entry)))) return;
     router.back();
-    toast.show({ message: `Logged ${value} ${unitLabel(units)} for ${formatShortDate(date)}.`, tone: 'success' });
+    if (reached.length) {
+      if (celebrations) haptics.success();
+      toast.show({ message: goalReachedMessage(reached), tone: 'success', icon: 'target' });
+    } else {
+      toast.show({ message: `Logged ${value} ${unitLabel(units)} for ${formatShortDate(date)}.`, tone: 'success' });
+    }
   };
 
   return (

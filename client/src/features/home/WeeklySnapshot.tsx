@@ -41,6 +41,21 @@ export function WeeklySnapshot(props: Props) {
   );
 }
 
+/** Where this week's target comes from, since it can change week to week (G3.10). */
+function targetCaption(streak: StreakState): string {
+  switch (streak.thisWeekSource) {
+    case 'goal':
+      return `Weekly goal: ${streak.thisWeekTarget}`;
+    case 'plan':
+      return `${streak.thisWeekPlanned} planned this week`;
+    case 'minimum':
+      return 'Nothing planned this week';
+    // Only weeks that ended before G3.10; this week never is.
+    case 'legacy':
+      return `Weekly target: ${streak.thisWeekTarget}`;
+  }
+}
+
 function message(streak: StreakState, daysLeft: number): string {
   const left = streak.thisWeekTarget - streak.thisWeekCompleted;
   if (left <= 0) return 'Week target hit. Your streak is safe.';
@@ -59,8 +74,10 @@ function Body({ streak, week, today, onPress, outerScheme }: Props & { outerSche
     .filter((d) => d.status !== 'rest')
     .map((d) => `${formatWeekday(d.date)} ${DAY_WORDS[d.status as Exclude<DayStatus, 'rest'>]}`)
     .join(', ');
+  const caption = targetCaption(streak);
   const spoken = [
     `This week: ${streak.thisWeekCompleted} of ${plural(streak.thisWeekTarget, 'workout')}.`,
+    `${caption}.`,
     `${streak.currentWeeks}-week streak.`,
     message(streak, daysLeft),
     dayList && `${dayList}.`,
@@ -102,6 +119,12 @@ function Body({ streak, week, today, onPress, outerScheme }: Props & { outerSche
             <AppText variant="footnote" tone="secondary">
               {message(streak, daysLeft)}
             </AppText>
+            <View style={styles.caption}>
+              <Icon name={streak.thisWeekSource === 'goal' ? 'target' : 'calendar'} color={colors.textSecondary} size={12} />
+              <AppText variant="caption" weight="600" tone="secondary" style={styles.shrink}>
+                {caption}
+              </AppText>
+            </View>
           </View>
         </View>
 
@@ -160,6 +183,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  caption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  shrink: {
+    flexShrink: 1,
   },
   days: {
     flexDirection: 'row',

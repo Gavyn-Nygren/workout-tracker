@@ -7,6 +7,7 @@ process.env.TZ = 'America/New_York';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
+import { deriveBadges, type BadgeInput } from '../src/data/badges';
 import {
   addDays,
   completionStamp,
@@ -21,7 +22,7 @@ import {
   todayISO,
   weekdayIndex,
 } from '../src/data/dates';
-import { deriveBadges, deriveStreak } from '../src/data/progress';
+import { deriveStreak } from '../src/data/progress';
 import type { FormReport, ISODate, LoggedSet, Plan, ScheduledOccurrence, WorkoutSession } from '../src/data/types';
 import { buildWins } from '../src/features/home/wins';
 import { buildAgenda } from '../src/features/today/agenda';
@@ -458,8 +459,20 @@ describe('form recordings are dated by the local day they were made', () => {
   });
 
   test('the Camera Ready badge is dated by the local day of the first analysis', () => {
-    const streak = deriveStreak([], '2026-10-30', 3);
-    const badge = deriveBadges([], new Map(), [report('first', new Date(2026, 9, 26, 21, 30), 90)], streak).find((b) => b.badgeKey === 'first_analysis');
+    const input: BadgeInput = {
+      sessions: [],
+      exercisesById: new Map(),
+      formReports: [report('first', new Date(2026, 9, 26, 21, 30), 90)],
+      records: [],
+      streak: deriveStreak([], '2026-10-30', 3),
+      occurrences: [],
+      plans: [],
+      bodyweight: [],
+      units: 'imperial',
+      weekStartsOn: 1,
+      today: '2026-10-30',
+    };
+    const badge = deriveBadges(input).find((b) => b.badgeKey === 'first_analysis');
     assert.equal(badge?.earnedDate, '2026-10-26');
   });
 });

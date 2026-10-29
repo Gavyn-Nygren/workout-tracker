@@ -10,6 +10,7 @@ import {
   useBodyweight,
   useDeleteSession,
   useExercises,
+  useGoals,
   useLatestPreferences,
   usePlanShifts,
   usePreferences,
@@ -23,6 +24,7 @@ import type { Exercise, SessionBlock, SessionExercise, WorkoutSession } from '@/
 import { useHaptics } from '@/hooks/useHaptics';
 import { spokenDuration } from '@/hooks/useNow';
 import { createLocalStore } from '@/lib/localStore';
+import { goalsAddedByReopen } from '../summary/goalsReached';
 import type { DayItem } from '../today/agenda';
 import { sessionForReopen, sessionFromPlan } from './buildSession';
 import { bodyweightForSet, completedNewestFirst, recordsAddedByReopen, withSessionWrite, type SessionWrite } from './history';
@@ -86,6 +88,8 @@ export type FinishedWorkout = {
   reopened: boolean;
   /** For a reopened workout: how many records the edits added that it didn't have before (G3.6). */
   newRecordCount: number;
+  /** For a reopened workout: goals the edits reached that weren't reached before (G3.10). */
+  newGoalIds: string[];
 };
 
 type ContextValue = {
@@ -174,6 +178,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
   const planShifts = usePlanShifts();
   const exercises = useExercises();
   const bodyweight = useBodyweight();
+  const goals = useGoals();
   const preferencesQuery = usePreferences();
   const preferences = preferencesQuery.data ?? defaultPreferences;
 
@@ -615,6 +620,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
         };
         // A reopened workout celebrates only records its edits added, not ones it already had.
         const newRecordCount = reopened ? recordsAddedByReopen(sessions.data ?? [], original.current, finished, exercisesById).length : 0;
+        const newGoalIds = reopened ? goalsAddedByReopen(goals.data ?? [], sessions.data ?? [], original.current, finished, exercisesById, todayISO(now)).map((g) => g.id) : [];
         const opened = generation.current;
         // A pending auto-save mustn't land after this and mark the workout unfinished again.
         finishing.current = true;
@@ -625,7 +631,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
           if (ok) close();
           else keepOpen();
         }
-        return ok ? { session: finished, reopened, newRecordCount } : null;
+        return ok ? { session: finished, reopened, newRecordCount, newGoalIds } : null;
       },
     };
   }, [
@@ -637,6 +643,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
     exercisesById,
     history,
     sessions.data,
+    goals.data,
     planShifts.data,
     preferences,
     completeSet,

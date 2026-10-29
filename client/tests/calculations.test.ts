@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { countsAsWorkout, countsForPRs, countsForVolume, effectiveLoadKg, setE1RM, setVolumeKg } from '../src/data/calculations';
+import { deriveBadges, type BadgeInput } from '../src/data/badges';
 import { builtinExercises } from '../src/data/content';
-import { deriveBadges, deriveStreak } from '../src/data/progress';
+import { deriveStreak } from '../src/data/progress';
 import { derivePersonalRecords, deriveRecordBests, exerciseBests } from '../src/data/records';
 import type { LoggedSet, PRType, SessionExercise, SetKind, SetModifier, WorkoutSession } from '../src/data/types';
 import { epley1RM, lbToKg } from '../src/data/units';
@@ -409,16 +410,31 @@ describe('longest weekly streak record (spec 2.7)', () => {
 
 describe('badges (recalculated on read)', () => {
   const fourWeeks = ['2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28'].map((d) => workout(d));
+  /** Badges from these workouts, with a target of 1 a week. */
+  const badgesOf = (sessions: WorkoutSession[], today: string) => {
+    const input: BadgeInput = {
+      sessions,
+      exercisesById,
+      formReports: [],
+      records: [],
+      streak: deriveStreak(sessions, today, 1),
+      occurrences: [],
+      plans: [],
+      bodyweight: [],
+      units: 'imperial',
+      weekStartsOn: 1,
+      today,
+    };
+    return deriveBadges(input);
+  };
 
   test('the 4-week streak badge is dated when the streak first reached 4 weeks, and stays there', () => {
-    const later = [...fourWeeks, workout('2026-10-20')];
-    const badge = deriveBadges(later, exercisesById, [], deriveStreak(later, '2026-10-26', 1)).find((b) => b.badgeKey === 'streak_4_weeks');
+    const badge = badgesOf([...fourWeeks, workout('2026-10-20')], '2026-10-26').find((b) => b.badgeKey === 'streak_4_weeks');
     assert.equal(badge?.earnedDate, '2026-09-28');
   });
 
   test('a warm-up-only workout doesn’t earn “first workout”', () => {
     const warmupOnly = workout('2026-10-26', [set({ kind: 'warmup', loadKg: 60, reps: 5 })], { completion: 'partial' });
-    const badges = deriveBadges([warmupOnly], exercisesById, [], deriveStreak([warmupOnly], '2026-10-26', 1));
-    assert.ok(!badges.some((b) => b.badgeKey === 'first_workout'));
+    assert.ok(!badgesOf([warmupOnly], '2026-10-26').some((b) => b.badgeKey === 'first_workout'));
   });
 });

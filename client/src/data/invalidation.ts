@@ -2,7 +2,7 @@
 // Infinity), so invalidating here is the only way a screen recalculates. Kept free of React so the
 // rules can be unit-tested (tests/invalidation.test.ts).
 import type { DataRepository } from './repository';
-import type { ISODate } from './types';
+import type { ISODate, Preferences } from './types';
 
 /** The first part of every query key in hooks.ts, one per kind of read. */
 export type QueryRoot =
@@ -28,13 +28,21 @@ export const WRITE_NAME = /^(save|delete|update|push|undo)/;
 /** Every repository write. A new write fails the typecheck until it has an entry below. */
 export type Mutation = Extract<keyof DataRepository, `save${string}` | `delete${string}` | `update${string}` | `push${string}` | `undo${string}`>;
 
-/** Reads derived from logged workouts: records, streak weeks, and badges. */
+/**
+ * Reads derived from logged workouts: records, streak weeks, and badges. Workouts also decide when
+ * a weekly goal with a deadline is reached and archived, which stops it setting the streak target.
+ * Goal progress itself is worked out on screen from these reads (useHomeData), not stored.
+ */
 const DERIVED_FROM_WORKOUTS = ['personalRecords', 'streak', 'badges'] as const satisfies readonly QueryRoot[];
 
-/** Plan edits rebuild the plan's upcoming calendar. */
-const PLAN_READS = ['plans', 'planVersions', 'occurrences'] as const satisfies readonly QueryRoot[];
+/**
+ * Plan edits rebuild the plan's upcoming calendar. Without a weekly goal, a week's streak target is
+ * what the plans scheduled (G3.10). Badges read plans and the calendar too (perfect week, program
+ * finished), and the streak earns them.
+ */
+const PLAN_READS = ['plans', 'planVersions', 'occurrences', 'streak', 'badges'] as const satisfies readonly QueryRoot[];
 
-/** The goal's weekly target sets the streak, and the streak earns badges. */
+/** A weekly goal sets the streak target, and the streak earns badges. */
 const GOAL_READS = ['goals', 'streak', 'badges'] as const satisfies readonly QueryRoot[];
 
 export const INVALIDATES: Record<Mutation, readonly QueryRoot[]> = {
@@ -45,22 +53,33 @@ export const INVALIDATES: Record<Mutation, readonly QueryRoot[]> = {
   updatePlanWorkout: PLAN_READS,
   savePlan: PLAN_READS,
   deletePlan: [...PLAN_READS, 'planShifts'],
-  // A push forward (and its undo) moves the plan's unstarted workouts.
-  pushPlanForward: ['occurrences', 'planShifts'],
-  undoPlanShift: ['occurrences', 'planShifts'],
+  // A push forward (and its undo) moves the plan's unstarted workouts, between weeks too.
+  pushPlanForward: ['occurrences', 'planShifts', 'streak', 'badges'],
+  undoPlanShift: ['occurrences', 'planShifts', 'streak', 'badges'],
   // Records read the exercise's bodyweight setting, and badges count its volume.
   saveExercise: ['exercises', ...DERIVED_FROM_WORKOUTS],
   saveGoal: GOAL_READS,
   deleteGoal: GOAL_READS,
   // Sets keep the bodyweight snapshot taken when they were done, so a weigh-in never changes records.
-  saveBodyweight: ['bodyweight'],
-  deleteBodyweight: ['bodyweight'],
+  // Bodyweight-ratio badges fall back to the latest weigh-in when a set has no snapshot.
+  saveBodyweight: ['bodyweight', 'badges'],
+  deleteBodyweight: ['bodyweight', 'badges'],
   deleteRecordingVideo: ['formReports', 'recordings'],
-  // The set loses its link to the recording, and the first analysis earns a badge.
+  // The set loses its link to the recording, and form reports earn badges.
   deleteFormReport: ['formReports', 'recordings', 'sessions', 'badges'],
-  // The week-start setting decides which workouts share a streak week.
+  // The week-start setting decides which workouts share a streak week; badge thresholds follow units.
   savePreferences: ['preferences', 'streak', 'badges'],
 };
+
+/**
+ * What a preferences save refreshes: the preferences, plus the streak and badges only when the week
+ * start or units changed (the only settings they read). So a rest the timer remembers mid-workout
+ * doesn't recompute them. Without the settings from before the save, everything listed above.
+ */
+export function preferencesSaveInvalidates(previous: Pick<Preferences, 'weekStartsOn' | 'units'> | undefined, next: Pick<Preferences, 'weekStartsOn' | 'units'>): readonly QueryRoot[] {
+  if (previous && previous.weekStartsOn === next.weekStartsOn && previous.units === next.units) return ['preferences'];
+  return INVALIDATES.savePreferences;
+}
 
 /** The slice of TanStack Query's client used here, so tests can pass a stand-in. */
 export type Invalidator = {
@@ -77,7 +96,11 @@ export function invalidateAfter(client: Invalidator, mutation: Mutation): Promis
   return invalidateKeys(client, INVALIDATES[mutation]);
 }
 
-/** Reads that depend on today's date, so they go stale when the day changes even with no write. */
+/**
+ * Reads that depend on today's date, so they go stale when the day changes even with no write. The
+ * streak's weekly goal stops counting 7 days after it's reached, so it's here. Goal progress, archive,
+ * and deadlines are worked out on screen with useToday, so the goals read itself isn't.
+ */
 export const DATE_DEPENDENT: readonly QueryRoot[] = ['streak', 'badges', 'occurrences'];
 
 /** Milliseconds until a second past the next local midnight, when "today" changes. */

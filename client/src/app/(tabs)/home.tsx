@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { ActionSheetIOS, Alert, ScrollView, StyleSheet, View } from 'react-native';
 
-import { Button, Card, EmptyState, ErrorState, ScreenState, SectionHeader, Skeleton, useToast } from '@/components/ui';
+import { Button, Card, EmptyState, ErrorState, ListRow, ScreenState, SectionHeader, Skeleton, useToast } from '@/components/ui';
 import { succeeded, useDeleteGoal } from '@/data/hooks';
 import type { Goal } from '@/data/types';
 import { EarnedRow, GoalRow, NextUpList, WinsFeed } from '@/features/home/HomeParts';
@@ -16,10 +16,10 @@ import { radius, spacing } from '@/theme/tokens';
  * goals, recent wins, then badges.
  */
 export default function HomeScreen() {
-  const { scheme } = useAppTheme();
+  const { scheme, colors } = useAppTheme();
   const toast = useToast();
   const deleteGoal = useDeleteGoal();
-  const { isLoading, error, retry, today, units, streak, week, goals, wins, earned, upcoming } = useHomeData();
+  const { isLoading, error, retry, today, units, streak, week, goals, completedGoals, wins, earned, upcoming } = useHomeData();
 
   if (error) {
     return (
@@ -60,6 +60,19 @@ export default function HomeScreen() {
       },
     );
 
+  // Goals reached over a week ago leave the list; this row opens them.
+  const completedRow = completedGoals.length > 0 && (
+    <ListRow
+      title="Completed goals"
+      icon="checkmark.circle"
+      value={String(completedGoals.length)}
+      separator={false}
+      onPress={() => router.push('/goals-completed')}
+      accessibilityLabel={`Completed goals, ${completedGoals.length}`}
+      accessibilityHint="Opens the goals you've reached"
+    />
+  );
+
   return (
     <ScrollView contentContainerStyle={[styles.content, dashboard]}>
       {/* iPad: this week and goals on the left, wins and badges on the right. */}
@@ -73,12 +86,20 @@ export default function HomeScreen() {
               {goals.length ? (
                 <Card padding="none">
                   {goals.map(({ goal, progress }, i) => (
-                    <GoalRow key={goal.id} goal={goal} progress={progress} units={units} separator={i < goals.length - 1} onPress={() => openGoal(goal)} />
+                    <GoalRow key={goal.id} goal={goal} progress={progress} units={units} separator={i < goals.length - 1 || Boolean(completedRow)} onPress={() => openGoal(goal)} />
                   ))}
+                  {completedRow}
                 </Card>
               ) : (
-                <Card>
-                  <EmptyState icon="target" title="No goals yet" message="Set a lift, frequency, bodyweight, or form goal and track it here." actionLabel="Add a goal" onAction={() => router.push('/goal')} />
+                <Card padding={completedRow ? 'none' : 'lg'}>
+                  <EmptyState
+                    icon="target"
+                    title={completedRow ? 'No goals in progress' : 'No goals yet'}
+                    message={completedRow ? 'Set your next lift, frequency, bodyweight, or form goal.' : 'Set a lift, frequency, bodyweight, or form goal and track it here.'}
+                    actionLabel="Add a goal"
+                    onAction={() => router.push('/goal')}
+                  />
+                  {completedRow && <View style={[styles.divider, { borderTopColor: colors.border }]}>{completedRow}</View>}
                 </Card>
               )}
             </View>
@@ -92,7 +113,7 @@ export default function HomeScreen() {
                 <WinsFeed wins={wins} />
               ) : (
                 <Card>
-                  <EmptyState icon="star" title="Wins show up here" message="New PRs, form improvements, and badges from the last three weeks. Finish a workout to get your first." />
+                  <EmptyState icon="star" title="Wins show up here" message="New PRs, form improvements, badges, and goals reached in the last three weeks. Finish a workout to get your first." />
                 </Card>
               )}
             </View>
@@ -129,5 +150,8 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: spacing.sm,
+  },
+  divider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
 });

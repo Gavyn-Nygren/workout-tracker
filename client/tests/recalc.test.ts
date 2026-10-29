@@ -170,19 +170,22 @@ describe('a skipped exercise', () => {
 describe('the weekly target and streak badges', () => {
   beforeEach(() => fresh());
 
-  test('saving and deleting a frequency goal changes the weekly target and the streak badge', async () => {
+  test("saving and deleting a frequency goal changes this week's target and the streak badge", async () => {
+    // One workout a week for four weeks, ending this week. No plan, so each week needs 1.
     for (const [i, day] of WEEKS.slice(3).entries()) await repo.saveSession(squat(`w${i + 1}`, day, 100));
-    const fallback = (await repo.getStreak()).thisWeekTarget;
-    assert.notEqual(fallback, 1);
-    assert.equal(await badge('streak_4_weeks'), undefined);
-
-    await repo.saveGoal(weeklyGoal(1));
-    assert.equal((await repo.getStreak()).thisWeekTarget, 1);
+    const before = await repo.getStreak();
+    assert.deepEqual([before.thisWeekTarget, before.thisWeekSource, before.currentWeeks], [1, 'minimum', 4]);
     assert.equal((await badge('streak_4_weeks'))?.earnedDate, WEEKS[6]);
 
-    await repo.deleteGoal('goal_weekly');
-    assert.equal((await repo.getStreak()).thisWeekTarget, fallback);
+    // Finished weeks keep the 1 they ended with; this week now needs 2, so the run is 3 so far.
+    await repo.saveGoal(weeklyGoal(2));
+    const goal = await repo.getStreak();
+    assert.deepEqual([goal.thisWeekTarget, goal.thisWeekSource, goal.currentWeeks], [2, 'goal', 3]);
     assert.equal(await badge('streak_4_weeks'), undefined);
+
+    await repo.deleteGoal('goal_weekly');
+    assert.equal((await repo.getStreak()).thisWeekTarget, 1);
+    assert.equal((await badge('streak_4_weeks'))?.earnedDate, WEEKS[6]);
   });
 
   test('the 4-week streak badge keeps the day it was earned as later workouts are added', async () => {

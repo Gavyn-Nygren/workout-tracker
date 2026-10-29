@@ -2,25 +2,22 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, ErrorState, NotFoundState, ProgressBar, Skeleton } from '@/components/ui';
-import { useBadges, useExercises, useFormReports, useSessions, useStreak } from '@/data/hooks';
+import { useBadges } from '@/data/hooks';
 import { BADGE_CATEGORY_LABEL } from '@/features/home/badges';
 import { BadgeMedallion } from '@/features/home/HomeParts';
-import { useHomeData } from '@/features/home/useHomeData';
 import { formatShortDate } from '@/lib/format';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 
-/** A badge's details: earned date, or progress toward it. */
+/** A badge's details: how to earn it, then its earned date (and the ladder's next step), or progress toward it. */
 export default function BadgeSheet() {
   const { key } = useLocalSearchParams<{ key: string }>();
   const { colors } = useAppTheme();
-  const { isLoading, earned, upcoming } = useHomeData();
-  // The reads badges are built from (same cache as useHomeData), checked for errors.
-  const queries = [useBadges(), useSessions(), useExercises(), useStreak(), useFormReports()];
+  // Only the badges read (the same cache Home uses): a badge sheet needs none of Home's other work.
+  const badges = useBadges();
 
-  const failed = queries.filter((q) => q.error);
-  if (failed.length) return <ErrorState fill title="Couldn't load this badge" onRetry={() => failed.forEach((q) => q.refetch())} />;
-  if (isLoading) {
+  if (badges.error) return <ErrorState fill title="Couldn't load this badge" onRetry={() => badges.refetch()} />;
+  if (badges.isLoading || !badges.data) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.cardElevated }]} accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }}>
         <Skeleton width={96} height={96} radius={radius.pill} />
@@ -31,9 +28,12 @@ export default function BadgeSheet() {
     );
   }
 
-  const got = earned.find((b) => b.badgeKey === key);
-  const next = upcoming.find((b) => b.badgeKey === key);
+  const got = badges.data.earned.find((b) => b.badgeKey === key);
+  // Any badge not earned yet, not just the ones Next up shows.
+  const next = badges.data.progress.find((b) => b.badgeKey === key);
   const badge = got ?? next;
+  // The lowest step of this badge's ladder still to earn, e.g. "3-Plate Bench" after "2-Plate Bench".
+  const nextStep = got && badges.data.progress.filter((b) => b.ladder === got.ladder).sort((a, b) => a.step - b.step)[0];
   if (!badge) return <NotFoundState thing="Badge" icon="medal" backLabel="Close" />;
 
   return (
@@ -55,6 +55,11 @@ export default function BadgeSheet() {
       {got && (
         <AppText variant="subhead" weight="600" tone="success">
           {`Earned ${formatShortDate(got.earnedDate)}`}
+        </AppText>
+      )}
+      {nextStep && (
+        <AppText variant="footnote" tone="secondary" style={styles.center}>
+          {`Next: ${nextStep.title}`}
         </AppText>
       )}
       {next && (

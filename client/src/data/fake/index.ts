@@ -15,6 +15,7 @@ import type {
   WorkoutSession,
 } from '../types';
 import { defaultPreferences } from '../preferences';
+import { weekTargetsFromHistory } from '../weekTargets';
 import { deriveBadges, derivePersonalRecords, deriveStreak, fakeGoals } from './derived';
 import { fakeExercises } from './exercises';
 import { generateFormReports } from './form';
@@ -46,8 +47,24 @@ export function buildFakeDataset(today: ISODate): FakeDataset {
   const { occurrences, sessions, bodyweight } = generateHistory(fakePlans, isBodyweight, today);
   const { recordings, formReports } = generateFormReports(sessions);
   const goals = fakeGoals(today);
-  const frequencyGoal = goals.find((g) => g.type === 'frequency');
-  const streak = deriveStreak(sessions, today, frequencyGoal?.type === 'frequency' ? frequencyGoal.workoutsPerWeek : 4);
+  const { units, weekStartsOn } = defaultPreferences;
+  // The same targets the database freezes for these weeks on its first read.
+  const streak = deriveStreak(sessions, today, weekTargetsFromHistory({ goals, sessions, occurrences, weekStartsOn, today }), weekStartsOn);
+  const personalRecords = derivePersonalRecords(sessions, exercisesById);
+  const badges = deriveBadges({
+    sessions,
+    exercisesById,
+    formReports,
+    records: personalRecords,
+    streak,
+    occurrences,
+    plans: fakePlans,
+    planVersions: fakePlans,
+    bodyweight,
+    units,
+    weekStartsOn,
+    today,
+  });
 
   return {
     today,
@@ -57,9 +74,9 @@ export function buildFakeDataset(today: ISODate): FakeDataset {
     occurrences,
     sessions,
     bodyweight,
-    personalRecords: derivePersonalRecords(sessions, exercisesById),
+    personalRecords,
     goals,
-    badges: deriveBadges(sessions, exercisesById, formReports, streak),
+    badges,
     streak,
     recordings,
     formReports,

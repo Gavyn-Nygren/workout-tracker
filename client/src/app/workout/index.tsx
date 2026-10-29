@@ -208,8 +208,10 @@ export default function ActiveWorkoutScreen() {
       // On failure the error toast shows (SaveErrorToasts) and the workout stays open, so nothing is lost.
       const saved = await saveWorkout();
       if (!saved) return;
-      // A reopened workout celebrates only the records its edits added, and never offers plan changes.
-      const params = saved.reopened ? { session: saved.session.id, reopened: '1', newRecords: String(saved.newRecordCount) } : { session: saved.session.id, fresh: '1' };
+      // A reopened workout celebrates only the records and goals its edits added, and never offers plan changes.
+      const params = saved.reopened
+        ? { session: saved.session.id, reopened: '1', newRecords: String(saved.newRecordCount), newGoals: saved.newGoalIds.join(',') }
+        : { session: saved.session.id, fresh: '1' };
       router.replace({ pathname: '/summary', params });
     };
     if (counts.done === 0) {

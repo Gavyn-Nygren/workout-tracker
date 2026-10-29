@@ -381,16 +381,44 @@ export type StreakRecord = {
   sessionId: ID;
 };
 
+/**
+ * A goal (spec 2.9). Progress, the reached date, and the archive are derived from history
+ * (goalStatus in data/goals.ts), never stored.
+ */
 export type Goal = Timestamps & {
   id: ID;
   title: string;
   deadline?: ISODate;
+  /**
+   * When a deadline was added to, or changed on, a goal that kept its set date (the goal form sets it
+   * for lift, bodyweight and form goals; a weekly goal starts over instead). Pace runs from then, and
+   * from the progress the goal had then. Without it, pace runs from when the goal was set.
+   */
+  deadlineSetAt?: ISODateTime;
+  /** Unused: the reached date is derived (goalStatus). */
   achievedDate?: ISODate;
 } & (
-    | { type: 'lift'; exerciseId: ID; target: { kind: 'load_reps'; loadKg: number; reps: number } | { kind: 'e1rm'; loadKg: number } }
+    | {
+        type: 'lift';
+        exerciseId: ID;
+        /** Load targets on bodyweight exercises are weight added to bodyweight (negative for assistance), as records compare. */
+        target: { kind: 'load_reps'; loadKg: number; reps: number } | { kind: 'e1rm'; loadKg: number };
+      }
     | { type: 'frequency'; workoutsPerWeek: number }
-    | { type: 'bodyweight'; targetKg: number; startKg: number }
-    | { type: 'form'; exerciseId: ID; joint: Joint; targetDeg: number; startDeg: number }
+    | {
+        type: 'bodyweight';
+        targetKg: number;
+        /** The latest weigh-in when the goal was set. Without one, the first weigh-in after sets the start. */
+        startKg?: number;
+      }
+    | {
+        type: 'form';
+        exerciseId: ID;
+        joint: Joint;
+        targetDeg: number;
+        /** The latest recording's angle when the goal was set. Without one, the first recording after sets the start. */
+        startDeg?: number;
+      }
   );
 
 export type BadgeCategory = 'milestone' | 'strength' | 'consistency' | 'form';
@@ -404,12 +432,66 @@ export type EarnedBadge = {
   earnedDate: ISODate;
 };
 
+/**
+ * Where a week's streak target came from (spec 2.5, G3.10): the weekly goal, the number of
+ * workouts the user's plans scheduled that week, or 1 when nothing was planned. 'legacy' weeks
+ * ended before G3.10 and keep the rule they were judged by then: the weekly goal, else 4.
+ */
+export type StreakTargetSource = 'goal' | 'plan' | 'minimum' | 'legacy';
+
+/**
+ * A finished week's streak target, stored once the week has ended so later goal or plan edits
+ * never rewrite a past streak (G3.10). One per week and week-start setting.
+ */
+export type FrozenWeekTarget = {
+  /** The week's first day under `weekStartsOn`. */
+  weekStart: ISODate;
+  weekStartsOn: Weekday;
+  target: number;
+  source: StreakTargetSource;
+  /** Workouts the plans scheduled that week, whatever the source. */
+  planned: number;
+  /**
+   * Those workouts' dates, one per workout, as stored when the week was. A week regrouped by a
+   * week-start switch counts its planned workouts from these (sqliteRepository regroupedPlanned).
+   * Missing on rows stored before G3.10 shipped.
+   */
+  plannedDates?: ISODate[];
+  /**
+   * The same workouts' occurrence ids, in the same order. Perfect Week checks a finished week still
+   * holds each of them. Missing on rows without `plannedDates`, and on a regrouped week that took a day
+   * from a row without them.
+   */
+  plannedIds?: ID[];
+  /** When it was stored (a timestamp). */
+  frozenAt: string;
+};
+
+/** One week of the streak, as Home and badges read it. */
+export type StreakWeek = {
+  weekStart: ISODate;
+  target: number;
+  source: StreakTargetSource;
+  /** Workouts the plans scheduled that week (done, missed, or upcoming). */
+  planned: number;
+  /** Workouts that count, done that week. */
+  completed: number;
+  met: boolean;
+  /** Whether the target is the stored one (weeks that have ended) rather than live. */
+  frozen: boolean;
+};
+
 export type StreakState = {
   currentWeeks: number;
   longestWeeks: number;
   /** Workouts that count toward this week's target (partials with at least 1 working set count). */
   thisWeekCompleted: number;
   thisWeekTarget: number;
+  thisWeekSource: StreakTargetSource;
+  /** Workouts the plans scheduled this week (done, missed, or upcoming). */
+  thisWeekPlanned: number;
+  /** Oldest first, from the first week with a counted workout through this week (empty before any). */
+  weeks: StreakWeek[];
   /** milestoneDates[n - 1] is the day a streak first reached n weeks, for streak badges. */
   milestoneDates: ISODate[];
   /** Longest-streak records, oldest first. */

@@ -3,68 +3,34 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Card, Icon, PressableScale, ProgressBar, ProgressRing } from '@/components/ui';
 import type { EarnedBadge, Goal, UnitSystem } from '@/data/types';
-import { formatLoad, formatMonthDay, plural } from '@/lib/format';
+import { formatMonthDay } from '@/lib/format';
 import { useTextScale } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { BADGE_ICON, type NextBadge } from './badges';
-import type { GoalProgress } from './goals';
+import { goalRowText, type GoalTag } from './goalRowText';
+import type { GoalStatus } from './goals';
 import type { Win } from './wins';
 
 // ---------------------------------------------------------------------------
 // Goals (user's pick: bars with pace)
 
-/** `spoken` says "of" instead of "/" and "estimated one-rep max" instead of "e1RM". */
-function progressText(goal: Goal, p: GoalProgress, units: UnitSystem, spoken = false): string {
-  switch (goal.type) {
-    case 'lift': {
-      const current = p.current !== undefined ? formatLoad(p.current, units) : 'Not logged yet';
-      const target = formatLoad(p.target, units);
-      if (spoken) return `${current} of ${target}${goal.target.kind === 'e1rm' ? ' estimated one-rep max' : ` for ${plural(goal.target.reps, 'rep')}`}`;
-      return `${current} / ${target}${goal.target.kind === 'e1rm' ? ' e1RM' : ` × ${goal.target.reps}`}`;
-    }
-    case 'frequency':
-      return `${p.current ?? 0} of ${plural(p.target, 'workout')} this week`;
-    case 'bodyweight':
-      return `${p.current !== undefined ? formatLoad(p.current, units) : '—'} now · target ${formatLoad(p.target, units)}`;
-    case 'form':
-      return `${p.current !== undefined ? `${Math.round(p.current)}°` : 'No recording yet'} now · target ${p.target}° ${goal.joint} angle`;
-  }
-}
-
-function paceTag(progress: GoalProgress) {
-  return progress.achieved
-    ? { label: 'Done', success: true, icon: 'checkmark' as const }
-    : progress.pace === 'on_track'
-      ? { label: 'On track', success: true }
-      : progress.pace === 'behind'
-        ? { label: 'Behind pace', success: false }
-        : undefined;
-}
-
-function PaceTag({ progress }: { progress: GoalProgress }) {
+function GoalTagPill({ tag }: { tag: GoalTag }) {
   const { colors } = useAppTheme();
-  const tag = paceTag(progress);
-  if (!tag) return null;
   return (
-    <View style={[styles.tag, { backgroundColor: tag.success ? colors.successSubtle : colors.input }]}>
-      {'icon' in tag && tag.icon && <Icon name={tag.icon} color={colors.successText} size={11} weight="bold" />}
-      <AppText variant="caption" weight="700" tone={tag.success ? 'success' : 'warning'}>
+    <View style={[styles.tag, { backgroundColor: tag.tone === 'success' ? colors.successSubtle : colors.input }]}>
+      {tag.icon && <Icon name={tag.icon} color={colors.successText} size={11} weight="bold" />}
+      <AppText variant="caption" weight="700" tone={tag.tone === 'success' ? 'success' : tag.tone === 'warning' ? 'warning' : 'secondary'}>
         {tag.label}
       </AppText>
     </View>
   );
 }
 
-export function GoalRow({ goal, progress, units, separator, onPress }: { goal: Goal; progress: GoalProgress; units: UnitSystem; separator: boolean; onPress: () => void }) {
+export function GoalRow({ goal, progress, units, separator, onPress }: { goal: Goal; progress: GoalStatus; units: UnitSystem; separator: boolean; onPress: () => void }) {
   const { colors } = useAppTheme();
   const { large } = useTextScale();
-  const daysLeft = progress.daysLeft !== undefined && !progress.achieved ? `${plural(progress.daysLeft, 'day')} left` : undefined;
-  const meta = [progressText(goal, progress, units), daysLeft].filter(Boolean).join('  ·  ');
-  const pace = paceTag(progress)?.label;
-  const spoken = [`${goal.title}.`, pace && `${pace}.`, `${Math.round(progress.fraction * 100)} percent.`, [progressText(goal, progress, units, true), daysLeft].filter(Boolean).join(', ')]
-    .filter(Boolean)
-    .join(' ');
+  const { tag, meta, spoken } = goalRowText(goal, progress, units);
   return (
     <Pressable
       onPress={onPress}
@@ -78,7 +44,7 @@ export function GoalRow({ goal, progress, units, separator, onPress }: { goal: G
         <AppText variant="headline" style={large ? styles.grow : styles.flex}>
           {goal.title}
         </AppText>
-        <PaceTag progress={progress} />
+        {tag && <GoalTagPill tag={tag} />}
       </View>
       <ProgressBar value={progress.fraction} label={goal.title} />
       <AppText variant="footnote" tone="secondary" numeric>
@@ -98,6 +64,7 @@ export function WinsFeed({ wins }: { wins: Win[] }) {
     <Card padding="none">
       {wins.map((win, i) => {
         // Gold for PRs needs the darker on-surface gold on the light input well (raw gold is 1.7:1 there).
+        // Badges and goals reached share the green icon.
         const color = win.kind === 'pr' ? colors.prOnSurface : win.kind === 'form' ? colors.accentText : colors.successFill;
         const date = (
           <AppText variant="caption" tone="secondary" numeric>

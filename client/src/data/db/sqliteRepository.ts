@@ -1,18 +1,110 @@
+import { badgeState, type BadgeInput } from '../badges';
+import { countsAsWorkout } from '../calculations';
 import { builtinExercises, starterTemplates } from '../content';
-import { addDays, todayISO } from '../dates';
+import { addDays, daysBetween, startOfWeek, todayISO } from '../dates';
 import { withPreferenceDefaults } from '../preferences';
-import { deriveBadges, deriveStreak } from '../progress';
+import { deriveStreak } from '../progress';
 import { derivePersonalRecords } from '../records';
 import { SCHEDULE_AHEAD_DAYS, type DataRepository, type DateRange } from '../repository';
 import { planShiftFor, scheduleOccurrences, shiftCovers, shiftedDate } from '../schedule';
-import type { BodyweightEntry, Exercise, FormReport, Goal, ID, ISODate, LoggedSet, Plan, PlanShift, Preferences, Recording, ScheduledOccurrence, WorkoutSession } from '../types';
+import type {
+  BodyweightEntry,
+  Exercise,
+  FormReport,
+  FrozenWeekTarget,
+  Goal,
+  ID,
+  ISODate,
+  LoggedSet,
+  Plan,
+  PlanShift,
+  Preferences,
+  PersonalRecord,
+  Recording,
+  ScheduledOccurrence,
+  StreakState,
+  Weekday,
+  WorkoutSession,
+} from '../types';
+import { plannedPerWeek, weekTargetsFromHistory, type WeekTarget, type WeekTargetLookup } from '../weekTargets';
 import { blankAutoFilledPlanRests } from './blankPlanRests';
 import { insertRowIfMissing, joinSessions, nowISO, putRow, readAll, readAllSync, readOne, readOneSync, splitSession, tombstone } from './rows';
 import type { SqlDb, SqlValue } from './sql';
+import { legacyStreakRule, upgradeToG310 } from './upgradeG310';
 
 const PREFERENCES_ID = 'me';
-/** Weekly target when there's no frequency goal (refined in G3.10). */
-const DEFAULT_WEEKLY_TARGET = 4;
+
+/**
+ * After a week-start switch: the week stored under another setting that a week starting `week`
+ * takes its target from. That's the stored week sharing most of its days (4 or more), the newest
+ * if two settings have one.
+ */
+function carriedOver(week: ISODate, others: FrozenWeekTarget[]): FrozenWeekTarget | undefined {
+  let best: { row: FrozenWeekTarget; shared: number } | undefined;
+  for (const row of others) {
+    const shared = 7 - Math.abs(daysBetween(row.weekStart, week));
+    if (shared < 4) continue;
+    if (!best || shared > best.shared || (shared === best.shared && row.frozenAt > best.row.frozenAt)) best = { row, shared };
+  }
+  return best?.row;
+}
+
+/**
+ * A regrouped week's target after a week-start switch, so the switch keeps whether the old week was
+ * met: the old week's target, lowered to what the regrouped week completed if the old week was met,
+ * raised past it if it wasn't. (A met old week whose workouts all fall outside the regrouped week
+ * can't stay met: a target is at least 1.)
+ */
+export function regroupedTarget(oldTarget: number, oldCompleted: number, completed: number): number {
+  const target = Math.max(1, Math.round(oldTarget));
+  return oldCompleted >= target ? Math.min(target, Math.max(1, completed)) : Math.max(target, completed + 1);
+}
+
+/** A scheduled workout as a stored week keeps it: its date, and its occurrence id where known. */
+export type PlannedSlot = { date: ISODate; id?: ID };
+
+/** A stored week's planned workouts, when it stored their dates. */
+const slotsOf = (row: FrozenWeekTarget): PlannedSlot[] | undefined =>
+  row.plannedDates?.map((date, i) => (row.plannedIds?.[i] ? { date, id: row.plannedIds[i] } : { date }));
+
+/**
+ * A regrouped week's scheduled workouts after a week-start switch, one per workout, for its planned
+ * count and Perfect Week. Each day counts what the old setting's stored week covering it had on that
+ * day when it was stored (the earliest, if two settings have one), so a push or plan delete after
+ * that week ended can't take a missed workout out of the regrouped week. A day no stored week covers
+ * with dates (the old setting's week under way at the switch) counts what's stored now: `now` is the
+ * workouts stored in the regrouped week. A workout pushed from one old week into the next after the
+ * first was stored is in both: it counts once, where it was stored last (now is latest).
+ */
+export function regroupedPlanned(week: ISODate, others: FrozenWeekTarget[], now: PlannedSlot[]): PlannedSlot[] {
+  // Each workout found, with when its source was stored (undefined: now).
+  const found: { slot: PlannedSlot; storedAt?: string }[] = [];
+  for (let i = 0; i < 7; i++) {
+    const day = addDays(week, i);
+    let snapshot: FrozenWeekTarget | undefined;
+    for (const row of others) {
+      if (!row.plannedDates || day < row.weekStart || day > addDays(row.weekStart, 6)) continue;
+      if (!snapshot || row.frozenAt < snapshot.frozenAt) snapshot = row;
+    }
+    const stored = snapshot && slotsOf(snapshot);
+    for (const slot of stored ?? now) if (slot.date === day) found.push({ slot, storedAt: stored ? snapshot!.frozenAt : undefined });
+  }
+  const later = (a?: string, b?: string) => a === undefined || (b !== undefined && a > b);
+  const last = new Map<ID, (typeof found)[number]>();
+  for (const f of found) {
+    const seen = f.slot.id === undefined ? undefined : last.get(f.slot.id);
+    if (f.slot.id !== undefined && (!seen || later(f.storedAt, seen.storedAt))) last.set(f.slot.id, f);
+  }
+  return found.filter((f) => f.slot.id === undefined || last.get(f.slot.id) === f).map((f) => f.slot);
+}
+
+/** A reopened workout (in progress again, its completion time kept) as it was before the reopen. */
+const asBeforeReopen = (s: WorkoutSession): WorkoutSession => (s.status === 'in_progress' && s.completedAt ? { ...s, status: 'completed' } : s);
+/** The same list with reopened workouts as they were before (the same array when there are none). */
+const beforeReopens = (sessions: WorkoutSession[]): WorkoutSession[] =>
+  sessions.some((s) => s.status === 'in_progress' && s.completedAt) ? sessions.map(asBeforeReopen) : sessions;
+/** Sessions that were finished, reopened ones included (in progress again only while open). */
+const FINISHED_CLAUSE = "status = 'completed' OR (status = 'in_progress' AND completed_at IS NOT NULL)";
 
 const occurrenceColumns = (o: ScheduledOccurrence) => ({ plan_id: o.planId, scheduled_date: o.scheduledDate, session_id: o.sessionId ?? null });
 const sessionColumns = (s: WorkoutSession) => ({
@@ -40,9 +132,18 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
   const today = options.today ?? todayISO;
   const builtinById = new Map(builtinExercises.map((e) => [e.id, e]));
 
-  // Every completed and in-progress session, loaded once and reused until the next write.
+  // Every completed and in-progress session, loaded once and reused until the next write. Records
+  // and the streak are derived from them, so they're kept until the next write too (the streak only
+  // for the day it was read: a week ends, and a reached goal stops counting, at midnight).
   let sessionsCache: Promise<WorkoutSession[]> | null = null;
+  let recordsCache: Promise<PersonalRecord[]> | null = null;
+  let streakCache: { day: ISODate; streak: Promise<StreakState> } | null = null;
   let scheduledThrough: ISODate | null = null;
+  const dropCaches = () => {
+    sessionsCache = null;
+    recordsCache = null;
+    streakCache = null;
+  };
 
   /** Runs a write atomically, then drops cached reads. */
   const write = (task: () => void): Promise<void> => {
@@ -52,7 +153,7 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
     } catch (error) {
       return Promise.reject(error);
     } finally {
-      sessionsCache = null;
+      dropCaches();
     }
   };
 
@@ -99,16 +200,217 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
   const chronological = (sessions: WorkoutSession[]) =>
     sessions.filter((s) => s.status === 'completed').sort((a, b) => (a.completedAt ?? '').localeCompare(b.completedAt ?? ''));
 
-  const weeklyTarget = async () => {
-    const goals = await readAll<Goal>(db, 'goals');
-    // The newest frequency goal wins if there's more than one.
-    const frequency = goals.filter((g) => g.type === 'frequency').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
-    return frequency?.type === 'frequency' ? frequency.workoutsPerWeek : DEFAULT_WEEKLY_TARGET;
+  /** Every personal record, derived once per write (the records read and badges share it). */
+  const allRecords = () => {
+    if (recordsCache) return recordsCache;
+    const loading = (async () => derivePersonalRecords(chronological(await allSessions()), await exerciseMap()))();
+    recordsCache = loading;
+    loading.catch(() => {
+      if (recordsCache === loading) recordsCache = null;
+    });
+    return loading;
   };
+
   const preferencesSync = (): Preferences => {
     return withPreferenceDefaults(readOneSync<Preferences>(db, 'preferences', PREFERENCES_ID));
   };
-  const getStreak = async () => deriveStreak(await allSessions(), today(), await weeklyTarget(), preferencesSync().weekStartsOn);
+
+  /**
+   * Finished workouts, read synchronously (inside a write's transaction). A reopened workout counts
+   * as it was before the reopen while it's open, so looking at Home mid-edit can't freeze a finished
+   * week with a target from a moment when that workout didn't count.
+   */
+  const finishedSessionsSync = (): WorkoutSession[] => {
+    const headers = readAllSync<WorkoutSession>(db, 'sessions', FINISHED_CLAUSE);
+    if (!headers.length) return [];
+    const sets = db.getAllSync<{ session_id: string; entry_id: string; position: number; data: string }>(
+      `SELECT session_id, entry_id, position, data FROM logged_sets
+       WHERE deleted_at IS NULL AND session_id IN (SELECT id FROM sessions WHERE deleted_at IS NULL AND (${FINISHED_CLAUSE}))`,
+      [],
+    );
+    return joinSessions(headers, sets).map(asBeforeReopen);
+  };
+
+  /**
+   * The weekly goals the streak target reads (the newest one that isn't archived wins; goals.ts),
+   * and the workouts that decide whether one is archived (`sessions`, with reopened workouts as
+   * they were before). The streak reads goals only through here. Stays synchronous: writes call
+   * it, through freezeEndedWeeks, inside their transaction.
+   */
+  const weeklyGoalsSync = (sessions: () => WorkoutSession[]) => {
+    const goals = readAllSync<Goal>(db, 'goals').filter((g) => g.type === 'frequency');
+    // Only a weekly goal with a deadline can be reached, and so archived; only then are workouts read.
+    return { goals, sessions: goals.some((g) => g.deadline) ? sessions() : [] };
+  };
+
+  /** Scheduled workouts from `from` through `to`, from any plan, on their dates after pushes. */
+  const plannedBetween = (from: ISODate, to: ISODate) =>
+    db
+      .getAllSync<{ id: string; scheduled_date: string }>('SELECT id, scheduled_date FROM occurrences WHERE deleted_at IS NULL AND scheduled_date BETWEEN ? AND ?', [from, to])
+      .map((row) => ({ id: row.id, scheduledDate: row.scheduled_date }));
+
+  /**
+   * Stores the streak target of every finished week that doesn't have one yet (G3.10), so a later
+   * goal or plan edit can't rewrite a past streak. Lazy: it runs when the streak is read, and inside
+   * every write that can change a finished week's target, before the change (writeAfterFreeze).
+   * - A week is frozen the first time this runs after it ends, with the rules as they stand then.
+   * - Weeks that ended before the update to G3.10 keep G3.9's rule (upgradeG310.ts).
+   * - Rows belong to a week-start setting. A switch (savePreferences, `carry`) freezes the weeks
+   *   that ended under the old setting at once: each takes the stored target of the old setting's
+   *   week it shares most days with, adjusted so it stays met or not met (regroupedTarget), so the
+   *   switch can't rewrite a past streak. Its planned count is its own: the workouts on its days as
+   *   the old weeks stored them (regroupedPlanned). Weeks that end after the switch, including
+   *   the one under way when it was made, get the rules as they stand when they end, like any other
+   *   week. Switching back finds the old setting's rows again.
+   * - Covers the weeks from the first finished workout or stored scheduled workout, whichever is
+   *   earlier, to last week. Weeks before the first counted workout only matter to Perfect Week.
+   * - `sessions`: every workout, when the caller already has them. Call inside a transaction.
+   */
+  const freezeEndedWeeks = ({ carry = false, sessions }: { carry?: boolean; sessions?: WorkoutSession[] } = {}) => {
+    const first = db.getFirstSync<{ day: string | null }>(
+      `SELECT MIN(day) AS day FROM (
+         SELECT MIN(day) AS day FROM sessions WHERE deleted_at IS NULL AND (${FINISHED_CLAUSE})
+         UNION ALL SELECT MIN(scheduled_date) AS day FROM occurrences WHERE deleted_at IS NULL)`,
+      [],
+    )?.day;
+    if (!first) return;
+    const { weekStartsOn } = preferencesSync();
+    const from = startOfWeek(first, weekStartsOn);
+    const last = addDays(startOfWeek(today(), weekStartsOn), -7);
+    if (from > last) return;
+    const stored = db.getAllSync<{ week_start: string }>(
+      'SELECT week_start FROM streak_weeks WHERE week_starts_on = ? AND week_start BETWEEN ? AND ? AND deleted_at IS NULL',
+      [weekStartsOn, from, last],
+    );
+    if (stored.length === daysBetween(from, last) / 7 + 1) return;
+    const frozen = new Set(stored.map((row) => row.week_start));
+    const otherSettings = carry
+      ? readAllSync<FrozenWeekTarget>(db, 'streak_weeks', 'week_starts_on != ? AND week_start BETWEEN ? AND ?', [weekStartsOn, addDays(from, -6), addDays(last, 6)])
+      : [];
+    const legacy = legacyStreakRule(db);
+    const occurrences = plannedBetween(from, addDays(last, 6));
+    const planned = plannedPerWeek(occurrences, weekStartsOn);
+    // Each week's scheduled workouts, stored with it for Perfect Week and a later switch (regroupedPlanned).
+    const slotsByWeek = new Map<ISODate, PlannedSlot[]>();
+    for (const { id, scheduledDate } of occurrences) {
+      const week = startOfWeek(scheduledDate, weekStartsOn);
+      slotsByWeek.set(week, [...(slotsByWeek.get(week) ?? []), { date: scheduledDate, id }]);
+    }
+    const byDate = (a: PlannedSlot, b: PlannedSlot) => a.date.localeCompare(b.date) || (a.id ?? '').localeCompare(b.id ?? '');
+    // Each worked out only if a week needs it: most freezes are one week, carried, or legacy.
+    let finished: WorkoutSession[] | undefined;
+    const finishedOnce = () => (finished ??= sessions ? beforeReopens(sessions) : finishedSessionsSync());
+    let live: WeekTargetLookup | undefined;
+    const rulesNow = (week: ISODate) => (live ??= weekTargetsFromHistory({ ...weeklyGoalsSync(finishedOnce), occurrences, weekStartsOn, today: today() }))(week);
+    let countedDays: ISODate[] | undefined;
+    /** Workouts that count, done in the 7 days from `weekStart` (as deriveStreak counts a week). */
+    const completedIn = (weekStart: ISODate) => {
+      countedDays ??= finishedOnce()
+        .filter(countsAsWorkout)
+        .map((s) => s.completedDate!);
+      const end = addDays(weekStart, 6);
+      return countedDays.filter((d) => d >= weekStart && d <= end).length;
+    };
+    const frozenAt = nowISO();
+    for (let week = from; week <= last; week = addDays(week, 7)) {
+      if (frozen.has(week)) continue;
+      const old = carriedOver(week, otherSettings);
+      let kept: WeekTarget;
+      let slots = (slotsByWeek.get(week) ?? []).sort(byDate);
+      if (old) {
+        // The carried target keeps the streak as it was. The planned workouts are the regrouped
+        // week's own, as its days stood when the old weeks were stored (Perfect Week reads them).
+        slots = regroupedPlanned(week, otherSettings, slots);
+        kept = { target: regroupedTarget(old.target, completedIn(old.weekStart), completedIn(week)), source: old.source, planned: slots.length };
+      } else {
+        if (legacy && addDays(week, 6) < legacy.before) kept = { target: legacy.target, source: 'legacy', planned: planned.get(week) ?? 0 };
+        else kept = rulesNow(week);
+        // A week frozen at a switch without a week to carry from (a switch made on its last day)
+        // still takes its days as the old setting's stored weeks had them, for Perfect Week. Its
+        // target is unchanged, so the streak is too.
+        if (otherSettings.length) slots = regroupedPlanned(week, otherSettings, slots);
+      }
+      const plannedIds = slots.every((s) => s.id) ? slots.map((s) => s.id!) : undefined;
+      const row: FrozenWeekTarget = {
+        weekStart: week,
+        weekStartsOn,
+        target: kept.target,
+        source: kept.source,
+        planned: kept.planned,
+        plannedDates: slots.map((s) => s.date),
+        ...(plannedIds && { plannedIds }),
+        frozenAt,
+      };
+      insertRowIfMissing(db, 'streak_weeks', `${week}@${weekStartsOn}`, row, { week_start: week, week_starts_on: weekStartsOn }, frozenAt);
+    }
+  };
+
+  /** This week's target as things stand now (and any finished week not frozen yet). */
+  const liveTarget = (weekStart: ISODate, weekStartsOn: Weekday, weekly: ReturnType<typeof weeklyGoalsSync>) =>
+    weekTargetsFromHistory({ ...weekly, occurrences: plannedBetween(weekStart, addDays(weekStart, 6)), weekStartsOn, today: today() })(weekStart);
+
+  const readStreak = async (day: ISODate): Promise<StreakState> => {
+    ensureSchedule();
+    const sessions = await allSessions();
+    db.withTransactionSync(() => freezeEndedWeeks({ sessions }));
+    const { weekStartsOn } = preferencesSync();
+    const stored = await readAll<FrozenWeekTarget>(db, 'streak_weeks', 'week_starts_on = ? AND week_start < ?', [weekStartsOn, startOfWeek(day, weekStartsOn)]);
+    const frozen = new Map(stored.map((w) => [w.weekStart, w]));
+    const weekly = weeklyGoalsSync(() => beforeReopens(sessions));
+    const targets: WeekTargetLookup = (week) => {
+      const kept = frozen.get(week);
+      return kept ? { target: kept.target, source: kept.source, planned: kept.planned, frozen: true } : liveTarget(week, weekStartsOn, weekly);
+    };
+    return deriveStreak(sessions, day, targets, weekStartsOn);
+  };
+
+  /** The streak, worked out once per write and day (Home's streak and its badges share it). */
+  const getStreak = (): Promise<StreakState> => {
+    const day = today();
+    if (streakCache?.day === day) return streakCache.streak;
+    const loading = readStreak(day);
+    streakCache = { day, streak: loading };
+    loading.catch(() => {
+      if (streakCache?.streak === loading) streakCache = null;
+    });
+    return loading;
+  };
+
+  /** Everything badges are derived from (badges.ts). */
+  const badgeInput = async (): Promise<BadgeInput> => {
+    const streak = await getStreak();
+    const sessions = await allSessions();
+    const exercisesById = await exerciseMap();
+    const { units, weekStartsOn } = preferencesSync();
+    // Every finished week's planned count, weeks before the first counted workout too (Perfect Week).
+    const frozenWeeks = await readAll<FrozenWeekTarget>(db, 'streak_weeks', 'week_starts_on = ?', [weekStartsOn]);
+    return {
+      sessions,
+      exercisesById,
+      formReports: await readAll<FormReport>(db, 'form_reports'),
+      records: await allRecords(),
+      streak,
+      frozenWeeks: frozenWeeks.map(({ weekStart, planned, plannedDates, plannedIds }) => ({ weekStart, planned, plannedDates, plannedIds })),
+      // Every stored scheduled workout, past and upcoming (getStreak just filled the calendar).
+      occurrences: await readAll<ScheduledOccurrence>(db, 'occurrences'),
+      plans: await readAll<Plan>(db, 'plans'),
+      planVersions: await readAll<Plan>(db, 'plan_versions'),
+      bodyweight: await readAll<BodyweightEntry>(db, 'bodyweight'),
+      units,
+      weekStartsOn,
+      today: today(),
+    };
+  };
+
+  /**
+   * A write that can change a week's streak target (goals, plans, pushes, the week start): finished
+   * weeks are frozen first, in the same transaction, so the change only reaches this week on.
+   */
+  const writeAfterFreeze = (task: () => void) =>
+    write(() => {
+      freezeEndedWeeks();
+      task();
+    });
 
   /** A plan's pushes forward that haven't been undone. */
   const shiftsFor = (planId: ID) => readAllSync<PlanShift>(db, 'plan_shifts', 'plan_id = ?', [planId]);
@@ -168,12 +470,14 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
 
   // Once per database: plans made before G3.8 lose the rests the app filled in (see blankPlanRests.ts).
   blankAutoFilledPlanRests(db);
+  // Once per database that had workouts or goals before G3.10: keep what they meant then.
+  upgradeToG310(db, today());
   ensureSchedule();
 
   return {
     today,
     forgetCache: () => {
-      sessionsCache = null;
+      dropCaches();
       scheduledThrough = null;
     },
 
@@ -198,15 +502,12 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
     getSession: async (id) => (await loadSessions('id = ?', [id]))[0],
     listBodyweight: () => readAll<BodyweightEntry>(db, 'bodyweight', undefined, [], 'date'),
     listPersonalRecords: async (filter) => {
-      const records = derivePersonalRecords(chronological(await allSessions()), await exerciseMap());
+      const records = await allRecords();
       return records.filter((r) => (!filter?.exerciseId || r.exerciseId === filter.exerciseId) && (!filter?.since || r.achievedDate >= filter.since));
     },
     listGoals: () => readAll<Goal>(db, 'goals'),
-    listBadges: async () => {
-      const sessions = chronological(await allSessions());
-      const reports = (await readAll<FormReport>(db, 'form_reports')).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-      return deriveBadges(sessions, await exerciseMap(), reports, await getStreak());
-    },
+    listBadges: async () => badgeState(await badgeInput()).earned,
+    getBadges: async () => badgeState(await badgeInput(), Infinity),
     getStreak,
     listFormReports: (filter) => (filter?.exerciseId ? readAll<FormReport>(db, 'form_reports', 'exercise_id = ?', [filter.exerciseId]) : readAll<FormReport>(db, 'form_reports')),
     getFormReport: (id) => readOne<FormReport>(db, 'form_reports', id),
@@ -214,8 +515,10 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
 
     // Writes
 
+    // Workouts decide when a weekly goal with a deadline is reached and archived, and so a week's
+    // target: finished weeks are frozen first. A reopened workout counts as it was (finishedSessionsSync).
     saveSession: (session) =>
-      write(() => {
+      writeAfterFreeze(() => {
         const { header, sets } = splitSession(session);
         putRow(db, 'sessions', session.id, header, sessionColumns(session));
         const keep = new Set(sets.map((s) => s.id));
@@ -233,7 +536,8 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
       }),
 
     deleteSession: (sessionId) =>
-      write(() => {
+      // A freed workout can move back to a date in a finished week (an undo while it was started).
+      writeAfterFreeze(() => {
         const session = readOneSync<WorkoutSession>(db, 'sessions', sessionId);
         if (!session) return;
         tombstone(db, 'sessions', sessionId);
@@ -256,20 +560,20 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
       }),
 
     updatePlanWorkout: (planId, workoutId, blocks) =>
-      write(() => {
+      writeAfterFreeze(() => {
         const plan = readOneSync<Plan>(db, 'plans', planId);
         if (!plan) throw new Error(`Plan ${planId} not found`);
         commitPlan({ ...plan, version: plan.version + 1, updatedAt: nowISO(), workouts: plan.workouts.map((w) => (w.id === workoutId ? { ...w, blocks } : w)) });
       }),
 
     savePlan: (plan) =>
-      write(() => {
+      writeAfterFreeze(() => {
         const existing = readOneSync<Plan>(db, 'plans', plan.id);
         commitPlan({ ...plan, version: existing ? existing.version + 1 : plan.version, updatedAt: nowISO() });
       }),
 
     deletePlan: (planId) =>
-      write(() => {
+      writeAfterFreeze(() => {
         tombstone(db, 'plans', planId);
         // Workouts that were never started go, past (missed) ones included; logged history stays.
         const unstarted = db.getAllSync<{ id: string }>('SELECT id FROM occurrences WHERE plan_id = ? AND session_id IS NULL AND deleted_at IS NULL', [planId]);
@@ -278,7 +582,7 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
       }),
 
     pushPlanForward: (occurrenceId, shiftId) =>
-      write(() => {
+      writeAfterFreeze(() => {
         const occurrence = readOneSync<ScheduledOccurrence>(db, 'occurrences', occurrenceId);
         const plan = occurrence ? readOneSync<Plan>(db, 'plans', occurrence.planId) : undefined;
         if (!occurrence || !plan) throw new Error('That workout is no longer scheduled');
@@ -298,7 +602,7 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
       }),
 
     undoPlanShift: (shiftId) =>
-      write(() => {
+      writeAfterFreeze(() => {
         const shift = readOneSync<PlanShift>(db, 'plan_shifts', shiftId);
         if (!shift) return;
         tombstone(db, 'plan_shifts', shift.id);
@@ -313,8 +617,8 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
         putRow(db, 'custom_exercises', exercise.id, exercise);
       }),
 
-    saveGoal: (goal) => write(() => void putRow(db, 'goals', goal.id, goal)),
-    deleteGoal: (goalId) => write(() => void tombstone(db, 'goals', goalId)),
+    saveGoal: (goal) => writeAfterFreeze(() => void putRow(db, 'goals', goal.id, goal)),
+    deleteGoal: (goalId) => writeAfterFreeze(() => void tombstone(db, 'goals', goalId)),
 
     saveBodyweight: (entry) =>
       write(() => {
@@ -355,6 +659,12 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
         }
       }),
 
-    savePreferences: (preferences) => write(() => void putRow(db, 'preferences', PREFERENCES_ID, preferences)),
+    // Weeks are frozen under the old week start first, so switching back finds them again. Then the
+    // weeks that ended under it are frozen under the new one, carrying their targets over.
+    savePreferences: (preferences) =>
+      writeAfterFreeze(() => {
+        putRow(db, 'preferences', PREFERENCES_ID, preferences);
+        freezeEndedWeeks({ carry: true });
+      }),
   };
 }

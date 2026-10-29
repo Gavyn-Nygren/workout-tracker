@@ -1,3 +1,4 @@
+import type { BadgeState } from './badges';
 import type {
   BodyweightEntry,
   EarnedBadge,
@@ -47,7 +48,10 @@ export interface DataRepository {
   listBodyweight(): Promise<BodyweightEntry[]>;
   listPersonalRecords(filter?: { exerciseId?: ID; since?: ISODate }): Promise<PersonalRecord[]>;
   listGoals(): Promise<Goal[]>;
+  /** Badges earned, each dated by the workout, record, or report that reached it (badges.ts). */
   listBadges(): Promise<EarnedBadge[]>;
+  /** Badges earned, progress toward the rest, and every Next up candidate, nearest first. */
+  getBadges(): Promise<BadgeState>;
   getStreak(): Promise<StreakState>;
   listFormReports(filter?: { exerciseId?: ID }): Promise<FormReport[]>;
   getFormReport(id: ID): Promise<FormReport | undefined>;
