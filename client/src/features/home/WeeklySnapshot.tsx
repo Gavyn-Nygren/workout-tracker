@@ -8,6 +8,7 @@ import { useTextScale } from '@/theme/layout';
 import { SchemeOverride, useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import type { DayItem } from '../today/agenda';
+import { DAY_WORDS, dayStatus, targetCaption, type DayStatus } from './weekDots';
 
 type Props = {
   streak: StreakState;
@@ -20,17 +21,6 @@ type Props = {
 /** Text inside the ring and under the narrow day columns stops growing here, like WeekStrip. */
 const COMPACT_TEXT_MAX = 1.3;
 
-type DayStatus = 'done' | 'partial' | 'missed' | 'planned' | 'rest';
-const DAY_WORDS: Record<Exclude<DayStatus, 'rest'>, string> = { done: 'done', partial: 'partly done', missed: 'missed', planned: 'planned' };
-
-function dayStatus(items: DayItem[]): DayStatus {
-  if (items.some((x) => x.status === 'completed')) return 'done';
-  if (items.some((x) => x.status === 'partial')) return 'partial';
-  if (items.some((x) => x.status === 'missed')) return 'missed';
-  if (items.some((x) => x.status === 'planned' || x.status === 'in_progress')) return 'planned';
-  return 'rest';
-}
-
 /** Home's top card (user's pick): this week's ring, the week streak, and the days at a glance. */
 export function WeeklySnapshot(props: Props) {
   const { scheme } = useAppTheme();
@@ -39,21 +29,6 @@ export function WeeklySnapshot(props: Props) {
       <Body {...props} outerScheme={scheme} />
     </SchemeOverride>
   );
-}
-
-/** Where this week's target comes from, since it can change week to week (G3.10). */
-function targetCaption(streak: StreakState): string {
-  switch (streak.thisWeekSource) {
-    case 'goal':
-      return `Weekly goal: ${streak.thisWeekTarget}`;
-    case 'plan':
-      return `${streak.thisWeekPlanned} planned this week`;
-    case 'minimum':
-      return 'Nothing planned this week';
-    // Only weeks that ended before G3.10; this week never is.
-    case 'legacy':
-      return `Weekly target: ${streak.thisWeekTarget}`;
-  }
 }
 
 function message(streak: StreakState, daysLeft: number): string {
@@ -74,7 +49,8 @@ function Body({ streak, week, today, onPress, outerScheme }: Props & { outerSche
     .filter((d) => d.status !== 'rest')
     .map((d) => `${formatWeekday(d.date)} ${DAY_WORDS[d.status as Exclude<DayStatus, 'rest'>]}`)
     .join(', ');
-  const caption = targetCaption(streak);
+  // Where this week's target comes from, since it can change week to week (G3.10).
+  const caption = targetCaption({ source: streak.thisWeekSource, target: streak.thisWeekTarget, planned: streak.thisWeekPlanned }, { thisWeek: true });
   const spoken = [
     `This week: ${streak.thisWeekCompleted} of ${plural(streak.thisWeekTarget, 'workout')}.`,
     `${caption}.`,

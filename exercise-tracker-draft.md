@@ -168,7 +168,7 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
   - Templates that need equipment the user lacks are left out.
   - The rest are scored by goal → category, experience level, and days per week, with ready-to-use templates first.
 - **Tour** (user's pick: swipeable cards): five cards (Today, logging and rest, form recording, progress, goals and streaks), illustrated with the app's own components. Skip any time, and replay from Profile → About.
-- **Notification permission:** the first time a notification type is turned on, an explainer screen lists the benefits before iOS asks. If permission was denied earlier, it links to iOS Settings instead.
+- **Notification permission:** the first time a notification type is turned on, an explainer screen lists the benefits before iOS asks. If permission was denied earlier, it links to iOS Settings instead. The first rest and the first plan scheduled also offer it once (2.6, 2.11). When iOS has notifications off, Profile → Notifications says so, with a link to iOS Settings, and the toggles keep their values.
 
 ### 2.5 Plans, calendar, and workout lifecycle
 
@@ -568,7 +568,7 @@ Sumo deadlifts are excluded because they are hard to read from a side view.
   - Then Appearance (System / Light / Dark), and **grouped settings pages** like iOS Settings:
     - **Units & logging:** lb/kg, which also resets rounding to that unit's defaults; RPE or RIR; per-equipment rounding increments, decimals allowed.
     - **Workout defaults:** rest for compound, isolation, and warm-up sets, in 15-second steps; the haptics and PR-celebration toggles.
-    - **Notifications:** five opt-in categories, a reminder time, the weekly summary day and time, and quiet hours with start and end times. A rest timer still alerts during quiet hours.
+    - **Notifications:** five opt-in categories, a reminder time, the weekly summary day and time, and quiet hours with start and end times. A rest timer still alerts during quiet hours. Captions say which week the summary covers and when the reminder time falls in quiet hours, and See latest summary opens Your week (2.11). Form analysis ready reads "Comes with form analysis in a later update" and isn't counted in the row's "N on".
     - **Privacy & security:**
       - The Face ID lock confirms with a real Face ID prompt when you turn it on, and locks after Immediately, 5 min, or 1 hour.
       - The anonymous usage data toggle.
@@ -632,14 +632,30 @@ Sumo deadlifts are excluded because they are hard to read from a side view.
 - rest-timer alarms
 - missed-workout prompts
 - weekly summary
-- form-analysis-complete alerts
+- form-analysis-complete alerts (with form analysis, G4.5; the setting is saved but nothing is sent yet)
 
 **Behaviour**
 
-- All are opt-in and configurable by day, time, and quiet hours.
-- **Permission timing:** the app asks the first time it's relevant (the first rest timer or first plan scheduled), after a short explanation screen. It never asks at launch.
-- **Lock-screen content shows workout details**, for example "Leg Day starts in 30 min" or "Rest over - Set 3 of Squat". The iOS "Show Previews" setting is respected.
-- **Weekly summary:** Sunday evening by default, adjustable. It is computed on-device and delivered as a local notification that opens a summary screen. It covers workouts done vs planned, total volume, PRs, streak status, and form highlights.
+- **All are opt-in** (off until turned on) and set in Profile → Notifications: one reminder time, the weekly summary's day and time, and quiet hours.
+- **Permission timing:** the app asks the first time it's relevant (the first rest timer, the first plan scheduled, or turning a type on in Settings), after a short explanation screen. It never asks at launch.
+  - **First plan scheduled** (user's pick): once per phone, after the first active plan is saved (Start this plan in onboarding, Use this template, Create, or Resume plan), a sheet offers three switches, Workout reminders, Missed workout, and Weekly summary, all on, and one "Turn on notifications" button. It waits until onboarding and the tour are finished, and never shows during a workout or at launch. It's skipped when iOS already said no or one of the three is already on.
+  - Saying no at the iOS prompt shows a message. When iOS has notifications off, Profile → Notifications says so with Open Settings, and the Profile row reads "Off in iOS".
+- **Workout reminders** (user's pick: follow my plans): one at the reminder time (default 5:00 PM) on every day with an unstarted workout from an active plan, for the next 14 days. "Lower A today" / "Upper / Lower Strength · about 60 min"; the minutes are left out when any workout has no estimate.
+  - **Several workouts on one day** get one reminder naming them: "Upper A and Calves & Core today", or "Upper A +2 today" when that's long, with "2 workouts · about 85 min". Once one is done, it names only the rest.
+  - Workouts have dates, not times of day, so there's no "starts in 30 min".
+- **Missed-workout prompt** (user's pick): at 9:00 AM the morning after a training day whose workouts weren't started. "You missed Lower A yesterday" / "Move it to today or keep your schedule. Tap to choose." The time is fixed, not a setting.
+  - Tapping it opens Today, where the push-forward question shows. Nothing moves by itself (2.5).
+  - Only one is pending at a time: the earliest unanswered miss whose prompt is still ahead. It's cancelled once that miss is answered on Today (pushed, kept with Keep schedule, started, or skipped).
+- **Weekly summary:** Sunday 7:00 PM by default. The day can be Sunday or Monday, at any time. It covers the week that ends on that day, so far, or else the week before, and Settings says which ("Covers Mon–Sun, this week so far"). It's computed on-device, and the next two are scheduled.
+  - The text: "4 of 5 workouts · 38,450 lb · 3 PRs. 6-week streak." With a streak at risk: "One more today keeps your 5-week streak." The wording stays neutral when the target is missed, with no emoji. It isn't sent when nothing was planned, nothing was done, and no streak is at stake.
+  - **Tapping it opens Your week** (user's pick: a dark top card like the workout summary's): the done/target ring, the streak, and four tiles (Workouts, Volume, Working sets, PRs); then the week's day dots, the workouts, PRs, and form highlights (hidden when empty). It's worked out when opened, so it's never stale. It also opens from Profile → Notifications → See latest summary.
+  - The counting matches Home (2.7, 2.9).
+- **Kept up to date:** reminders and prompts are planned again after every change: starting, finishing, skipping, or pushing a workout; editing, pausing, or deleting a plan; Erase all data and Load sample data; a setting; a new day; every return to the app; and sign-out, which cancels and clears them. Delivered reminders for workouts that are settled, or for a day that's passed, are cleared from Notification Center.
+- **Quiet hours** apply to everything except the rest alarm. Notifications wait until quiet hours end. A reminder or missed prompt that would wait into the next day is dropped instead ("Lower A today" would be wrong), and Settings says so under the reminder time.
+- **While the app is open:** reminders and missed prompts show as a banner with sound, except on Today or during a workout, where they go to Notification Center silently. The summary shows as a banner without sound. The rest alarm only plays the haptic (2.6). No notification sets a badge.
+- **Lock-screen content shows workout details**, for example "Leg Day today" or "Rest over - Set 3 of Squat". On the lock screen, reminders and missed prompts play the default sound and the summary is silent. The iOS "Show Previews" setting is respected.
+- **Times and time zones:** each notification is set for a moment worked out from the phone's local date and time, so daylight saving time is handled. After a trip to another time zone, they follow the old one until the app is opened.
+- **All local in V1.** Push needs the Phase 4 build and the Phase 5 server.
 
 ### 2.12 Offline and sync
 
@@ -740,7 +756,7 @@ All entities below are versioned and use client-generated IDs. Deletions are sto
 
 | Area | Entities |
 | --- | --- |
-| Account | user (via Supabase Auth), preferences (units, effort scale, theme, rounding increments, rest defaults, notification settings), devices, push tokens, consents, onboarding/tutorial state |
+| Account | user (via Supabase Auth), preferences (units, effort scale, theme, rounding increments, rest defaults, notification settings), devices, push tokens (only once a server feature needs them; every V1 notification is local), consents, onboarding/tutorial state |
 | Exercises | built-in exercise (stable ID), custom exercise (optional base-movement link), aliases |
 | Plans | template, user plan (copied from a template, with type weekly/fixed/rotating), plan version, scheduled occurrence |
 | Workouts | session, block (single/superset/circuit/warm-up), prescription (target values), logged set (kind + modifiers + actual values + bodyweight snapshot) |
@@ -853,11 +869,11 @@ any ──delete──▶ tombstone (stats recalculate)
 
 ### Sync, notifications, and edge cases
 
-- Time zones and daylight saving time for quiet hours and reminders (G3.12). Calendar dates, the week boundary, and DST for the calendar are decided in 2.5 (G3.7).
-- Which notifications are local and which are remote. The working assumption is that reminders, timer alarms, and the weekly summary are local.
-- Cancelling and rescheduling reminders when a workout is completed, shifted, or skipped.
-- Notification behaviour on days with several workouts.
-- Behaviour on logout: what local data is cleared and what happens to unsynced outbox items.
+- ~~Time zones and daylight saving time for quiet hours and reminders~~: decided in 2.11 (G3.12). Calendar dates, the week boundary, and DST for the calendar are decided in 2.5 (G3.7).
+- ~~Which notifications are local and which are remote~~: all V1 notifications are local (2.11).
+- ~~Cancelling and rescheduling reminders when a workout is completed, shifted, or skipped~~: decided in 2.11 (G3.12).
+- ~~Notification behaviour on days with several workouts~~: one reminder names them all (2.11).
+- Behaviour on logout: what local data is cleared and what happens to unsynced outbox items. (Notifications are cancelled and cleared on sign-out, G3.12.)
 - The sync-status UX.
 - Behaviour when the user disables or changes biometrics, and when reauthentication is needed for deletion or export.
 

@@ -1,4 +1,4 @@
-import type { Equipment, ID, Preferences, ProgressGraph, ProgressPin, ProgressPreferences, UnitSystem } from './types';
+import type { Equipment, ID, NotificationToggle, Preferences, ProgressGraph, ProgressPin, ProgressPreferences, UnitSystem, Weekday } from './types';
 
 /** Rounding defaults per unit system (spec 2.6): barbell 5 lb / 2.5 kg, dumbbell 5 lb / 2 kg, machine 5 lb / 2.5 kg. */
 export const defaultRounding: Record<UnitSystem, Partial<Record<Equipment, number>>> = {
@@ -105,6 +105,58 @@ export function cleanProgress(stored: unknown): ProgressPreferences {
   return { pins, graphs };
 }
 
+/** The five notification on/off settings, in Settings' order. */
+export const NOTIFICATION_TOGGLES: readonly NotificationToggle[] = ['workoutReminders', 'restTimer', 'missedWorkout', 'weeklySummary', 'formAnalysisComplete'];
+
+/**
+ * Whether a value (a link's `key`, say) names one of the five toggles. Anything else, such as
+ * 'reminderTime' or 'quietHours', can't be turned on with `true`.
+ */
+export function isNotificationToggle(value: unknown): value is NotificationToggle {
+  return typeof value === 'string' && (NOTIFICATION_TOGGLES as readonly string[]).includes(value);
+}
+
+/** A 24-hour "HH:MM" time of day, as the time pickers save it: "07:30", never "7:30" or "24:00". */
+export function isTimeOfDay(value: unknown): value is string {
+  return typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+const isWeekday = (value: unknown): value is Weekday => typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 7;
+
+/**
+ * Notification settings as stored, minus anything unusable, so a bad value never crashes Settings
+ * or the scheduler. A toggle that isn't a boolean, or a time that isn't "HH:MM", is its default
+ * (a link's `?key=reminderTime` once could save `true` there). The summary's day and time are
+ * checked one by one. Quiet hours need a valid start and end, or they're off. Anything else is
+ * dropped. Missing or not an object (saved before these settings): the defaults.
+ */
+export function cleanNotifications(stored: unknown): Preferences['notifications'] {
+  const defaults = defaultPreferences.notifications;
+  const saved = stored && typeof stored === 'object' && !Array.isArray(stored) ? (stored as Record<string, unknown>) : {};
+  const toggle = (key: NotificationToggle) => {
+    const value = saved[key];
+    return typeof value === 'boolean' ? value : defaults[key];
+  };
+  const at = saved.weeklySummaryAt && typeof saved.weeklySummaryAt === 'object' ? (saved.weeklySummaryAt as { weekday?: unknown; time?: unknown }) : {};
+  const quiet = saved.quietHours && typeof saved.quietHours === 'object' ? (saved.quietHours as { start?: unknown; end?: unknown }) : {};
+
+  const clean: Preferences['notifications'] = {
+    workoutReminders: toggle('workoutReminders'),
+    restTimer: toggle('restTimer'),
+    missedWorkout: toggle('missedWorkout'),
+    weeklySummary: toggle('weeklySummary'),
+    formAnalysisComplete: toggle('formAnalysisComplete'),
+    reminderTime: isTimeOfDay(saved.reminderTime) ? saved.reminderTime : defaults.reminderTime,
+    weeklySummaryAt: {
+      weekday: isWeekday(at.weekday) ? at.weekday : defaults.weeklySummaryAt.weekday,
+      time: isTimeOfDay(at.time) ? at.time : defaults.weeklySummaryAt.time,
+    },
+  };
+  // Left out rather than undefined when off, the way it's saved.
+  if (isTimeOfDay(quiet.start) && isTimeOfDay(quiet.end)) clean.quietHours = { start: quiet.start, end: quiet.end };
+  return clean;
+}
+
 /**
  * Saved preferences as the app uses them: settings added in later versions fall back to their
  * defaults, so rows saved by an older version still load.
@@ -114,7 +166,7 @@ export function withPreferenceDefaults(stored: Partial<Preferences> | null | und
   return {
     ...defaultPreferences,
     ...stored,
-    notifications: { ...defaultPreferences.notifications, ...stored.notifications },
+    notifications: cleanNotifications(stored.notifications),
     restByExerciseSec: cleanRestMemory(stored.restByExerciseSec),
     progress: cleanProgress(stored.progress),
   };

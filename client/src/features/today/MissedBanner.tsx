@@ -8,11 +8,11 @@ import type { ID, ISODate } from '@/data/types';
 import { useHaptics } from '@/hooks/useHaptics';
 import { formatWeekday, plural } from '@/lib/format';
 import { newId } from '@/lib/id';
-import { createLocalStore } from '@/lib/localStore';
 import { useTextScale } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import type { Agenda } from './agenda';
+import { keptMissedStore } from './keptMissed';
 import {
   askingMessage,
   askingTitle,
@@ -21,12 +21,8 @@ import {
   pruneDismissed,
   pushedMessage,
   undoneMessage,
-  type DismissedMiss,
   type MissedBannerState,
 } from './missed';
-
-/** Missed workouts kept on their dates with "Keep schedule", remembered across restarts. */
-const dismissedStore = createLocalStore<DismissedMiss[]>('today.keptMissed', []);
 
 /**
  * What the missed-workout banner shows today, or undefined for none (see missed.ts).
@@ -37,7 +33,7 @@ export function useMissedBanner(agenda: Agenda, today: ISODate, activeOccurrence
   const plans = usePlans();
   // A weekly plan's push stays within the week, so the wording depends on where the week starts.
   const weekStartsOn = usePreferences().data?.weekStartsOn ?? defaultPreferences.weekStartsOn;
-  const dismissed = dismissedStore.use();
+  const dismissed = keptMissedStore.use();
   return useMemo(() => {
     if (!shifts.data || !plans.data) return undefined;
     const ids = new Set(pruneDismissed(dismissed, today).map((d) => d.id));
@@ -135,7 +131,7 @@ export function MissedBanner({ state, today, onView }: Props) {
             size="sm"
             disabled={push.isPending}
             onPress={() => {
-              dismissedStore.set((kept) => dismissMissed(kept, state.items, today));
+              keptMissedStore.set((kept) => dismissMissed(kept, state.items, today));
               announce('Schedule kept.');
             }}
           />

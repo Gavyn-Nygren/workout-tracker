@@ -58,6 +58,22 @@ export function setVolumeKg(set: LoggedSet, exercise: Pick<Exercise, 'isBodyweig
   return (effectiveLoadKg(set, exercise) ?? 0) * set.reps;
 }
 
+/**
+ * A workout's total volume (spec 2.7): setVolumeKg over every set, so only completed working sets
+ * count (no warm-ups or timed holds), including those done before an exercise was skipped. Sets of
+ * an exercise that's not in `exercisesById` add nothing, as on the workout summary.
+ */
+export function sessionVolumeKg(session: Pick<WorkoutSession, 'blocks'>, exercisesById: ReadonlyMap<string, Pick<Exercise, 'isBodyweight'>>): number {
+  let volumeKg = 0;
+  for (const block of session.blocks) {
+    for (const entry of block.exercises) {
+      const exercise = exercisesById.get(entry.exerciseId);
+      if (exercise) for (const set of entry.sets) volumeKg += setVolumeKg(set, exercise);
+    }
+  }
+  return volumeKg;
+}
+
 export function setE1RM(set: LoggedSet, exercise: Pick<Exercise, 'isBodyweight'>): number | undefined {
   if (!countsForPRs(set) || !set.reps) return undefined;
   const load = effectiveLoadKg(set, exercise);

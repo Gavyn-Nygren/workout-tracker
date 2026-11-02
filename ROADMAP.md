@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G3.12 (local notifications).
+**Current goal:** G3.13 (content).
 
 ## How we work
 
@@ -388,9 +388,19 @@ Everything works on one phone, offline, with no server.
 
 ### G3.12 Local notifications
 
-- [ ] Workout reminders, missed-workout prompts, Sunday weekly summary.
-- [ ] Quiet hours, and permission requested at the first relevant moment.
-- [ ] Cancel or reschedule reminders when a workout is completed or shifted.
+- [x] Workout reminders, missed-workout prompts, Sunday weekly summary.
+  - *Reminders follow the plans: one at the reminder time on each day with an unstarted workout, naming every workout that day (user's pick). The missed prompt comes at 9:00 AM the next morning and opens Today's push-forward question (user's pick).*
+  - *The weekly summary is worked out on the phone with Home's counting, and opens a new Your week screen with a dark top card like the workout summary's (user's pick). It also opens from Profile → Notifications → See latest summary.*
+  - *Taps work from a cold start; reminders and missed prompts open Today with today selected. With the app open, each kind shows its own way (spec 2.11).*
+- [x] Quiet hours, and permission requested at the first relevant moment.
+  - *Quiet hours hold notifications until they end; a reminder held into the next day is dropped, and Settings says so. The rest alarm is exempt.*
+  - *After the first plan is scheduled, a one-time sheet offers three switches, all on, and one Turn on button (user's pick). It waits for onboarding and the tour, and never shows at launch.*
+  - *Settings gained an "Off in iOS" row, a caption for which week the summary covers, and See latest summary. A bad permission link can no longer write into a time setting, saved settings are cleaned on load, and saying no at the iOS prompt shows a message.*
+- [x] Cancel or reschedule reminders when a workout is completed or shifted.
+  - *Every repository write, Erase and Load sample, settings, a new day, returning to the app, and sign-out plan everything again. One sync runs at a time, reads everything before cancelling anything, and stops without changes if a read fails. It only ever touches its own notifications (never the rest alarm or another app's).*
+  - *Profile → Developer: Preview notifications (one of each kind about 5 seconds later), Pending notifications, and Open weekly summary.*
+
+*Done: 1284 tests, covering the reminder, missed-prompt, and summary plans (including DST and other time zones), quiet hours, the summary's numbers and wording, the full sync on a test database (start, finish, skip, push, keep schedule, plan edits, sign-out), the diff against what iOS has pending, taps, the first-plan offer's timing, and settings clean-up. Review: 4 findings, 3 fixed and re-checked, 1 disproved. Not yet checked on an iPhone: Preview notifications on the lock screen and with the app open, Pending notifications, the Your week screen, a real reminder at the reminder time, quiet hours, tapping each kind (from a cold start too), the first-plan sheet (through Restart first-run setup), the "Off in iOS" row, and a change made just before locking the phone reaching iOS. Everything is off by default; once reminders are on, the sample plans send real ones.*
 
 ### G3.13 Content
 
@@ -431,6 +441,7 @@ Everything works on one phone, offline, with no server.
 ### G4.5 Form reports
 
 - [ ] Annotated replay, trends, comparisons, observation rule library (reviewed wording), and model/rule versioning.
+- [ ] Form-analysis-complete alerts. The Settings toggle has been saved since G3.12, but nothing sends one yet.
 
 ### G4.6 Video lifecycle
 

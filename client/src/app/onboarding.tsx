@@ -13,6 +13,7 @@ import { lbToKg } from '@/data/units';
 import { formatShortDate } from '@/lib/format';
 import { newId } from '@/lib/id';
 import { authStore, completeOnboarding } from '@/features/auth/authStore';
+import { notePlanScheduled } from '@/features/notifications/planOfferStore';
 import { onboardingAnswers, type Answers } from '@/features/onboarding/answers';
 import { recommendTemplates, type Goal } from '@/features/onboarding/recommend';
 import { nextWeekStart, planFromTemplate } from '@/features/plans/planEdits';
@@ -120,6 +121,8 @@ export default function OnboardingScreen() {
       async (i) => {
         if (i > 1) return;
         if (!(await succeeded(savePlan.mutateAsync(planFromTemplate(template, i === 0 ? today : weekStart))))) return;
+        // Reminders are offered once onboarding and the tour are over (PlanReminderOffer).
+        notePlanScheduled();
         toast.show({ message: `${template.name} is in your plans.`, tone: 'success' });
         setPhase('tour');
       },

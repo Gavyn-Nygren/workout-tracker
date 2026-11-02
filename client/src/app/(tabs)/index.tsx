@@ -6,6 +6,7 @@ import { ErrorState, SectionHeader, Skeleton, useToast } from '@/components/ui';
 import { useDeleteSession, useSaveSession } from '@/data/hooks';
 import type { ISODate } from '@/data/types';
 import { ComingUp } from '@/features/today/ComingUp';
+import { useTodayFocusNonce } from '@/features/today/focusToday';
 import { MissedBanner, useMissedBanner } from '@/features/today/MissedBanner';
 import { RestDayCard } from '@/features/today/RestDayCard';
 import { useAgenda } from '@/features/today/useAgenda';
@@ -82,6 +83,13 @@ export default function TodayScreen() {
   if (shownToday !== today) {
     setShownToday(today);
     if (selected === shownToday) setSelected(today);
+  }
+  // A tapped workout reminder or missed-workout prompt asks for today (focusToday.ts).
+  const focusNonce = useTodayFocusNonce();
+  const [shownFocus, setShownFocus] = useState(focusNonce);
+  if (shownFocus !== focusNonce) {
+    setShownFocus(focusNonce);
+    setSelected(today);
   }
 
   // The workout in progress shows as "In progress" with a Resume button.

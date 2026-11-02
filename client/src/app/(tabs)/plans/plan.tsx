@@ -9,6 +9,7 @@ import { defaultPreferences } from '@/data/preferences';
 import type { Plan, PlanShift } from '@/data/types';
 import { formatShortDate } from '@/lib/format';
 import { describeSchedule, workoutDays, workoutStats } from '@/features/plans/describe';
+import { notePlanScheduled } from '@/features/notifications/planOfferStore';
 import { StatusPill } from '@/features/plans/PlanCard';
 import { addWorkout } from '@/features/plans/planEdits';
 import { currentProgramWeek, shiftsOf } from '@/features/plans/position';
@@ -56,7 +57,15 @@ export default function PlanDetailScreen() {
         }
         if (index === 1) {
           const status = plan.status === 'active' ? 'paused' : 'active';
-          savePlan.mutate({ ...plan, status }, { onSuccess: () => toast.show({ message: status === 'paused' ? 'Plan paused. Its upcoming workouts are off the calendar.' : 'Plan resumed.' }) });
+          savePlan.mutate(
+            { ...plan, status },
+            {
+              onSuccess: () => {
+                if (status === 'active') notePlanScheduled();
+                toast.show({ message: status === 'paused' ? 'Plan paused. Its upcoming workouts are off the calendar.' : 'Plan resumed.' });
+              },
+            },
+          );
         }
         if (index === 2) {
           Alert.alert(`Delete ${plan.name}?`, 'Upcoming workouts from this plan are removed. Workouts you already logged stay in your history.', [

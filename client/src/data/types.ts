@@ -579,16 +579,29 @@ export type Preferences = {
   celebrations: boolean;
   telemetry: boolean;
   biometricLock: { enabled: boolean; afterSec: 0 | 300 | 3600 };
+  /**
+   * Spec 2.9 and 2.11. Cleaned on load (withPreferenceDefaults): a toggle that isn't a boolean, a
+   * time that isn't "HH:MM", or a broken summary slot falls back to its default, and broken quiet
+   * hours are off.
+   */
   notifications: {
     workoutReminders: boolean;
     restTimer: boolean;
     missedWorkout: boolean;
     weeklySummary: boolean;
     formAnalysisComplete: boolean;
-    /** Time of day ("HH:MM") for workout reminders on training days. */
+    /**
+     * Time of day ("HH:MM", 24-hour) for workout reminders, on every day with an unstarted planned
+     * workout. The missed-workout prompt has no time of its own: it comes the next morning.
+     */
     reminderTime: string;
+    /** The weekly summary's day (ISO weekday, 7 = Sunday) and time ("HH:MM"). */
     weeklySummaryAt: { weekday: Weekday; time: string };
-    /** No notifications between these times ("HH:MM"), wrapping past midnight. */
+    /**
+     * No notifications between these times ("HH:MM"), wrapping past midnight. They're held until
+     * the end, except a workout reminder that would move to the next day, which is dropped. The
+     * same start and end means no quiet hours. The rest alarm still rings.
+     */
     quietHours?: { start: string; end: string };
   };
   /**
@@ -597,6 +610,9 @@ export type Preferences = {
    */
   progress: ProgressPreferences;
 };
+
+/** The five notification on/off settings (spec 2.11), the keys the permission sheet may turn on. */
+export type NotificationToggle = 'workoutReminders' | 'restTimer' | 'missedWorkout' | 'weeklySummary' | 'formAnalysisComplete';
 
 /**
  * A Key exercises pin on Progress. `isDefault` marks one of the default pins (Squat, Bench, and

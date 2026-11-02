@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
 import { resetLocalStores } from '@/lib/localStore';
@@ -12,6 +12,7 @@ import { withDevFaults } from './devFaults';
 import { invalidateKeys, msUntilTomorrow, staleOnForeground } from './invalidation';
 import type { DataRepository } from './repository';
 import type { ISODate } from './types';
+import { withWriteFeed, type WriteFeed } from './writeFeed';
 
 type DevDataTools = {
   /** Whether the database holds the sample data rather than the user's own. */
@@ -28,15 +29,18 @@ type DevDataTools = {
  */
 const LOCAL_STATE_WITH_DATA = ['progress.range'];
 
-type DataContextValue = { repository: DataRepository; dev: DevDataTools; today: ISODate };
+type DataContextValue = { repository: DataRepository; feed: WriteFeed; dev: DevDataTools; today: ISODate };
 
 const DataContext = createContext<DataContextValue | null>(null);
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const [db] = useState<SqlDb>(openAppDatabase);
   const [store] = useState(() => createSqliteRepository(db));
+  // Every write bumps the feed, including the ones that skip the query hooks (the workout autosave),
+  // so code that follows the data (the notification sync) hears about them. Release builds keep it.
+  const [feed] = useState(() => withWriteFeed(store));
   // Developer switches (slow or failing reads and writes) for checking loading and error states.
-  const [repository] = useState<DataRepository>(() => (__DEV__ ? withDevFaults(store) : store));
+  const [repository] = useState<DataRepository>(() => (__DEV__ ? withDevFaults(feed.repository) : feed.repository));
   const [queryClient] = useState(
     () => new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } }),
   );
@@ -73,14 +77,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [store, queryClient]);
 
   const value = useMemo<DataContextValue>(() => {
-    // Every screen reloads from the database after the contents are swapped.
-    const reload = () => {
-      store.forgetCache();
-      resetLocalStores(LOCAL_STATE_WITH_DATA);
-      return queryClient.resetQueries();
+    // Every screen reloads from the database after the contents are swapped. The swap goes around
+    // the repository, so the write feed is bumped by hand, even when the reload fails.
+    const reload = async () => {
+      try {
+        store.forgetCache();
+        resetLocalStores(LOCAL_STATE_WITH_DATA);
+        return await queryClient.resetQueries();
+      } finally {
+        feed.bump();
+      }
     };
     return {
       repository,
+      feed,
       today,
       dev: {
         holdsSampleData: () => holdsSampleData(db),
@@ -94,7 +104,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         },
       },
     };
-  }, [db, store, repository, queryClient, today]);
+  }, [db, store, feed, repository, queryClient, today]);
 
   return (
     <DataContext.Provider value={value}>
@@ -119,6 +129,16 @@ export function useRepository(): DataRepository {
  */
 export function useToday(): ISODate {
   return useDataContext().today;
+}
+
+/**
+ * A number that goes up after every repository write, failed ones included, and after Erase all data
+ * and Load sample data. For code that must follow every change, not just the reads it shows: the
+ * notification sync (G3.12).
+ */
+export function useDataVersion(): number {
+  const { feed } = useDataContext();
+  return useSyncExternalStore(feed.subscribe, feed.getVersion);
 }
 
 /** Developer tools for the sample data (Profile → Developer → Component gallery). */

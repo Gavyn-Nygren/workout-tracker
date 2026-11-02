@@ -7,6 +7,7 @@ import { succeeded, useExercises, usePreferences, useSavePlan, useTemplates } fr
 import { defaultPreferences } from '@/data/preferences';
 import { formatShortDate } from '@/lib/format';
 import { CATEGORY_LABEL, describeSchedule, exerciseName, PLAN_TYPE_LABEL, prescriptionSummary, spokenPrescription, workoutDays } from '@/features/plans/describe';
+import { notePlanScheduled } from '@/features/notifications/planOfferStore';
 import { nextWeekStart, planFromTemplate } from '@/features/plans/planEdits';
 import { ScheduleGrid } from '@/features/plans/ScheduleGrid';
 import { templateMeta } from '@/features/plans/TemplateCard';
@@ -53,6 +54,7 @@ export default function TemplateScreen() {
         if (i > 1) return;
         const plan = planFromTemplate(template, i === 0 ? today : weekStart);
         if (!(await succeeded(savePlan.mutateAsync(plan)))) return;
+        notePlanScheduled();
         router.replace({ pathname: '/plans/plan', params: { id: plan.id } });
         toast.show({ message: `${template.name} added to your plans.`, tone: 'success' });
       },

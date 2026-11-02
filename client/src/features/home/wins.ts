@@ -18,19 +18,20 @@ export type Win = {
 };
 
 /** Most notable PR type first, so each exercise-and-session shows one line. */
-const PR_PRIORITY: PRType[] = ['heaviest_weight', 'e1rm', 'reps_at_weight', 'longest_hold', 'volume'];
+export const PR_PRIORITY: PRType[] = ['heaviest_weight', 'e1rm', 'reps_at_weight', 'longest_hold', 'volume'];
 /** Extra reps or volume are minor wins: the first to go when the feed is full. */
 const MINOR_PR: PRType[] = ['reps_at_weight', 'volume'];
-const PR_TITLE: Record<PRType, string> = {
+export const PR_TITLE: Record<PRType, string> = {
   heaviest_weight: 'heaviest weight',
   e1rm: 'est. 1RM',
   reps_at_weight: 'most reps',
   longest_hold: 'longest hold',
   volume: 'exercise volume',
 };
-const JOINT_LABEL: Record<Joint, string> = { knee: 'knee', hip: 'hip', ankle: 'ankle' };
+export const JOINT_LABEL: Record<Joint, string> = { knee: 'knee', hip: 'hip', ankle: 'ankle' };
 
-function prDetail(r: PersonalRecord, units: UnitSystem): string {
+/** A PR's value line, as Recent wins shows it: "225 lb · +10 lb", "8 reps at 135 lb (was 6)". */
+export function prDetail(r: PersonalRecord, units: UnitSystem): string {
   // Bodyweight lifts' weight records hold what was added to bodyweight ("+20 lb", "−20 lb" for assistance).
   const load = (kg: number, bodyweight?: string) => (r.addedLoad ? formatAddedLoad(kg, units, bodyweight) : formatLoad(kg, units));
   if (r.type === 'reps_at_weight') return `${r.value} reps at ${load(r.atLoadKg ?? 0, 'bodyweight')}${r.previousValue !== undefined ? ` (was ${r.previousValue})` : ''}`;

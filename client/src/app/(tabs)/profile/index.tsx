@@ -4,14 +4,21 @@ import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { AppText, Card, ListRow, SectionHeader, SegmentedControl, useToast } from '@/components/ui';
 import { useDevData } from '@/data/DataProvider';
 import { useBodyweight, usePersonalRecords, useSessions, useStreak } from '@/data/hooks';
+import { NOTIFICATION_TOGGLES } from '@/data/preferences';
 import { workoutCount } from '@/data/progress';
 import { formatClock, spokenDuration } from '@/hooks/useNow';
 import { formatLoad } from '@/lib/format';
 import { authStore, resetFirstRun } from '@/features/auth/authStore';
+import { useNotificationDevTools } from '@/features/notifications/notificationsApi';
+import { resetPlanOffer } from '@/features/notifications/planOfferStore';
 import { useSettings } from '@/features/settings/useSettings';
+import { useNotificationPermission } from '@/features/workout/useRestAlarm';
 import { useAppTheme, type ThemePreference } from '@/theme/ThemeProvider';
 import { Columns, dashboard, DENSE_TEXT_MAX, useTextScale } from '@/theme/layout';
 import { radius, spacing } from '@/theme/tokens';
+
+/** The toggles the Notifications row counts: form-analysis alerts aren't sent until form analysis is real (G4.5). */
+const COUNTED_NOTIFICATIONS = NOTIFICATION_TOGGLES.filter((key) => key !== 'formAnalysisComplete');
 
 const THEME_OPTIONS = [
   { value: 'system', label: 'System' },
@@ -26,6 +33,8 @@ export default function ProfileScreen() {
   const { large } = useTextScale();
   const toast = useToast();
   const devData = useDevData();
+  const notificationPermission = useNotificationPermission();
+  const notificationTools = useNotificationDevTools();
   const auth = authStore.use();
   const account = { name: auth.name, method: auth.method === 'apple' ? 'Signed in with Apple' : auth.email ?? 'Signed in with email' };
   const { data: sessions } = useSessions();
@@ -39,7 +48,34 @@ export default function ProfileScreen() {
   const workouts = workoutCount(sessions ?? []);
   const prCount = records?.length ?? 0;
   const rest = preferences.restDefaultsSec;
-  const notificationsOn = Object.entries(preferences.notifications).filter(([k, v]) => typeof v === 'boolean' && v && k !== 'quietHours').length;
+  const notificationsOn = COUNTED_NOTIFICATIONS.filter((key) => preferences.notifications[key]).length;
+  // With iOS notifications off, the saved toggles don't send anything, so the row says so.
+  const offInIOS = notificationsOn > 0 && notificationPermission === 'denied';
+  const notificationsValue = offInIOS ? 'Off in iOS' : notificationsOn ? `${notificationsOn} on` : 'Off';
+  // Developer: one of each notification, to check the wording and the taps on the phone.
+  const previewNotifications = async () => {
+    if (notificationPermission === 'denied') {
+      toast.show({ message: 'Notifications are off for Expo Go in iOS Settings.', tone: 'warning' });
+      return;
+    }
+    if (notificationPermission === 'undetermined') {
+      toast.show({ message: 'Allow notifications first: turn one on in Notifications.', tone: 'warning' });
+      return;
+    }
+    try {
+      await notificationTools.preview();
+      toast.show({ message: 'One of each kind arrives in about 5 seconds.', tone: 'success' });
+    } catch {
+      toast.show({ message: "Couldn't send the previews. Try again.", tone: 'error' });
+    }
+  };
+  const showPendingNotifications = async () => {
+    try {
+      Alert.alert('Pending notifications', await notificationTools.pendingSummary());
+    } catch {
+      toast.show({ message: "Couldn't read the pending notifications. Try again.", tone: 'error' });
+    }
+  };
   const go = (pathname: '/profile/units' | '/profile/workout' | '/profile/notifications' | '/profile/privacy' | '/profile/data' | '/profile/about') => router.push(pathname);
 
   return (
@@ -113,7 +149,13 @@ export default function ProfileScreen() {
                   accessibilityLabel={`Workout defaults, compound rest ${spokenDuration(rest.compound)}, isolation rest ${spokenDuration(rest.isolation)}`}
                   onPress={() => go('/profile/workout')}
                 />
-                <ListRow title="Notifications" icon="bell" value={notificationsOn ? `${notificationsOn} on` : 'Off'} onPress={() => go('/profile/notifications')} />
+                <ListRow
+                  title="Notifications"
+                  icon="bell"
+                  value={notificationsValue}
+                  accessibilityLabel={offInIOS ? 'Notifications, off in iOS Settings' : undefined}
+                  onPress={() => go('/profile/notifications')}
+                />
                 <ListRow title="Privacy & security" icon="lock" value={preferences.biometricLock.enabled ? 'Face ID on' : undefined} onPress={() => go('/profile/privacy')} />
                 <ListRow title="Data & account" icon="person.crop.circle" onPress={() => go('/profile/data')} />
                 <ListRow title="About" icon="info.circle" onPress={() => go('/profile/about')} separator={false} />
@@ -125,6 +167,26 @@ export default function ProfileScreen() {
                 <SectionHeader title="Developer" />
                 <Card padding="none">
                   <ListRow title="Component gallery" subtitle="Every shared component, in the current theme" icon="square.grid.2x2" onPress={() => router.push('/dev/gallery')} />
+                  <ListRow
+                    title="Preview notifications"
+                    subtitle="A reminder, a missed workout, and a weekly summary in about 5 seconds"
+                    icon="bell.badge"
+                    accessibilityHint="Sends one of each with your real workouts. The scheduled ones stay as they are."
+                    onPress={() => void previewNotifications()}
+                  />
+                  <ListRow
+                    title="Pending notifications"
+                    subtitle="What's scheduled on this phone"
+                    icon="list.bullet.rectangle"
+                    accessibilityHint="Lists the scheduled reminders, missed-workout alerts, and summaries"
+                    onPress={() => void showPendingNotifications()}
+                  />
+                  <ListRow
+                    title="Open weekly summary"
+                    subtitle="Your week, as the summary notification opens it"
+                    icon="chart.bar.xaxis"
+                    onPress={() => router.push('/weekly-summary')}
+                  />
                   <ListRow
                     title="Load sample data"
                     subtitle="Replace everything with eight weeks of sample workouts ending today"
@@ -179,7 +241,14 @@ export default function ProfileScreen() {
                     onPress={() =>
                       Alert.alert('Restart first-run setup?', 'You will be signed out and taken through sign-up and onboarding. Your data stays.', [
                         { text: 'Cancel', style: 'cancel' },
-                        { text: 'Restart', onPress: resetFirstRun },
+                        {
+                          text: 'Restart',
+                          onPress: () => {
+                            // The next plan started in onboarding offers reminders again.
+                            resetPlanOffer();
+                            resetFirstRun();
+                          },
+                        },
                       ])
                     }
                     separator={false}

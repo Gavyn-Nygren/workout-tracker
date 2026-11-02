@@ -9,6 +9,7 @@ import { succeeded, usePreferences, useSavePlan } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import type { PlanSchedule, Weekday } from '@/data/types';
 import { formatLongDate, formatShortDate, plural, WEEKDAY_LONG, WEEKDAY_SHORT, weekdayOrder } from '@/lib/format';
+import { notePlanScheduled } from '@/features/notifications/planOfferStore';
 import { newPlan, nextWeekStart } from '@/features/plans/planEdits';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
@@ -58,6 +59,7 @@ export default function NewPlanScreen() {
     if (savePlan.isPending) return;
     const plan = newPlan({ name, startDate, type, weekdays, weeks, cycle, weekStartsOn });
     if (!(await succeeded(savePlan.mutateAsync(plan)))) return;
+    notePlanScheduled();
     router.replace({ pathname: '/plans/plan', params: { id: plan.id } });
   };
 

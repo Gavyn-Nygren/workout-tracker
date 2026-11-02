@@ -94,6 +94,11 @@ export type FinishedWorkout = {
 
 type ContextValue = {
   workout: ActiveWorkout | null;
+  /**
+   * The launch check for a workout left in progress has finished, so `workout` is what's really
+   * open. Until then, a workout that's about to resume reads as null.
+   */
+  ready: boolean;
   counts: SetCounts;
   /** The running rest, with its next set up to date with edits made during it. */
   rest: RestTimer | null;
@@ -559,6 +564,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
 
     return {
       workout,
+      ready: resumeChecked,
       counts: workout ? countSets(workout.session) : { done: 0, total: 0 },
       rest: liveRest,
       restJustEnded,
@@ -636,6 +642,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
     };
   }, [
     workout,
+    resumeChecked,
     liveRest,
     restJustEnded,
     upNext,

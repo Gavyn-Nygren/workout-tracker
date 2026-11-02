@@ -3,19 +3,21 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
 import type { Preferences } from '@/data/types';
+import { getForegroundContext } from '@/features/notifications/notificationsApi';
+import { presentationForAny } from '@/features/notifications/presentation';
 import { createLocalStore } from '@/lib/localStore';
 import type { RestTimer } from './rest';
-import { createRestAlarmSync, permissionFrom, presentationFor, REST_ALARM_ID, REST_ALARM_KIND, restAlarmPlan, type AlarmPermission } from './restAlarm';
+import { createRestAlarmSync, permissionFrom, REST_ALARM_ID, REST_ALARM_KIND, restAlarmPlan, type AlarmPermission } from './restAlarm';
 
 // The expo-notifications side of the rest alarm. The decisions are in restAlarm.ts.
 
 /**
  * Decides how a notification that arrives with the app open is shown. Set once, at the root
- * layout's load: the rest alarm stays quiet there (the app's own haptic covers it); everything
- * else shows as it would with no handler.
+ * layout's load: the rest alarm stays quiet there (the app's own haptic covers it); the others
+ * by kind and where the app is (presentationForAny, G3.12).
  */
 export function setUpNotificationHandler() {
-  Notifications.setNotificationHandler({ handleNotification: async (notification) => presentationFor(notification) });
+  Notifications.setNotificationHandler({ handleNotification: async (notification) => presentationForAny(notification, getForegroundContext()) });
 }
 
 // ---------------------------------------------------------------------------

@@ -6,6 +6,9 @@ import { TAB_BAR_CLEARANCE, ToastProvider, ToastViewport } from '@/components/ui
 import { DataProvider } from '@/data/DataProvider';
 import { SaveErrorToasts } from '@/data/SaveErrorToasts';
 import { authStore } from '@/features/auth/authStore';
+import { NotificationSync } from '@/features/notifications/NotificationSync';
+import { NotificationTaps } from '@/features/notifications/NotificationTaps';
+import { PlanReminderOffer } from '@/features/notifications/PlanReminderOffer';
 import { ActiveWorkoutProvider } from '@/features/workout/ActiveWorkoutProvider';
 import { useMiniBarHeight } from '@/features/workout/MiniBar';
 import { setUpNotificationHandler } from '@/features/workout/useRestAlarm';
@@ -96,6 +99,8 @@ function NavigationRoot() {
             <Stack.Screen name="workout/reorder" options={sheet([0.7, 1])} />
             <Stack.Screen name="workout/timer" options={sheet([0.7])} />
             <Stack.Screen name="summary" options={{ presentation: 'modal', headerShown: false }} />
+            {/* "Your week": what the weekly summary notification opens (G3.12). */}
+            <Stack.Screen name="weekly-summary" options={{ presentation: 'modal', headerShown: false }} />
             <Stack.Screen name="plan-picker" options={sheet([0.85, 1])} />
             <Stack.Screen name="goal" options={{ presentation: 'modal', headerShown: false }} />
             <Stack.Screen name="goals-completed" options={{ presentation: 'modal', headerShown: false }} />
@@ -116,6 +121,12 @@ function NavigationRoot() {
         {/* Clear the in-progress workout bar too, when it's showing above the tab bar. */}
         <ToastViewport bottomOffset={TAB_BAR_CLEARANCE + miniBarHeight} />
         <SaveErrorToasts />
+        {/* Notifications (G3.12): small children rather than hooks here, so following the route
+            doesn't re-render the Stack. Keeps iOS's pending ones in step with the data, opens the
+            right screen for a tap, and offers reminders after the first plan. */}
+        <NotificationSync />
+        <NotificationTaps />
+        <PlanReminderOffer />
       </ToastProvider>
     </ThemeProvider>
   );
