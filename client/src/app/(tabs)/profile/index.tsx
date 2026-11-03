@@ -55,7 +55,7 @@ export default function ProfileScreen() {
   // Developer: one of each notification, to check the wording and the taps on the phone.
   const previewNotifications = async () => {
     if (notificationPermission === 'denied') {
-      toast.show({ message: 'Notifications are off for Expo Go in iOS Settings.', tone: 'warning' });
+      toast.show({ message: 'Notifications are off in iOS Settings.', tone: 'warning' });
       return;
     }
     if (notificationPermission === 'undetermined') {

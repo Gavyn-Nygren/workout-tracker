@@ -435,8 +435,19 @@ describe('a run against a fake iOS', () => {
     assert.match(lines[1], /^Reminder \(preview\) · /, 'the seeded preview fires at 0 here, so it comes first');
     assert.equal(lines[2], 'Reminder · Mon, Nov 2, 5:00 PM · Lower A today');
     assert.equal(lines[3], 'Reminder · Wed, Nov 4, 5:00 PM · Lower A today');
-    assert.equal(lines.at(-1), 'Also pending: 3 other (the rest alarm or other Expo Go projects).');
-    assert.equal(await describePending(fakeIos(() => now).scheduler, 'nobody'), 'Nothing pending.\nAlso pending: 4 other (the rest alarm or other Expo Go projects).');
+    assert.deepEqual(lines.slice(-2), ['Rest alarm pending.', 'Also pending: 2 other.'], 'the rest alarm gets its own line; the other project and the old install are counted');
+    assert.equal(await describePending(fakeIos(() => now).scheduler, 'nobody'), 'Nothing pending.\nRest alarm pending.\nAlso pending: 3 other.');
+  });
+
+  test('describePending in a build of its own: only ours and the rest alarm, so no "other" line', async () => {
+    const now = at(TODAY, '08:00');
+    const own = fakeIos(() => now);
+    await own.scheduler.cancel('@someone/other-project/daily');
+    await own.scheduler.cancel(`@anonymous/exercise-tracker-old/et.reminder.${TODAY}`);
+    const lines = (await describePending(own.scheduler, OWNER)).split('\n');
+    assert.equal(lines[0], '1 pending');
+    assert.equal(lines.at(-1), 'Rest alarm pending.');
+    assert.equal(lines.length, 3);
   });
 });
 

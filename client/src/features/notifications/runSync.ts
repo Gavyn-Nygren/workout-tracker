@@ -16,7 +16,7 @@ import type { DataRepository } from '@/data/repository';
 import { addDays, toISODate } from '@/data/dates';
 import type { ID, ISODate, Plan, Preferences, ScheduledOccurrence, UnitSystem } from '@/data/types';
 import { buildWeeklySummary, weeklySummaryText, type WeeklySummaryInput } from '@/features/weekly/weeklySummary';
-import type { AlarmPermission } from '@/features/workout/restAlarm';
+import { REST_ALARM_ID, REST_ALARM_KIND, type AlarmPermission } from '@/features/workout/restAlarm';
 import { formatShortDate } from '@/lib/format';
 import { deliveredToDismiss, HORIZON_DAYS, MIN_LEAD_MS, notificationPlan, previewPlan, SUMMARIES_AHEAD } from './notificationPlan';
 import { diffPending, ownRequests } from './reconcile';
@@ -326,8 +326,9 @@ function titleFromKey(key: unknown): string {
 
 /**
  * Profile → Developer → Pending notifications: ours that iOS has pending, soonest first, one line
- * each ("Reminder · Mon, Nov 2, 5:00 PM · Lower A today"), then how many others are pending (the
- * rest alarm, or other Expo Go projects), since they share iOS's 64 slots.
+ * each ("Reminder · Mon, Nov 2, 5:00 PM · Lower A today"), then the rest alarm if one is pending, then
+ * how many others are (in Expo Go, other projects' requests show up here too), since they all
+ * share iOS's 64 slots.
  */
 export async function describePending(scheduler: NotificationScheduler, owner: string): Promise<string> {
   const all = await scheduler.getPending();
@@ -339,7 +340,9 @@ export async function describePending(scheduler: NotificationScheduler, owner: s
       return [{ nid: data.nid, kind: data.kind, fireAt, title: titleFromKey(data.key) }];
     })
     .sort((a, b) => (Number.isFinite(a.fireAt) ? a.fireAt : Infinity) - (Number.isFinite(b.fireAt) ? b.fireAt : Infinity) || (a.nid < b.nid ? -1 : 1));
-  const others = all.length - ours.length;
+  const restAlarms = all.filter((r) => r?.identifier === REST_ALARM_ID || r?.data?.kind === REST_ALARM_KIND).length;
+  const restAlarm = restAlarms > 0;
+  const others = all.length - ours.length - restAlarms;
 
   const lines = ours.map(({ nid, kind, fireAt, title }) => {
     const label = (typeof kind === 'string' && KIND_LABEL[kind as NotificationKind]) || 'Notification';
@@ -347,7 +350,7 @@ export async function describePending(scheduler: NotificationScheduler, owner: s
     return [`${label}${nid.startsWith(PREVIEW_PREFIX) ? ' (preview)' : ''}`, when, title].filter(Boolean).join(' · ');
   });
   const head = ours.length ? `${ours.length} pending` : 'Nothing pending.';
-  const tail = others > 0 ? [`Also pending: ${others} other (the rest alarm or other Expo Go projects).`] : [];
+  const tail = [...(restAlarm ? ['Rest alarm pending.'] : []), ...(others > 0 ? [`Also pending: ${others} other.`] : [])];
   return [head, ...lines, ...tail].join('\n');
 }
 

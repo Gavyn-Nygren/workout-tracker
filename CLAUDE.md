@@ -13,6 +13,6 @@ iOS-first strength/hypertrophy tracker with on-device form analysis.
 
 ## Working rules
 
-- Look first, functionality second. Screens get built with fake data and approved on the user's iPhone (Expo Go) before real logic.
+- Look first, functionality second. Screens get built with fake data and approved on the user's iPhone (Expo Go, or the development build from G4.1) before real logic.
 - For unsettled design choices, give the user 2-4 concrete options to pick from.
 - Type-check with `npm run typecheck` in `client/`.

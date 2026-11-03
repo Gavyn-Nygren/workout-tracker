@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Card, Icon, ListRow, SectionHeader, SegmentedControl, Toggle, useToast } from '@/components/ui';
+import { lockSubtitle, lockSupport, lockSwitchDisabled, type LockSupport } from '@/features/settings/lockSupport';
 import { useSettings } from '@/features/settings/useSettings';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -17,12 +18,14 @@ export default function PrivacyScreen() {
   const toast = useToast();
   const { preferences, update } = useSettings();
   const lock = preferences.biometricLock;
-  const [available, setAvailable] = useState<boolean | undefined>(undefined);
+  const [support, setSupport] = useState<LockSupport | undefined>(undefined);
 
   useEffect(() => {
-    Promise.all([LocalAuthentication.hasHardwareAsync(), LocalAuthentication.isEnrolledAsync()])
-      .then(([hardware, enrolled]) => setAvailable(hardware && enrolled))
-      .catch(() => setAvailable(false));
+    Promise.all([LocalAuthentication.getEnrolledLevelAsync(), LocalAuthentication.supportedAuthenticationTypesAsync(), LocalAuthentication.hasHardwareAsync()])
+      .then(([level, types, hardware]) =>
+        setSupport(lockSupport({ level, faceIdPhone: types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION), biometryAllowed: hardware })),
+      )
+      .catch(() => setSupport(undefined));
   }, []);
 
   const toggleLock = async (on: boolean) => {
@@ -48,9 +51,9 @@ export default function PrivacyScreen() {
         <Card padding="none">
           <ListRow
             title="Face ID lock"
-            subtitle={available === false ? 'Set up Face ID or a passcode in iOS Settings to use this.' : 'Unlock the app with Face ID, or your passcode as a fallback'}
+            subtitle={lockSubtitle(support)}
             icon="faceid"
-            trailing={<Toggle label="Face ID lock" value={lock.enabled} onChange={toggleLock} disabled={available === false} />}
+            trailing={<Toggle label="Face ID lock" value={lock.enabled} onChange={toggleLock} disabled={lockSwitchDisabled(support, lock.enabled)} />}
             separator={false}
           />
         </Card>

@@ -11,6 +11,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.gavynnygren.exercisetracker",
       "usesAppleSignIn": true,
+      "deploymentTarget": "17.0",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "icon": {
         "light": "./assets/icon.png",
         "dark": "./assets/icon-dark.png",
@@ -36,6 +40,25 @@
       "expo-font",
       "@react-native-community/datetimepicker",
       "expo-sharing",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Face ID unlocks the app when the app lock is on. The app never sees your face."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "enableRemoteNotifications": false
+        }
+      ],
+      [
+        "expo-dev-client",
+        {
+          "toolsButton": false,
+          "showMenuAtLaunch": false
+        }
+      ],
       [
         "expo-splash-screen",
         {

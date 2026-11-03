@@ -30,7 +30,7 @@ import {
 
 /** Days of reminders and prompts planned ahead, from today. */
 export const HORIZON_DAYS = 14;
-/** The most of ours pending at once. iOS keeps only the soonest 64, shared across Expo Go projects. */
+/** The most of ours pending at once. iOS keeps only the soonest 64 per app, shared with the rest alarm (and in Expo Go, with every other project). */
 export const MAX_PENDING = 40;
 /** The least lead the diff schedules a new or changed notification with. */
 export const MIN_LEAD_MS = 5000;

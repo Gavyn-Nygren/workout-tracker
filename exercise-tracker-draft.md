@@ -82,7 +82,7 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
   - Every change is also written to an outbox table for the sync worker.
   - Personal records, streaks, and badges are calculated from the stored history rather than stored, so edits never leave them stale.
   - Small on-device UI state (the Progress range, theme, sign-in state) lives in expo-sqlite's key-value store. Progress's pinned exercises and saved graphs are saved with the preferences, so they're exported, reset, and synced with them.
-- Charts: **custom react-native-svg charts** for now. Victory Native XL was the plan, but its current release needs Skia 2.15+ while Expo SDK 58 / Expo Go ships Skia 2.14. The charts follow the dataviz rules (one axis, hairline grid, 2px lines, ringed markers, labelled endpoints, drag-to-read crosshair). Revisit Victory once on development builds (roadmap Phase 4).
+- Charts: **custom react-native-svg charts** for now. Victory Native XL was the plan, but its current release needs Skia 2.15+ while Expo SDK 58 / Expo Go ships Skia 2.14. The charts follow the dataviz rules (one axis, hairline grid, 2px lines, ringed markers, labelled endpoints, drag-to-read crosshair). Revisit Victory once an Expo SDK supports Skia 2.15+ (a development build still uses the SDK's Skia version).
 - Form analysis: Vision Camera, MediaPipe Pose Landmarker, and Skia overlays, **all running on-device**.
 - Live Activity rest timer: a native iOS widget extension.
 - React Native Web stays possible but is not built or tested for V1.
@@ -107,7 +107,7 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 
 **Devices**
 
-- **iOS 17+** is required.
+- **iOS 17+** is required (the build's minimum, set in `app.json`).
 - Form analysis requires an **iPhone 12 (A14 chip) or newer**. On older devices it shows as unavailable, with an explanation, and everything else works normally.
 - iPad is supported with a proper layout.
 
@@ -123,7 +123,8 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 
 - It is opt-in and off by default.
 - When enabled, Face ID is required after the app has been in the background for a chosen time: immediately, 5 minutes, or 1 hour.
-- If Face ID fails or is unavailable, the device passcode is the fallback.
+- If Face ID fails or is unavailable, the device passcode is the fallback. A phone with a passcode but no usable Face ID (not set up, or turned off for the app in iOS Settings) can still turn the lock on, and the row says the passcode unlocks it. With no passcode, the lock can't be turned on. A lock that's on can always be turned off.
+- iOS asks once before the app uses Face ID, with the line "Face ID unlocks the app when the app lock is on. The app never sees your face."
 - Biometric lock never interrupts an active workout or a running rest timer.
 - The app never stores or processes a face scan itself.
 
