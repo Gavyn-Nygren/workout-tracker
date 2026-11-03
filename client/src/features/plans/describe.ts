@@ -1,8 +1,10 @@
 import { plannedWorkingField } from '@/data/logging';
 import { trainingDays, weekdaysByWorkout } from '@/data/schedule';
-import type { Exercise, Plan, PlannedExercise, PlanSchedule, PlanWorkout, ProgressionRule, SetPrescription, StarterTemplate, UnitSystem, Weekday } from '@/data/types';
-import { formatLoad, formatRepTarget, plural, sortWeekdays, WEEKDAY_LONG, WEEKDAY_SHORT } from '@/lib/format';
+import type { Exercise, Plan, PlannedExercise, PlanSchedule, PlanWorkout, ProgressionRule, SetPrescription, StarterTemplate, TemplateDayOption, UnitSystem, Weekday } from '@/data/types';
+import { kgToLb } from '@/data/units';
+import { formatLoad, formatRepTarget, plural, sortWeekdays, unitLabel, WEEKDAY_LONG, WEEKDAY_SHORT } from '@/lib/format';
 import { formatClock, spokenDuration } from '@/hooks/useNow';
+import { templateDayOptions } from './planEdits';
 
 // The weekday names live in lib/format with the week-order helpers; re-exported for existing imports.
 export { WEEKDAY_LETTER, WEEKDAY_LONG, WEEKDAY_SHORT } from '@/lib/format';
@@ -14,7 +16,7 @@ export const PLAN_TYPE_LABEL: Record<PlanSchedule['type'], string> = { weekly: '
 export const CATEGORY_LABEL: Record<StarterTemplate['category'], string> = {
   bodybuilding: 'Bodybuilding',
   powerlifting: 'Powerlifting',
-  atg: 'ATG',
+  atg: 'Full range',
   crossfit: 'Conditioning',
   athletic: 'Athletic',
   bodyweight: 'Bodyweight',
@@ -22,6 +24,18 @@ export const CATEGORY_LABEL: Record<StarterTemplate['category'], string> = {
 };
 
 export const LEVEL_LABEL: Record<StarterTemplate['level'], string> = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' };
+
+/**
+ * A template's meta line on its card and page: "Beginner  ·  2 or 3 days/week  ·  Ongoing", with
+ * every version's days (templateDayOptions), or only `option`'s ("Beginner  ·  3 days/week  ·
+ * 8 weeks") once a version is picked.
+ */
+export function templateMeta(template: StarterTemplate, option?: Pick<TemplateDayOption, 'daysPerWeek'>): string {
+  const counts = option ? [option.daysPerWeek] : [...new Set(templateDayOptions(template).map((o) => o.daysPerWeek))];
+  const list = counts.length > 1 ? `${counts.slice(0, -1).join(', ')} or ${counts[counts.length - 1]}` : String(counts[0]);
+  const days = `${list} ${counts.length === 1 && counts[0] === 1 ? 'day' : 'days'}/week`;
+  return [LEVEL_LABEL[template.level], days, template.durationWeeks ? `${template.durationWeeks} weeks` : 'Ongoing'].join('  ·  ');
+}
 
 /** "Weekly · 4 days" / "Fixed-length · 12 weeks · 3 days" / "Rotating · 4-day cycle" */
 export function describeSchedule(schedule: PlanSchedule): string {
@@ -57,17 +71,38 @@ export function workoutStats(workout: PlanWorkout, spoken = false): string {
 }
 
 /**
+ * A rep-range rule's step as the engine takes it (features/workout/progression.ts, `moved`): the
+ * stored kg in the user's units, rounded to whole rounding steps, and at least one step. So
+ * lbToKg(5) is 5 lb, and in kg 2.5 on a barbell, 2 on dumbbells or 4 on kettlebells; 2.5 kg is
+ * 5 lb. `direction` −1 is a step that takes assistance off, which rounds a half step down as the
+ * engine does. A rounding step of 0 or less leaves the value unrounded, as the engine does too.
+ * The value is in the user's units, not kg.
+ */
+export function shownIncrement(incrementKg: number, units: UnitSystem, roundingStep: number, direction: 1 | -1 = 1): number {
+  const value = units === 'imperial' ? kgToLb(incrementKg) : incrementKg;
+  // Float noise from the kg/lb round trip: lbToKg(5) shows as 4.9999… lb.
+  const clean = (n: number) => Math.round(n * 1e6) / 1e6;
+  if (!(roundingStep > 0)) return clean(value);
+  const steps = value / roundingStep;
+  return clean(Math.max(1, direction > 0 ? Math.round(steps) : -Math.round(-steps)) * roundingStep);
+}
+
+/**
  * A progression rule in a few words, for the plan workout's exercise list: "+5 lb at top of range
  * · deload 10% after 3 misses", "+5 lb when every set hits 5 · repeat on a miss" (fixed reps, from
  * `sets`), "+2.5% a week · repeat on a miss". When the working sets log assistance (`exercise`
  * assisted, or sets planned as Assisted), progress takes assistance away, so it says that: "5 lb
- * less assistance at top of range · 10% more assistance after 3 misses".
+ * less assistance at top of range · 10% more assistance after 3 misses". With `roundingStep` (the
+ * exercise's, from roundingIncrementFor) a rep-range step reads as the engine takes it
+ * (shownIncrement): "+2.5 kg", not "+2.3 kg", for a 5 lb step in kg. Without it, the stored step
+ * is shown as it is.
  */
 export function describeProgression(
   rule: ProgressionRule | undefined,
   units: UnitSystem,
   sets: readonly SetPrescription[] = [],
   exercise?: Pick<Exercise, 'isBodyweight' | 'isAssisted'>,
+  roundingStep?: number,
 ): string {
   if (!rule) return 'No auto progression';
   const { onMiss } = rule;
@@ -79,7 +114,9 @@ export function describeProgression(
   const targets = sets.filter((s) => s.kind === 'normal' || s.kind === 'assisted').flatMap((s) => (s.targetReps === undefined ? [] : [s.targetReps]));
   const fixed = targets.length > 0 && targets.every((t) => typeof t === 'number');
   const when = !fixed ? 'at top of range' : new Set(targets).size === 1 ? `when every set hits ${targets[0]}` : 'when every set hits its reps';
-  return `${assisted ? `${formatLoad(rule.incrementKg, units)} less assistance` : `+${formatLoad(rule.incrementKg, units)}`} ${when} · ${miss}`;
+  // As the reason line shows a change (progression.ts): up to two decimals, so 1.25 kg reads 1.25.
+  const step = roundingStep === undefined ? formatLoad(rule.incrementKg, units) : `${Math.round(shownIncrement(rule.incrementKg, units, roundingStep, assisted ? -1 : 1) * 100) / 100} ${unitLabel(units)}`;
+  return `${assisted ? `${step} less assistance` : `+${step}`} ${when} · ${miss}`;
 }
 
 /**

@@ -146,17 +146,57 @@ export type TemplateCategory =
 
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
 
+/**
+ * What someone trains for (onboarding's goal question, spec 2.4). Not the goals entity `Goal`
+ * (spec 2.9) further down.
+ */
+export type TrainingGoal = 'strength' | 'muscle' | 'athletic' | 'mobility' | 'general';
+
+/**
+ * Gear a template needs beyond its equipment list, which only has the onboarding chips. Which
+ * built-in exercise needs what is in data/content/gear.ts.
+ */
+export type Gear = 'rack' | 'bench' | 'pull_up_bar' | 'dip_bars' | 'box' | 'low_bar';
+
+/** One "days a week" version of a template: some or all of its workouts on their own schedule. */
+export type TemplateDayOption = { daysPerWeek: number; schedule: PlanSchedule };
+
 export type StarterTemplate = {
   id: ID;
   name: string;
   category: TemplateCategory;
+  /** The level the program is made for (the card's headline). */
   level: ExperienceLevel;
+  /** Every level it suits: contiguous, and including `level`. */
+  levels: ExperienceLevel[];
+  /** What it trains for, main goal first. */
+  goals: TrainingGoal[];
+  /** The default version's days a week (its `schedule`). */
   daysPerWeek: number;
   durationWeeks?: number;
   description: string;
   equipment: Equipment[];
+  /** Gear beyond `equipment`, e.g. a squat rack or a pull-up bar. Missing means none. */
+  alsoNeeds?: Gear[];
+  /** The default version's schedule. */
   schedule: PlanSchedule;
+  /** Other day versions, each scheduling some of `workouts` on a different number of days. */
+  otherDays?: TemplateDayOption[];
   workouts: PlanWorkout[];
+};
+
+/**
+ * Onboarding's answers (spec 2.4), kept on the phone. A missing matching answer (experience, goal,
+ * equipment, days) means it was skipped. Height is stored in inches.
+ */
+export type OnboardingAnswers = {
+  experience?: ExperienceLevel;
+  goal?: TrainingGoal;
+  equipment?: Equipment[];
+  daysPerWeek?: number;
+  heightIn?: number;
+  limitations: string[];
+  limitationNote: string;
 };
 
 /** A user's plan. Templates are copied in, so template edits never rewrite it. */

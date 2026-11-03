@@ -141,7 +141,7 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 ### 2.4 Onboarding and preferences
 
 - Onboarding is optional. It may collect experience level, goals, available equipment, training days, body measurements, and injuries/limitations.
-- **Plan recommendation in V1 is rule-based.** Experience, goal, days per week, and equipment map to the best 1-3 starter templates, adjusted to the days available. AI plan assistance arrives with the chat release.
+- **Plan recommendation in V1 is rule-based.** Experience, goal, days per week, and equipment map to the best 1-3 starter templates, adjusted to the days available: a program can have versions for different numbers of days, and each recommendation starts the version that fits. AI plan assistance arrives with the chat release.
 - The tutorial is independently optional: a user can take the tutorial without a recommendation, or get a recommendation without the tutorial.
 - Units default to lb/in, with kg/cm selectable in Settings. Weights may be decimals.
 - Users choose RPE or RIR display in Settings (see 2.6).
@@ -161,13 +161,16 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 - **Access rules** (navigation guards): signed out, only the welcome and sign-in screens exist. New accounts see onboarding first; skipping it counts as finishing it.
 - **Onboarding** (user's pick: one question per screen):
   - A progress bar, Skip on every question, and "Skip setup" at any time.
-  - Questions: experience, main goal, equipment, days per week, height and bodyweight (bodyweight becomes the first weigh-in), and limitations with notes. The limitations step states that the app doesn't give medical advice.
-  - Then **1–3 recommended templates** with the reasons each fits, "Start this plan" (today or next Monday), or build your own.
-  - Then the optional tour.
-- **Recommendation rules (V1):**
-  - Templates that need equipment the user lacks are left out.
-  - The rest are scored by goal → category, experience level, and days per week, with ready-to-use templates first.
-- **Tour** (user's pick: swipeable cards): five cards (Today, logging and rest, form recording, progress, goals and streaks), illustrated with the app's own components. Skip any time, and replay from Profile → About.
+  - Questions: experience, main goal, equipment, days per week, height and bodyweight (bodyweight becomes the first weigh-in), and limitations with notes. The limitations step states that the app doesn't give medical advice. Height follows the units setting (in or cm).
+  - Every question starts empty. Skip, or Continue on equipment with nothing chosen, leaves it unanswered, and an unanswered question doesn't affect the picks.
+  - Then **1–3 recommended templates**. Each card has check-mark lines for what fits and plain info lines for what doesn't, for example "Needs 4 days a week", or the gear a home setup needs ("Also needs a squat rack and a bench"). "Start this plan" (today or next Monday) starts the version shown, or build your own.
+  - Then the optional tour. "Skip setup" still offers it.
+- **Recommendation rules (V1):** the rules table is data in `client/src/features/onboarding/rules.ts`, tested against every answer combination; the review page (`CONTENT_REVIEW.md`) shows the best match for each answer.
+  - Filters, in order: **equipment** (every item a program needs; bodyweight always counts), **experience** (**beginners only see programs that suit beginners, all of them 2-3 days a week**, user's pick; others see programs whose lowest level is at or below theirs), the **day version** (the most days that still fit, else the fewest; a program needing 2 or more extra days is left out), then the **goal** (only programs that list it, when any fit; otherwise the closest, and the subtitle says so).
+  - The rest are scored by goal (main or secondary), experience, days, and whether weights are used, then sorted by score, main goal, the smaller day gap, and catalog order.
+  - The heading is "Plans that fit you", "Closest plans" (the goal fallback, or no check line on the best match), or "A few good places to start" when every question was skipped.
+  - Height and limitations never change a pick (section 5).
+- **Tour** (user's pick: swipeable cards): five cards (Today, logging and rest, form recording, progress, goals and streaks), illustrated with the app's own components and a real starter program, with weights in the user's units. Skip any time, and replay from Profile → About. The last button reads "Start training" from onboarding and "Done" from Profile. While form analysis is simulated (until Phase 4), the form card says so, and phones older than the iPhone 12 get their own wording. The copy is in `client/src/data/content/tutorial.ts`.
 - **Notification permission:** the first time a notification type is turned on, an explainer screen lists the benefits before iOS asks. If permission was denied earlier, it links to iOS Settings instead. The first rest and the first plan scheduled also offer it once (2.6, 2.11). When iOS has notifications off, Profile → Notifications says so, with a link to iOS Settings, and the toggles keep their values.
 
 ### 2.5 Plans, calendar, and workout lifecycle
@@ -177,7 +180,7 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 | Type | How it schedules |
 | --- | --- |
 | **Weekly** | Workouts are assigned to weekdays and repeat. |
-| **Fixed-length program** | For example 12 weeks, with prescriptions that differ week by week. |
+| **Fixed-length program** | For example 12 weeks. Every week repeats the same days, and the progression rules move the weights from week to week. |
 | **Rotating cycle** | A day-based sequence (for example A, B, rest, C, rest) that repeats regardless of weekday. |
 
 **Plans and templates**
@@ -187,7 +190,27 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 - **Editing a plan changes unstarted future workouts only.** Completed history and any workout in progress keep their original prescription. Every saved version of a plan is kept, so a missed workout still opens with the prescription it was scheduled with.
 - Pausing or archiving a plan clears its upcoming workouts; resuming schedules them again from today. Deleting a plan removes every workout of it that wasn't started, missed ones included.
 - Users can start from curated starter templates or build custom plans.
-- Starter templates cover bodybuilding, powerlifting, ATG, CrossFit-style, athletic development, bodyweight, and gym/weighted training. They are **AI-drafted original programs reviewed by the developer**; branded programs are not reproduced.
+- Starter templates cover bodybuilding, powerlifting, full range of motion, conditioning (rep-based strength circuits), athletic development, bodyweight, and gym/weighted training. They are **AI-drafted original programs reviewed by the developer**; branded programs and trademarked names are not reproduced. The style labels are Bodybuilding, Powerlifting, **Full range** (user's pick; "ATG" is a trademark), Conditioning, Athletic, Bodyweight, and Gym.
+- **The starter catalog** (G3.13, user's pick: 12 programs). Each lives in `client/src/data/content/templates/`, and `CONTENT_REVIEW.md` lists every one in full. All are drafts until the developer approves them (`templates/review.ts`), which is required before release (G6.4).
+
+  | Program | Style | Made for | Days a week | Length | Equipment |
+  | --- | --- | --- | --- | --- | --- |
+  | Full-Body Foundations | Gym | Beginner | 3 or 2 | Ongoing | Dumbbells, machines, cables |
+  | Dumbbell Full Body | Gym | Beginner | 3 or 2 | Ongoing | Dumbbells |
+  | Home Bodyweight Starter | Bodyweight | Beginner | 3 or 2 | Ongoing | None |
+  | Barbell Strength Base | Powerlifting | Beginner | 3 | 12 weeks | Barbell |
+  | Full-Range Strength | Full range | Beginner | 3 or 2 | 8 weeks | Dumbbells |
+  | Upper / Lower Builder | Gym | Intermediate | 4 | Ongoing | Full gym |
+  | Five-Day Muscle Builder | Bodybuilding | Intermediate | 5 | Ongoing | Full gym |
+  | Big Three Block | Powerlifting | Intermediate | 4 or 3 | 6 weeks | Barbell, dumbbells |
+  | Calisthenics Strength | Bodyweight | Intermediate | 4 or 3 | Ongoing | None (bars) |
+  | Strength and Circuits | Conditioning | Intermediate | 3 or 2 | Ongoing | Barbell, kettlebell, dumbbells |
+  | Athletic Base | Athletic | Intermediate | 3 or 2 | 10 weeks | Barbell, dumbbells |
+  | Push Pull Legs | Bodybuilding | Advanced | 6 | Ongoing | Full gym |
+
+  - Weighted lifts use the rep-range rule (add weight when every set reaches the top; compound lifts deload 10% after 3 misses in a row, isolation lifts repeat). Big Three Block's three main lifts add 2.5% a week. Bodyweight moves and holds have no rule; their notes say when to move to a harder version.
+  - Rests are left on Auto; supersets and circuits rest after each round. At most 2 warm-up sets per lift, with no typed load. Time estimates are worked out from the sets and the default rests.
+  - Conditioning is rep-based circuits only: no timed formats, distance, or calories in V1.
 
 **Plans tab layout**
 
@@ -217,6 +240,9 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
   - The progression rule (none, rep range, or weekly %) and what to do on a miss (repeat, or deload after N misses).
   - It saves with a Save button and warns before you discard unsaved edits.
 - **Templates:** category filter chips, then a card per template showing level, days per week, length, and equipment. A template's detail shows its schedule and workouts. **Use this template** copies it into a new plan starting today or next Monday.
+  - A program with versions for different numbers of days has a **Days a week** switch above its schedule (user's pick). The week grid and the workouts follow it, and Use this template starts that version.
+  - The detail lists the equipment ("Bodyweight" when none is needed) and an "Also needs" line for gear such as a squat rack, a bench, or a pull-up bar.
+  - Progression rules read in the user's units, with the step the app actually takes for that equipment ("+5 lb", "+2.5 kg", or "+2 kg" on dumbbells).
 - **Exercises:**
   - The library has search and muscle filters, with your custom exercises listed first.
   - Each exercise's detail shows its muscles, when you last did it (with your best set), and which plans use it.
@@ -300,7 +326,7 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 
 - A planned workout can include target sets/reps, suggested weight, RPE/RIR, rest duration, tempo, notes, and warm-up guidance. Sets and reps are the primary fields.
 - **Warm-up sets can be planned** as well as logged.
-- Supersets, circuits, and warm-up blocks are supported.
+- Supersets and circuits are supported. Warm-ups are planned as warm-up sets; a separate warm-up block type isn't used yet.
 - **Tempo** uses 4-digit eccentric-pause-concentric-pause notation (for example `3-1-1-0`), with `X` meaning explosive. A tooltip explains the format. Typing "3110" or "3 1 1 0" saves "3-1-1-0"; anything else isn't saved and the field explains why.
 
 **Set model**
@@ -375,7 +401,7 @@ Every set has exactly one **kind** and any number of **modifiers**.
 
 **Exercise library**
 
-- **270 built-in exercises** (user's pick: the full gym plus Olympic lifts and strongman), each with a stable ID. They live in `client/src/data/content/exercises.ts`.
+- **278 built-in exercises** (user's pick: the full gym plus Olympic lifts and strongman), each with a stable ID. G3.13 added 8 for the starter programs: Bulgarian Split Squat (bodyweight), Cossack Squat, Deep Squat Hold, Burpee, Thruster (Dumbbell), Box Jump, Broad Jump, and Lateral Bound. They live in `client/src/data/content/exercises.ts`.
 - Names read **"Movement (Equipment)"**, for example "Bench Press (Dumbbell)", so variations sort together (user's pick). Search matches words in any order, plus nicknames ("RDL", "OHP") and gym shorthand ("db", "kb").
 - Variations link to their family's main movement (for example Pause Squat → Back Squat), which drives swap suggestions.
 - Form analysis is flagged only on the verified variations in 2.8.
@@ -447,7 +473,7 @@ Editing, deleting, or reopening a workout recalculates the affected PRs, volume,
 
 | Family | Variations | Angles measured |
 | --- | --- | --- |
-| Squats | back, front, goblet, ATG/deep | hip, knee, ankle/shin |
+| Squats | back, front, goblet, deep | hip, knee, ankle/shin |
 | Lunges / split squats | split squat, Bulgarian split squat, forward/reverse lunge | hip, knee, ankle/shin |
 | Deadlifts / RDLs | conventional, trap-bar, RDL, stiff-leg | hip, knee, shin |
 | Calf raises | standing, seated | ankle |
@@ -702,6 +728,7 @@ All token values live in `client/src/theme/tokens.ts`. Every text and background
 - **Active workout layout:** **dense table rows** in the Strong/Hevy style. Each set row shows set, previous, weight, reps, and a complete check. A camera button and a menu sit in the exercise header.
 - **Feedback:** a light haptic on set complete and a stronger one when the timer ends. A brief animated badge appears on a PR, and confetti only when a workout with PRs finishes. Both can be toggled off in Settings.
 - **Overall style:** athletic and high-contrast, with dark persistent header and navigation, baby-blue primary buttons and active navigation, and high-energy exercise cards.
+- **Voice and copy:** plain and short. No emoji, no hype, no guilt, and neutral wording on misses. No pain, injury, or medical claims, and no brand or trademarked names. Units follow Settings. Content and explanatory text use no "!"; the rest-over bar and a new personal record are the only exclamations. `validateTemplates` checks the starter content against these rules.
 - **iPad layout:** the user picked **two-column dashboards**. A screen counts as wide at **700 pt** or more, which covers every iPad including the iPad mini in portrait.
   - **Dashboards** (Today, Home, Progress, Plans, Profile) use two columns, up to 1120 pt wide:
     - **Today:** the week strip spans the top; the day's workouts are on the left, with Coming up beside them.
@@ -837,12 +864,12 @@ any ──delete──▶ tombstone (stats recalculate)
 
 ### Content still to be produced
 
-- **Template catalog:** the exact list of 6-10+ programs (at least one per category), their durations, and their progression rules. These are AI-drafted and reviewed by the developer.
+- ~~**Template catalog**~~: 12 programs drafted in G3.13 (see 2.5 and `CONTENT_REVIEW.md`). Still to do: the developer's approval of each program (`templates/review.ts`), required before release (G6.4).
 - ~~**Badge catalog**~~: thresholds and names done in G3.10 (see 2.9). Still to do: artwork beyond the category medallions.
-- **Tutorial content:** screens and flow.
-- **Onboarding recommendation rules:** the mapping table from onboarding answers to templates.
+- ~~**Tutorial content**~~: done in G3.13 (see 2.4).
+- ~~**Onboarding recommendation rules**~~: done in G3.13 (`rules.ts`, see 2.4).
 - **Form rule library:** the full set of observation and cue templates per movement, with reviewed wording.
-- ~~**Built-in exercise list**~~: done in G3.2 (270 exercises). Still to do: how-to instructions and demonstration media.
+- ~~**Built-in exercise list**~~: done in G3.2 (270 exercises; 278 since G3.13). Still to do: how-to instructions and demonstration media (G6.3).
 
 ### Technical decisions still open
 

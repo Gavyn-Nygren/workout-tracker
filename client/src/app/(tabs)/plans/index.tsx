@@ -97,7 +97,7 @@ function Templates() {
           ))}
         </Grid>
       )}
-      {!isLoading && !error && !list.length && <EmptyState icon="square.stack.3d.up" title="No templates here yet" message="More programs are being written. Try another category." />}
+      {!isLoading && !error && !list.length && <EmptyState icon="square.stack.3d.up" title="No templates in this category" message="Try another category." />}
     </View>
   );
 }

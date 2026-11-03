@@ -10,7 +10,6 @@ import type {
   Preferences,
   Recording,
   ScheduledOccurrence,
-  StarterTemplate,
   StreakState,
   WorkoutSession,
 } from '../types';
@@ -20,13 +19,12 @@ import { deriveBadges, derivePersonalRecords, deriveStreak, fakeGoals } from './
 import { fakeExercises } from './exercises';
 import { generateFormReports } from './form';
 import { generateHistory } from './history';
-import { fakePlans, fakeTemplates } from './plans';
+import { fakePlans } from './plans';
 
 export type FakeDataset = {
   today: ISODate;
   exercises: Exercise[];
   plans: Plan[];
-  templates: StarterTemplate[];
   occurrences: ScheduledOccurrence[];
   sessions: WorkoutSession[];
   bodyweight: BodyweightEntry[];
@@ -70,7 +68,6 @@ export function buildFakeDataset(today: ISODate): FakeDataset {
     today,
     exercises: fakeExercises,
     plans: fakePlans,
-    templates: fakeTemplates,
     occurrences,
     sessions,
     bodyweight,

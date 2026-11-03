@@ -10,6 +10,7 @@ import type { FormMovementFamily } from '@/data/types';
 import { FormUnavailable } from '@/features/form/FormUnavailable';
 import { SkeletonFigure } from '@/features/form/SkeletonFigure';
 import { isFormAnalysisSupported } from '@/features/form/capability';
+import { FORM_ANALYSIS_PREVIEW } from '@/features/form/preview';
 import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
 import { DENSE_TEXT_MAX, useTextScale } from '@/theme/layout';
 import { SchemeOverride, useAppTheme } from '@/theme/ThemeProvider';
@@ -124,12 +125,15 @@ function Setup() {
 
         <View style={[styles.preview, { height: previewHeight }]} accessible accessibilityLabel="Camera preview. Fit your whole body inside the outline, side-on to the phone.">
           <SkeletonFigure family={family} depth={0} showFrame withBar={exercise?.equipment === 'barbell'} width={width - spacing.lg * 2} height={previewHeight} />
-          <View style={[styles.liveTag, { backgroundColor: 'rgba(0,0,0,0.55)' }]}>
-            <View style={[styles.liveDot, { backgroundColor: colors.successFill }]} />
-            <AppText variant="caption" weight="700" maxFontSizeMultiplier={DENSE_TEXT_MAX}>
-              PREVIEW · MOCK CAMERA
-            </AppText>
-          </View>
+          {/* Only while the camera is a mock (FORM_ANALYSIS_PREVIEW, switched off at G4.3). */}
+          {FORM_ANALYSIS_PREVIEW && (
+            <View style={[styles.liveTag, { backgroundColor: 'rgba(0,0,0,0.55)' }]}>
+              <View style={[styles.liveDot, { backgroundColor: colors.successFill }]} />
+              <AppText variant="caption" weight="700" maxFontSizeMultiplier={DENSE_TEXT_MAX}>
+                PREVIEW · MOCK CAMERA
+              </AppText>
+            </View>
+          )}
         </View>
 
         <View style={styles.bottom}>

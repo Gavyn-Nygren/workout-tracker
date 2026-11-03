@@ -12,7 +12,7 @@ import { exerciseLogs, METRICS, metricPoints, topSetReading, type ExerciseLog, t
  * don't inherit it (Dead Bug and Bird Dog are Plank variations done for reps), so every built-in
  * hold is listed here by id.
  */
-const HOLD_EXERCISES = new Set(['ex_plank', 'ex_side_plank', 'ex_hollow_hold', 'ex_l_sit', 'ex_copenhagen_plank', 'ex_wall_sit', 'ex_dead_hang', 'ex_superman']);
+const HOLD_EXERCISES = new Set(['ex_plank', 'ex_side_plank', 'ex_hollow_hold', 'ex_l_sit', 'ex_copenhagen_plank', 'ex_wall_sit', 'ex_dead_hang', 'ex_superman', 'ex_deep_squat_hold']);
 
 export function isHoldExercise(exercise: Pick<Exercise, 'id' | 'baseMovementId' | 'source'>): boolean {
   if (HOLD_EXERCISES.has(exercise.id)) return true;

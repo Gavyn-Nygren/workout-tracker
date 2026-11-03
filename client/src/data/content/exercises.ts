@@ -89,10 +89,11 @@ const JERK = 'ex_split_jerk';
 const CARRY = 'ex_farmers_carry';
 const SLED = 'ex_sled_push';
 const STONE = 'ex_atlas_stone';
+const JUMP = 'ex_box_jump';
 
 export const BUILTIN_EXERCISES: Exercise[] = [
   // Squats
-  x(SQUAT, 'Back Squat (Barbell)', 'barbell', C, ['quads', 'glutes'], { secondary: ['adductors', 'core'], form: 'squat', aliases: ['Squat', 'High-Bar Squat', 'ATG Squat'] }),
+  x(SQUAT, 'Back Squat (Barbell)', 'barbell', C, ['quads', 'glutes'], { secondary: ['adductors', 'core'], form: 'squat', aliases: ['Squat', 'High-Bar Squat'] }),
   x('ex_low_bar_squat', 'Low-Bar Squat (Barbell)', 'barbell', C, ['glutes', 'quads'], { secondary: ['hamstrings', 'adductors', 'back'], base: SQUAT }),
   x('ex_front_squat', 'Front Squat (Barbell)', 'barbell', C, ['quads'], { secondary: ['glutes', 'core', 'back'], form: 'squat', base: SQUAT }),
   x('ex_pause_squat', 'Pause Squat (Barbell)', 'barbell', C, ['quads', 'glutes'], { secondary: ['adductors', 'core'], base: SQUAT }),
@@ -110,6 +111,7 @@ export const BUILTIN_EXERCISES: Exercise[] = [
   x('ex_pistol_squat', 'Pistol Squat', 'bodyweight', C, ['quads', 'glutes'], { secondary: ['core'], bw: true, base: SQUAT, aliases: ['Single-Leg Squat'] }),
   x('ex_sissy_squat', 'Sissy Squat', 'bodyweight', I, ['quads'], { bw: true, base: LEG_EXT }),
   x('ex_wall_sit', 'Wall Sit', 'bodyweight', I, ['quads'], { bw: true, base: LEG_EXT }),
+  x('ex_deep_squat_hold', 'Deep Squat Hold', 'bodyweight', I, ['quads', 'glutes'], { bw: true }),
 
   // Leg press and leg extension
   x(LEG_PRESS, 'Leg Press (Machine)', 'machine', C, ['quads', 'glutes'], { secondary: ['hamstrings', 'adductors'] }),
@@ -127,12 +129,14 @@ export const BUILTIN_EXERCISES: Exercise[] = [
   x('ex_walking_lunge', 'Walking Lunge (Dumbbell)', 'dumbbell', C, ['quads', 'glutes'], { secondary: ['hamstrings'], base: LUNGE }),
   x('ex_walking_lunge_bw', 'Walking Lunge', 'bodyweight', C, ['quads', 'glutes'], { bw: true, base: LUNGE }),
   x('ex_lateral_lunge', 'Lateral Lunge (Dumbbell)', 'dumbbell', C, ['adductors', 'glutes', 'quads'], { base: LUNGE, aliases: ['Side Lunge'] }),
+  x('ex_cossack_squat', 'Cossack Squat', 'bodyweight', C, ['quads', 'adductors'], { secondary: ['glutes'], bw: true, base: LUNGE }),
   x('ex_curtsy_lunge', 'Curtsy Lunge (Dumbbell)', 'dumbbell', C, ['glutes', 'quads'], { secondary: ['adductors'], base: LUNGE }),
   x('ex_split_squat', 'Split Squat (Dumbbell)', 'dumbbell', C, ['quads', 'glutes'], { form: 'lunge', base: LUNGE }),
   x('ex_split_squat_bw', 'Split Squat', 'bodyweight', C, ['quads', 'glutes'], { bw: true, form: 'lunge', base: LUNGE }),
   x('ex_bulgarian_split_squat', 'Bulgarian Split Squat (Dumbbell)', 'dumbbell', C, ['quads', 'glutes'], { secondary: ['adductors'], form: 'lunge', base: LUNGE, aliases: ['BSS', 'Rear-Foot Elevated Split Squat'] }),
   x('ex_bulgarian_split_squat_bb', 'Bulgarian Split Squat (Barbell)', 'barbell', C, ['quads', 'glutes'], { form: 'lunge', base: LUNGE, aliases: ['BSS'] }),
   x('ex_bulgarian_split_squat_smith', 'Bulgarian Split Squat (Smith Machine)', 'machine', C, ['quads', 'glutes'], { base: LUNGE, aliases: ['BSS'] }),
+  x('ex_bulgarian_split_squat_bw', 'Bulgarian Split Squat', 'bodyweight', C, ['quads', 'glutes'], { bw: true, form: 'lunge', base: LUNGE, aliases: ['BSS'] }),
   x('ex_step_up', 'Step-Up (Dumbbell)', 'dumbbell', C, ['quads', 'glutes'], { base: LUNGE }),
   x('ex_step_up_bb', 'Step-Up (Barbell)', 'barbell', C, ['quads', 'glutes'], { base: LUNGE }),
 
@@ -412,4 +416,11 @@ export const BUILTIN_EXERCISES: Exercise[] = [
   x(STONE, 'Atlas Stone Load', 'other', C, ['back', 'glutes', 'hamstrings'], { secondary: ['biceps', 'traps'], aliases: ['Atlas Stone'] }),
   x('ex_sandbag_to_shoulder', 'Sandbag to Shoulder', 'other', C, ['back', 'glutes'], { secondary: ['biceps', 'traps'], base: STONE }),
   x('ex_tire_flip', 'Tire Flip', 'other', C, ['glutes', 'back', 'quads'], { secondary: ['hamstrings'] }),
+
+  // Jumps and conditioning
+  x(JUMP, 'Box Jump', 'bodyweight', C, ['quads', 'glutes'], { secondary: ['hamstrings', 'calves'], bw: true }),
+  x('ex_broad_jump', 'Broad Jump', 'bodyweight', C, ['quads', 'glutes'], { secondary: ['hamstrings', 'calves'], bw: true, base: JUMP }),
+  x('ex_lateral_bound', 'Lateral Bound', 'bodyweight', C, ['glutes', 'quads'], { secondary: ['adductors', 'calves'], bw: true, base: JUMP, aliases: ['Skater Jump'] }),
+  x('ex_burpee', 'Burpee', 'bodyweight', C, ['quads', 'chest'], { secondary: ['shoulders', 'triceps', 'core'], bw: true }),
+  x('ex_db_thruster', 'Thruster (Dumbbell)', 'dumbbell', C, ['quads', 'shoulders'], { secondary: ['glutes', 'triceps', 'core'], aliases: ['Squat to Press'] }),
 ];

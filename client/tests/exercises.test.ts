@@ -19,7 +19,7 @@ const find = (name: string) => {
 const VERIFIED_FORM = new Set([
   'ex_back_squat', 'ex_front_squat', 'ex_goblet_squat', 'ex_goblet_squat_kb',
   'ex_reverse_lunge', 'ex_reverse_lunge_bb', 'ex_reverse_lunge_bw', 'ex_forward_lunge', 'ex_forward_lunge_bb',
-  'ex_split_squat', 'ex_split_squat_bw', 'ex_bulgarian_split_squat', 'ex_bulgarian_split_squat_bb',
+  'ex_split_squat', 'ex_split_squat_bw', 'ex_bulgarian_split_squat', 'ex_bulgarian_split_squat_bb', 'ex_bulgarian_split_squat_bw',
   'ex_deadlift', 'ex_trap_bar_deadlift', 'ex_rdl', 'ex_db_rdl', 'ex_stiff_leg_deadlift',
   'ex_standing_calf_raise', 'ex_seated_calf_raise', 'ex_calf_raise_bw', 'ex_single_leg_calf_raise', 'ex_smith_calf_raise',
 ]);
@@ -67,6 +67,15 @@ describe('built-in exercise library', () => {
     const flagged = new Set(BUILTIN_EXERCISES.filter((e) => e.formAnalysis).map((e) => e.id));
     assert.deepEqual([...flagged].sort(), [...VERIFIED_FORM].sort());
     assert.equal(byId.get('ex_sumo_deadlift')?.formAnalysis, undefined);
+  });
+
+  test('the G3.13 additions are there, and Back Squat no longer has the ATG alias', () => {
+    const added = ['ex_bulgarian_split_squat_bw', 'ex_cossack_squat', 'ex_deep_squat_hold', 'ex_burpee', 'ex_db_thruster', 'ex_box_jump', 'ex_broad_jump', 'ex_lateral_bound'];
+    for (const id of added) assert.ok(byId.has(id), id);
+    assert.equal(byId.get('ex_db_thruster')?.equipment, 'dumbbell');
+    assert.equal(byId.get('ex_deep_squat_hold')?.category, 'isolation');
+    assert.equal(byId.get('ex_bulgarian_split_squat_bw')?.formAnalysis, 'lunge');
+    assert.deepEqual(byId.get('ex_back_squat')?.aliases, ['Squat', 'High-Bar Squat']);
   });
 
   test('bodyweight-equipment exercises count bodyweight in their load', () => {

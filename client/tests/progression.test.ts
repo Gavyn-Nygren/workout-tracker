@@ -536,7 +536,7 @@ describe('history: the same plan workout (decision C)', () => {
     const edited = updatePlanned(plan, W, 'pe1', (p) => ({ ...p, sets: working(4, { min: 5, max: 8 }) }));
     assert.equal(edited.workouts[0].id, W);
     assert.deepEqual(weights(first(edited.workouts[0].blocks[0].exercises[0], [upperA('2026-10-21', 200, [8, 8, 8])], { plan: edited })), [205, 205, 205, 205]);
-    const template: StarterTemplate = { id: 't', name: 'T', category: 'gym', level: 'beginner', daysPerWeek: 1, description: '', equipment: [], schedule: WEEKLY, workouts: plan.workouts };
+    const template: StarterTemplate = { id: 't', name: 'T', category: 'gym', level: 'beginner', levels: ['beginner'], goals: ['general'], daysPerWeek: 1, description: '', equipment: [], schedule: WEEKLY, workouts: plan.workouts };
     const copy = planFromTemplate(template, TODAY);
     assert.notEqual(copy.workouts[0].id, W);
   });

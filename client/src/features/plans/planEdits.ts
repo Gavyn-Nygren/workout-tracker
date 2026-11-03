@@ -9,6 +9,7 @@ import type {
   PlanWorkout,
   SetPrescription,
   StarterTemplate,
+  TemplateDayOption,
   Weekday,
 } from '@/data/types';
 import { sortWeekdays, WEEKDAY_LONG } from '@/lib/format';
@@ -161,16 +162,45 @@ export function nextWeekStart(from: ISODate = todayISO(), weekStartsOn: Weekday 
   return addDays(startOfWeek(from, weekStartsOn), 7);
 }
 
-/** Copies a template into a new plan with fresh ids, so later template changes never touch it. */
-export function planFromTemplate(template: StarterTemplate, startDate: ISODate): Plan {
-  const workoutIds = new Map(template.workouts.map((w) => [w.id, newId('pw')]));
+/**
+ * A template's "days a week" versions, fewest days first: its own schedule (the default) and
+ * `otherDays`. A template with one version gives one option.
+ */
+export function templateDayOptions(template: Pick<StarterTemplate, 'daysPerWeek' | 'schedule' | 'otherDays'>): TemplateDayOption[] {
+  const options: TemplateDayOption[] = [{ daysPerWeek: template.daysPerWeek, schedule: template.schedule }, ...(template.otherDays ?? [])];
+  // A stable sort, on a new array: the template's own list is left as it is.
+  return options.sort((a, b) => a.daysPerWeek - b.daysPerWeek);
+}
+
+/** The version with `daysPerWeek` days a week; the default when it's missing or no version has that many. */
+export function templateDayOption(template: Pick<StarterTemplate, 'daysPerWeek' | 'schedule' | 'otherDays'>, daysPerWeek?: number): TemplateDayOption {
+  const fallback: TemplateDayOption = { daysPerWeek: template.daysPerWeek, schedule: template.schedule };
+  if (daysPerWeek === undefined || daysPerWeek === template.daysPerWeek) return fallback;
+  return template.otherDays?.find((o) => o.daysPerWeek === daysPerWeek) ?? fallback;
+}
+
+/** Every workout id a schedule uses, once each. */
+function scheduledWorkoutIds(schedule: PlanSchedule): Set<string> {
+  return new Set(schedule.type === 'rotating' ? schedule.sequence.filter((s) => s !== 'rest') : schedule.days.flatMap((d) => d.workoutIds));
+}
+
+/**
+ * Copies a template into a new plan with fresh ids, so later template changes never touch it.
+ * `daysPerWeek` picks one of its versions (templateDayOptions); without one, or with a count no
+ * version has, it's the default. Only the workouts that version schedules are copied.
+ */
+export function planFromTemplate(template: StarterTemplate, startDate: ISODate, opts: { daysPerWeek?: number } = {}): Plan {
+  const chosen = templateDayOption(template, opts.daysPerWeek).schedule;
+  const used = scheduledWorkoutIds(chosen);
+  const workouts = template.workouts.filter((w) => used.has(w.id));
+  const workoutIds = new Map(workouts.map((w) => [w.id, newId('pw')]));
   const mapId = (id: string) => workoutIds.get(id) ?? id;
   const schedule: PlanSchedule =
-    template.schedule.type === 'rotating'
-      ? { type: 'rotating', sequence: template.schedule.sequence.map((s) => (s === 'rest' ? s : mapId(s))) }
-      : template.schedule.type === 'weekly'
-        ? { type: 'weekly', days: template.schedule.days.map((d) => ({ ...d, workoutIds: d.workoutIds.map(mapId) })) }
-        : { type: 'fixed', weeks: template.schedule.weeks, days: template.schedule.days.map((d) => ({ ...d, workoutIds: d.workoutIds.map(mapId) })) };
+    chosen.type === 'rotating'
+      ? { type: 'rotating', sequence: chosen.sequence.map((s) => (s === 'rest' ? s : mapId(s))) }
+      : chosen.type === 'weekly'
+        ? { type: 'weekly', days: chosen.days.map((d) => ({ ...d, workoutIds: d.workoutIds.map(mapId) })) }
+        : { type: 'fixed', weeks: chosen.weeks, days: chosen.days.map((d) => ({ ...d, workoutIds: d.workoutIds.map(mapId) })) };
   const now = new Date().toISOString();
   return {
     id: newId('plan'),
@@ -180,7 +210,7 @@ export function planFromTemplate(template: StarterTemplate, startDate: ISODate):
     status: 'active',
     startDate,
     schedule,
-    workouts: template.workouts.map((w) => ({
+    workouts: workouts.map((w) => ({
       ...w,
       id: mapId(w.id),
       // A deep copy: the plan shares nothing with the template, so template updates never reach it.

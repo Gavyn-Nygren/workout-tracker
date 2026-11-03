@@ -9,6 +9,7 @@ import { useExercises, useFormReports } from '@/data/hooks';
 import { useHaptics } from '@/hooks/useHaptics';
 import { formatClock, spokenDuration } from '@/hooks/useNow';
 import { formatShortDate } from '@/lib/format';
+import { FORM_ANALYSIS_PREVIEW } from '@/features/form/preview';
 import { SkeletonFigure, useRepLoop } from '@/features/form/SkeletonFigure';
 import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
 import { DENSE_TEXT_MAX, useTextScale } from '@/theme/layout';
@@ -269,9 +270,12 @@ function Recorder() {
             />
           )}
           <Button title="Discard recording" variant="ghost" onPress={discard} />
-          <AppText variant="caption" tone="secondary" style={styles.center}>
-            This is a preview. Real recording and analysis arrive with the camera build.
-          </AppText>
+          {/* Only while recording is a mock (FORM_ANALYSIS_PREVIEW, switched off at G4.3). */}
+          {FORM_ANALYSIS_PREVIEW && (
+            <AppText variant="caption" tone="secondary" style={styles.center}>
+              This is a preview. Real recording and analysis arrive with the camera build.
+            </AppText>
+          )}
         </ScrollView>
       )}
     </View>

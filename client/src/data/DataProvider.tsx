@@ -25,9 +25,11 @@ type DevDataTools = {
 
 /**
  * On-device values that go with the data, so Erase all data and Load sample data reset them too:
- * the Progress range chip (RANGE_KEY in features/progress/useProgressPrefs.ts).
+ * the Progress range chip (RANGE_KEY in features/progress/useProgressPrefs.ts), and onboarding's
+ * answers (features/onboarding/answers.ts), health note included. Load sample data clears the
+ * answers too; nothing reads them once onboarding is over, so that changes nothing you'd see.
  */
-const LOCAL_STATE_WITH_DATA = ['progress.range'];
+const LOCAL_STATE_WITH_DATA = ['progress.range', 'onboarding.answers'];
 
 type DataContextValue = { repository: DataRepository; feed: WriteFeed; dev: DevDataTools; today: ISODate };
 

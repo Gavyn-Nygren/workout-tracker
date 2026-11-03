@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G3.13 (content).
+**Current goal:** G4.1 (EAS development build). The G3.13 starter programs are waiting for the owner's review (`CONTENT_REVIEW.md`).
 
 ## How we work
 
@@ -141,7 +141,7 @@ The most important screen.
 - [x] Plan list (multiple active plans) and plan detail with its calendar. *Segmented tab (My plans / Templates / Exercises) and week-grid schedule (user's picks).*
 - [x] Plan editor for weekly, fixed-length, and rotating plans. *Three-step setup, then the editor (user's pick); schedule editor for weekdays, program length, and rotating cycles.*
 - [x] Prescription editor: sets, reps, weight, RPE/RIR, rest, tempo, warm-ups, progression rule.
-- [x] Template browser by category. *Category chips + cards (user's pick). Four templates have full sample workouts; three are listing-only until G3.13.*
+- [x] Template browser by category. *Category chips + cards (user's pick). The stand-in templates were replaced by the G3.13 catalog.*
 - [x] Exercise picker and custom exercise form (with base-movement link).
 - [x] The user has reviewed Plans on their iPhone.
 
@@ -251,7 +251,7 @@ Everything works on one phone, offline, with no server.
 
 ### G3.2 Exercise library content
 
-- [x] 150-250 built-in exercises with stable IDs, equipment, muscle groups, and base-movement mappings. *270, covering the full gym plus Olympic lifts and strongman, with "Movement (Equipment)" names and word-order-free search (user's picks). How-to text comes later with demo media.*
+- [x] 150-250 built-in exercises with stable IDs, equipment, muscle groups, and base-movement mappings. *270 (278 since G3.13), covering the full gym plus Olympic lifts and strongman, with "Movement (Equipment)" names and word-order-free search (user's picks). How-to text comes later with demo media.*
 - [x] Custom exercises. *Saved in the database. Linking to a built-in uses the same search, with main movements listed first.*
 
 ### G3.3 Plans engine
@@ -404,9 +404,17 @@ Everything works on one phone, offline, with no server.
 
 ### G3.13 Content
 
-- [ ] AI-drafted starter templates for the user to review.
-- [ ] Onboarding recommendation rules table.
-- [ ] Tutorial copy.
+- [x] AI-drafted starter templates for the user to review.
+  - *12 original programs (user's pick), 2-6 days a week: every style, home setups (no weights, dumbbells only, barbell only), and one advanced program; 41 workouts. 8 exercises added to the library.*
+  - *Eight programs have versions for different numbers of days, chosen with a Days a week switch on the program page (user's pick). The "ATG" style is now "Full range" (user's pick: ATG is a trademark).*
+  - *A validator checks every template: exercises exist, equipment and gear match, schedules and versions add up, sets are well-formed, rules sit where they can work, times are computed, and there are no brand or injury words, emoji, or "!". Progression steps read in the user's units ("+2.5 kg", "+2 kg" on dumbbells), even after a units switch.*
+  - *The review page, `CONTENT_REVIEW.md`, is generated from the code: every program in full, with weekly sets per muscle. All 12 programs are drafts until the owner approves them (`templates/review.ts`), which G6.4 requires.*
+- [x] Onboarding recommendation rules table.
+  - *Rules as data in `rules.ts`, tested against every answer combination. Beginners only see beginner programs, all 2-3 days (user's pick). A skipped question counts as unanswered, equipment is strict, and each card starts the version that fits and lists what doesn't fit without a check mark. The review page tabulates the best match for every answer.*
+- [x] Tutorial copy.
+  - *Five cards rewritten to match the app, with the copy in `tutorial.ts`. The form card says recording is simulated until Phase 4, with its own wording on iPhones older than the 12. Skip setup still offers the tour, the last button says Start training or Done, VoiceOver paging and Reduce Motion are fixed, and the art shows a real program in the user's units.*
+
+*Done: 1518 tests, covering the validator (a test per rule), every program and day version copied into a plan and run through the calendar and workout builder, the time estimates, the rules over every answer combination plus 23 worked examples, the tour copy, the onboarding draft, progression labels in both units, and the review page matching the code. One review round (the programs as a coach would read them, rules, screens, data, copy): 16 findings, 13 fixed and re-checked, 3 disproved. Not yet checked on an iPhone: the Templates list and program page (the Days a week switch, Also needs), starting programs and running a workout from each, onboarding's new cards and Skip, height in cm, the tour (VoiceOver paging, Reduce Motion, kg in the art), and progression labels after a units switch. Not yet reviewed by the owner: the 12 programs, the recommendation tables, and the tour wording.*
 
 ---
 
@@ -430,6 +438,7 @@ Everything works on one phone, offline, with no server.
 - [ ] Portrait and landscape.
 - [ ] Countdown, auto-stop, and live rep count that pre-fills the set's reps.
 - [ ] On-device video storage.
+- [ ] Switch `FORM_ANALYSIS_PREVIEW` off (`src/features/form/preview.ts`), so the tour and form screens stop saying recording is simulated.
 
 ### G4.4 Analysis engine
 
@@ -482,6 +491,7 @@ Everything works on one phone, offline, with no server.
 - [ ] Tombstones.
 - [ ] Sync status indicator.
 - [ ] Decide what happens to local data and unsynced changes on logout.
+- [ ] Store onboarding and tour state with the account (spec 3.1).
 
 ### G5.4 Data rights
 
@@ -505,10 +515,12 @@ Everything works on one phone, offline, with no server.
 - [ ] Privacy policy and terms.
 - [ ] App Store privacy labels.
 - [ ] Screenshots and listing copy.
+- [ ] Exercise how-to text and demonstration media (spec 6).
 
 ### G6.4 Acceptance test pass
 
 - [ ] Every criterion in spec Section 7.
+- [ ] Every starter template approved by the owner (`TEMPLATE_REVIEW` in `src/data/content/templates/review.ts`).
 
 ### G6.5 TestFlight beta
 

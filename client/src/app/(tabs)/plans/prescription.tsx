@@ -9,7 +9,7 @@ import { defaultPreferences } from '@/data/preferences';
 import type { MissBehavior, PlannedExercise, ProgressionRule, RepTarget, SetKind, SetPrescription } from '@/data/types';
 import { kgToLb, lbToKg } from '@/data/units';
 import { plural, unitLabel } from '@/lib/format';
-import { autoRestHint, missHint } from '@/features/plans/describe';
+import { autoRestHint, missHint, shownIncrement } from '@/features/plans/describe';
 import { updatePlanned, withWarmupSet } from '@/features/plans/planEdits';
 import { TempoField } from '@/features/plans/TempoField';
 import { isProgressionKind, repRange } from '@/features/workout/progression';
@@ -334,7 +334,8 @@ export default function PrescriptionScreen() {
                 >
                   <Stepper
                     label={assisted ? 'Assistance to take off' : 'Weight to add'}
-                    value={toDisplay(rule.incrementKg)}
+                    // On its own half-step grid, so a 5 lb step on a barbell shows 2.5 kg in kg, not 2.27. Stored as it is until changed.
+                    value={shownIncrement(rule.incrementKg, units, increment / 2)}
                     onChange={(v) => edit((d) => ({ ...d, progression: { ...rule, incrementKg: fromDisplay(v) } }))}
                     step={increment / 2}
                     min={increment / 2}

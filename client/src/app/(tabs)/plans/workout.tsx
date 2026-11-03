@@ -4,6 +4,7 @@ import { ActionSheetIOS, Alert, Pressable, ScrollView, StyleSheet, View } from '
 
 import { AppText, Button, Card, EmptyState, ErrorState, Icon, NotFoundState, ScreenSkeleton } from '@/components/ui';
 import { succeeded, useExercises, usePlan, usePreferences, useSavePlan } from '@/data/hooks';
+import { roundingIncrementFor } from '@/data/logging';
 import { defaultPreferences } from '@/data/preferences';
 import type { Plan, PlannedBlock, PlannedExercise, PlanWorkout } from '@/data/types';
 import { formatClock, spokenDuration } from '@/hooks/useNow';
@@ -20,7 +21,8 @@ export default function PlanWorkoutScreen() {
   const { large } = useTextScale();
   const planQuery = usePlan(planId);
   const exercisesQuery = useExercises();
-  const { units, weekStartsOn } = usePreferences().data ?? defaultPreferences;
+  const preferences = usePreferences().data ?? defaultPreferences;
+  const { units, weekStartsOn } = preferences;
   const savePlan = useSavePlan();
   // Set while a delete saves: the refetched plan no longer has this workout, and the screen shouldn't flash "Workout not found" on the way out.
   const [deleted, setDeleted] = useState<PlanWorkout>();
@@ -129,7 +131,8 @@ export default function PlanWorkoutScreen() {
                   name={exerciseName(exercisesById, planned.exerciseId)}
                   summary={prescriptionSummary(planned)}
                   spokenSummary={spokenPrescription(planned)}
-                  progression={planned.progression && describeProgression(planned.progression, units, planned.sets, exercisesById.get(planned.exerciseId))}
+                  // The step as the rule takes it, on this exercise's rounding: a 5 lb step reads "+2.5 kg" in kg.
+                  progression={planned.progression && describeProgression(planned.progression, units, planned.sets, exercisesById.get(planned.exerciseId), roundingIncrementFor(exercisesById.get(planned.exerciseId)?.equipment, preferences))}
                   onPress={() => router.push({ pathname: '/plans/prescription', params: { plan: plan.id, workout: workout.id, pe: planned.id } })}
                   onMenu={() => openMenu(block, blockIndex, planned)}
                 />

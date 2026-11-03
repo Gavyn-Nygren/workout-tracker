@@ -8,10 +8,12 @@ import { migrate } from '../src/data/db/schema';
 import type { SqlDb } from '../src/data/db/sql';
 import { createSqliteRepository, type SqliteRepository } from '../src/data/db/sqliteRepository';
 import { fakePlans } from '../src/data/fake/plans';
+import { trainingDays } from '../src/data/schedule';
 import type { Exercise, Plan, PlannedBlock, PlannedExercise, PlanWorkout, SetPrescription, Weekday, WorkoutSession } from '../src/data/types';
 import { autoRestHint, prescriptionSummary, spokenPrescription } from '../src/features/plans/describe';
-import { addExercise, planFromTemplate, supersetWithNext, ungroup, withWarmupSet } from '../src/features/plans/planEdits';
+import { addExercise, planFromTemplate, supersetWithNext, templateDayOptions, ungroup, withWarmupSet } from '../src/features/plans/planEdits';
 import { restAfterSet } from '../src/features/workout/rest';
+import { LEGACY_TEMPLATES } from './support/legacyTemplates';
 import { openTestDatabase } from './support/nodeSqlite';
 
 // G3.8, user's pick "Leave plan rest blank": new plan sets get no rest, so they use the exercise's
@@ -49,30 +51,40 @@ const hasRest = (s: SetPrescription) => Object.prototype.hasOwnProperty.call(s, 
 const restsOf = (p: Plan) => Object.fromEntries(p.workouts.flatMap((w) => w.blocks.flatMap((b) => b.exercises)).map((e) => [e.id, e.sets.map((s) => s.restSec)]));
 const u = undefined;
 
+/** Each block's own rests, in order: what a copy must keep. */
+const blockRests = (w: PlanWorkout) => w.blocks.map((b) => [b.type, b.roundRestSec, b.transitionRestSec]);
+
 describe('new plans leave rest blank', () => {
-  test('starter templates and sample plans set no rest on any set; supersets and circuits keep their own rests', () => {
-    const sources = [...starterTemplates, ...fakePlans];
-    for (const source of sources) for (const set of allSets(source.workouts)) assert.equal(hasRest(set), false, `${source.id}: ${JSON.stringify(set)}`);
-    const grouped = sources.flatMap((s) => s.workouts.flatMap((w) => w.blocks.filter(isGrouped)));
-    assert.ok(grouped.length >= 5);
-    assert.ok(grouped.every((b) => (b.roundRestSec ?? 0) > 0), 'every superset and circuit still rests after each round');
-    // Bodyweight Basics' circuit and the sample Calves & Core circuit.
-    assert.deepEqual(
-      grouped
-        .filter((b) => b.type === 'circuit')
-        .map((b) => b.transitionRestSec)
-        .sort(),
-      [15, 20],
-    );
+  const sources = [...starterTemplates, ...fakePlans];
+
+  test('no starter template or sample plan sets a rest on any set', () => {
+    assert.ok(starterTemplates.length > 0);
+    for (const source of sources) {
+      assert.ok(allSets(source.workouts).length > 0, `${source.id} has sets`);
+      for (const set of allSets(source.workouts)) assert.equal(hasRest(set), false, `${source.id}: ${JSON.stringify(set)}`);
+    }
   });
 
-  test('a plan made from a template has no plan rests', () => {
-    const full = starterTemplates.filter((t) => t.workouts.length);
-    assert.ok(full.length >= 4);
-    for (const template of full) {
-      const p = planFromTemplate(template, MONDAY);
-      assert.ok(allSets(p.workouts).length > 0);
-      assert.ok(allSets(p.workouts).every((s) => !hasRest(s)), template.id);
+  test('every superset and circuit rests after each round', () => {
+    const grouped = sources.flatMap((s) => s.workouts.flatMap((w) => w.blocks.filter(isGrouped).map((b) => ({ where: `${s.id} > ${w.name} > ${b.id}`, b }))));
+    assert.ok(grouped.some(({ b }) => b.type === 'superset') && grouped.some(({ b }) => b.type === 'circuit'), 'there are supersets and circuits to check');
+    for (const { where, b } of grouped) assert.ok((b.roundRestSec ?? 0) > 0, `${where} rests after each round`);
+  });
+
+  test('every day version of every template copies into a plan with no rests, keeping the block rests', () => {
+    for (const template of starterTemplates) {
+      for (const { daysPerWeek } of templateDayOptions(template)) {
+        const where = `${template.id} (${daysPerWeek} days)`;
+        const p = planFromTemplate(template, MONDAY, { daysPerWeek });
+        assert.equal(trainingDays(p.schedule).count, daysPerWeek, `${where}: that version was copied`);
+        assert.ok(allSets(p.workouts).length > 0, where);
+        assert.ok(allSets(p.workouts).every((s) => !hasRest(s)), where);
+        for (const w of p.workouts) {
+          const source = template.workouts.find((tw) => tw.name === w.name);
+          assert.ok(source, `${where}: ${w.name}`);
+          assert.deepEqual(blockRests(w), blockRests(source), `${where}: ${w.name}`);
+        }
+      }
     }
   });
 
@@ -432,8 +444,8 @@ const oldUngroup = (p: Plan, workoutId: string, blockId: string): Plan => ({
         },
   ),
 });
-/** "Use template" before G3.8. */
-const oldFromTemplate = (templateId: string) => withOldRests(planFromTemplate(starterTemplates.find((t) => t.id === templateId)!, MONDAY));
+/** "Use template" before G3.8, on one of the stand-in templates of the time (tests/support/legacyTemplates.ts). */
+const oldFromTemplate = (templateId: string) => withOldRests(planFromTemplate(LEGACY_TEMPLATES.find((t) => t.id === templateId)!, MONDAY));
 
 /** Saves each stage through the repository as the old app did, then opens the database as the new app first does. */
 async function cleanedAfter(stages: Plan[]): Promise<SqliteRepository> {
@@ -446,6 +458,16 @@ async function cleanedAfter(stages: Plan[]): Promise<SqliteRepository> {
 }
 
 describe('the cleanup goes by where each planned exercise came from', () => {
+  test("the frozen stand-in templates use exactly the exercises the cleanup's rest map lists for them", () => {
+    assert.deepEqual(LEGACY_TEMPLATES.map((t) => t.id).sort(), ['tpl_calisthenics', 'tpl_ppl']);
+    for (const template of LEGACY_TEMPLATES) {
+      const used = new Set(template.workouts.flatMap((w) => w.blocks.flatMap((b) => b.exercises.map((e) => e.exerciseId))));
+      const listed = LEGACY_TEMPLATE_RESTS_SEC[template.id];
+      assert.ok(listed, template.id);
+      assert.deepEqual([...used].sort(), Object.keys(listed).sort(), template.id);
+    }
+  });
+
   test('a rest typed into a starter-template plan stays, even at the old 2:30 or 1:30', async () => {
     const v1 = oldFromTemplate('tpl_ppl');
     const squat = peFor(v1, 'ex_back_squat');
