@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G4.1 (EAS development build). The project side is done; the owner builds and installs it with [DEV_BUILD.md](DEV_BUILD.md) once the Apple Developer membership is active. The G3.13 starter programs are waiting for the owner's review (`CONTENT_REVIEW.md`).
+**Current goal:** G4.1 (EAS development build). The project is linked to EAS and the Apple Developer membership is active; the owner registers the iPhone, builds and installs with [DEV_BUILD.md](DEV_BUILD.md) steps 5-9. The G3.13 starter programs are waiting for the owner's review (`CONTENT_REVIEW.md`).
 
 ## How we work
 
@@ -420,13 +420,14 @@ Everything works on one phone, offline, with no server.
 
 ## Phase 4: Native Build & Form Analysis
 
-**Prerequisites:** an Apple Developer Program membership ($99/yr) and an Expo account (the owner has one already; Expo Go requires it). The iPhone is registered with Apple and has Developer Mode on. iOS builds come from EAS cloud builds, because Windows can't build iOS apps locally. The free Expo plan includes 15 iOS builds a month.
+**Prerequisites:** an Apple Developer Program membership ($99/yr, active since 2026-11) and an Expo account (gavyn17). The iPhone is registered with Apple and has Developer Mode on. iOS builds come from EAS cloud builds, because Windows can't build iOS apps locally. The free Expo plan includes 15 iOS builds a month.
 
 ### G4.1 Switch to an EAS development build
 
 - [x] Project setup, no accounts needed. *expo-dev-client, with its floating button and launch menu off (shake for the menu). `eas.json` has development, preview and production profiles; build numbers are kept by EAS. The development build is its own app (user's pick): "Tracker Dev", bundle id `com.gavynnygren.exercisetracker.dev`, through `app.config.ts` and `APP_VARIANT`, so a normal build can sit beside it later with separate data. Native settings: iOS 17.0 minimum (spec 1), the Face ID prompt line (user's pick: "Face ID unlocks the app when the app lock is on. The app never sees your face."), no push entitlement since every V1 notification is local, and exempt encryption only. `tests/appConfig.test.ts` pins these. `npm run start:go` still opens Expo Go.*
 - [x] Fixes for running outside Expo Go. *Developer copy no longer names Expo Go; Pending notifications lists the rest alarm on its own line. The Face ID lock follows spec 2.3: a passcode-only phone can use it, Face ID denied for the app falls back to the passcode with a row that says so, and a lock that's on can always be turned off (before, denying Face ID left it stuck on).*
-- [ ] The owner builds and installs it ([DEV_BUILD.md](DEV_BUILD.md) steps 1-8), wrapping up Expo Go first (export, notifications off).
+- [x] Link the project. *EAS project @gavyn17/exercise-tracker, on the personal account (user's pick); `owner` and `extra.eas.projectId` in `app.json`, pinned by the config test. A pre-build check found nothing that would fail the build; it fixed the tinted icon (Expo fills its transparency with white, so it is now flattened onto black), repeated the upload-relevant `client/.gitignore` rules at the root (EAS CLI on Windows skips nested ones), and brought DEV_BUILD.md in line with eas-cli 27.5.*
+- [ ] The owner registers the iPhone, builds and installs it ([DEV_BUILD.md](DEV_BUILD.md) steps 5-8).
 - [ ] Confirm everything from Phases 0-3 still works, plus the native-only checks in [DEV_BUILD.md](DEV_BUILD.md) step 9 (icons, splash, permission prompts, notification taps from a cold start, Face ID lock).
 
 ### G4.2 Camera stack spike (go/no-go)

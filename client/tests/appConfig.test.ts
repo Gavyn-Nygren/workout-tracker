@@ -42,6 +42,12 @@ describe('app variants', () => {
     assert.equal(eas.build.production.env.APP_VARIANT, 'production');
     assert.equal(eas.cli.appVersionSource, 'remote');
   });
+
+  test("linked to the owner's EAS project, so builds and credentials stay on one account", () => {
+    assert.equal(app.owner, 'gavyn17');
+    assert.equal(app.extra.eas.projectId, 'b6da9cab-c7e9-420a-84cf-f016dfc25da8');
+    assert.equal(app.extra.router, undefined, 'the router plugin adds its own defaults; app.json keeps none');
+  });
 });
 
 describe('native settings', () => {

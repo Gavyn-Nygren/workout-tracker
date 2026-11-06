@@ -76,6 +76,12 @@
     "experiments": {
       "typedRoutes": true
     },
-    "backgroundColor": "#F2F4F7"
+    "backgroundColor": "#F2F4F7",
+    "extra": {
+      "eas": {
+        "projectId": "b6da9cab-c7e9-420a-84cf-f016dfc25da8"
+      }
+    },
+    "owner": "gavyn17"
   }
 }

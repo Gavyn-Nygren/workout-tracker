@@ -146,3 +146,19 @@ vite.config.ts.timestamp-*
 venv/
 __pycache__/
 *.pyc
+
+# Expo app (client/). EAS CLI on Windows skips nested .gitignore files when it uploads a build,
+# so the rules in client/.gitignore that matter for the upload are repeated here.
+client/.expo/
+client/web-build/
+client/expo-env.d.ts
+client/ios/
+client/android/
+client/.kotlin/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+.metro-health-check*
