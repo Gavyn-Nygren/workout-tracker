@@ -49,8 +49,9 @@ export default function PlanExercisePicker() {
 
   return (
     // The page background, not the sheet color, so the list cards stand out (iOS grouped style).
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+    // The ScrollView is the sheet's first view (see sheet() in _layout.tsx).
+    <>
+      <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <View style={styles.header}>
           {loading ? (
             <Skeleton width="60%" height={28} />
@@ -73,14 +74,11 @@ export default function PlanExercisePicker() {
         />
       </ScrollView>
       <ToastViewport bottomOffset={spacing.lg} />
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
   content: {
     padding: spacing.lg,
     paddingTop: spacing.xxl,

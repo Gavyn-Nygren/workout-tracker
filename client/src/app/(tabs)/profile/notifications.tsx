@@ -76,7 +76,7 @@ export default function NotificationsScreen() {
       themeVariant={scheme}
       accentColor={colors.accentText}
       accessibilityLabel={label}
-      onChange={(_, date) => date && onChange(dateToTime(date))}
+      onValueChange={(_, date) => onChange(dateToTime(date))}
     />
   );
 

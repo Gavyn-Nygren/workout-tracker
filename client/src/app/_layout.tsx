@@ -55,6 +55,9 @@ function NavigationRoot() {
   /**
    * Native iOS sheet with a grabber, at the given heights (fractions of the screen). At
    * accessibility text sizes sheets open full height so their buttons stay on screen.
+   * A sheet that scrolls must have its ScrollView as its top view (a fragment with a ToastViewport
+   * beside it is fine). Wrapped in a View, the sheet draws blank in a native build on iOS 26
+   * (react-native-screens 4.30), though not in Expo Go. tests/sheetLayout.test.ts checks this.
    */
   const sheet = (detents: number[]) =>
     ({

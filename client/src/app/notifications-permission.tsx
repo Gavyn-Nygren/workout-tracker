@@ -96,9 +96,9 @@ export default function NotificationPermissionScreen() {
   };
 
   return (
-    <View style={[styles.flex, { backgroundColor: colors.cardElevated }]} onAccessibilityEscape={close}>
+    <>
       {/* The sheet opens full height at large text sizes; the content scrolls so the buttons stay reachable. */}
-      <ScrollView contentContainerStyle={styles.screen}>
+      <ScrollView style={{ backgroundColor: colors.cardElevated }} contentContainerStyle={styles.screen} onAccessibilityEscape={close}>
         <View style={[styles.icon, { backgroundColor: colors.accentSubtle }]}>
           <Icon name={forRest ? 'timer' : 'bell.badge.fill'} color={colors.accentText} size={32} />
         </View>
@@ -175,7 +175,7 @@ export default function NotificationPermissionScreen() {
         <Button title="Not now" variant="ghost" onPress={close} style={styles.centerSelf} />
       </ScrollView>
       <ToastViewport bottomOffset={spacing.lg} />
-    </View>
+    </>
   );
 }
 

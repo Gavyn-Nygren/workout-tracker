@@ -158,9 +158,15 @@ function LogWeightForm({ entries, editing, goals, units, celebrations }: FormPro
   };
 
   return (
-    // Scrolls, so Save stays reachable at large text sizes.
-    <View style={[styles.fill, { backgroundColor: colors.cardElevated }]} onAccessibilityEscape={() => router.back()}>
-      <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+    // Scrolls, so Save stays reachable at large text sizes. The ScrollView is the sheet's first view (see sheet() in _layout.tsx).
+    <>
+      <ScrollView
+        style={{ backgroundColor: colors.cardElevated }}
+        contentContainerStyle={styles.screen}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        onAccessibilityEscape={() => router.back()}
+      >
         <AppText variant="title2" accessibilityRole="header">
           {editing ? 'Edit weigh-in' : 'Log bodyweight'}
         </AppText>
@@ -204,7 +210,7 @@ function LogWeightForm({ entries, editing, goals, units, celebrations }: FormPro
               themeVariant={scheme}
               accentColor={colors.accentText}
               accessibilityLabel="Date"
-              onChange={(_, day) => day && setPicked(dateForChoice('other', toISODate(day), today))}
+              onValueChange={(_, day) => setPicked(dateForChoice('other', toISODate(day), today))}
             />
           </View>
         )}
@@ -222,14 +228,11 @@ function LogWeightForm({ entries, editing, goals, units, celebrations }: FormPro
         />
       </ScrollView>
       <ToastViewport bottomOffset={spacing.lg} />
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  fill: {
-    flex: 1,
-  },
   screen: {
     flexGrow: 1,
     padding: spacing.xl,
