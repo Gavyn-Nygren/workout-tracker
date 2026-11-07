@@ -7,6 +7,7 @@ import { AppText, Button, Card, Icon, ListRow, ToastViewport, Toggle, useToast }
 import { isNotificationToggle } from '@/data/preferences';
 import type { NotificationToggle, Preferences } from '@/data/types';
 import { WEEKDAY_LONG } from '@/lib/format';
+import { permissionSheetGuard } from '@/features/notifications/permissionSheet';
 import { PLAN_OFFER_KINDS, type PlanOfferKind } from '@/features/notifications/planOffer';
 import { markPlanOfferAsked } from '@/features/notifications/planOfferStore';
 import { formatTime, useSettings } from '@/features/settings/useSettings';
@@ -52,10 +53,14 @@ export default function NotificationPermissionScreen() {
   const blocked = permission === 'denied';
   const [chosen, setChosen] = useState(ALL_CHOSEN);
   const chosenKinds = PLAN_OFFER_KINDS.filter((kind) => chosen[kind]);
+  // The sheet closes once: a double tap on Turn on, or an answer after Not now, mustn't go back twice.
+  const [guard] = useState(permissionSheetGuard);
+  const [asking, setAsking] = useState(false);
 
   useEffect(() => {
     void refreshNotificationPermission();
   }, []);
+  useEffect(() => guard.showing(), [guard]);
 
   const enable = () => {
     const keys: NotificationToggle[] = forPlan ? chosenKinds : key ? [key] : [];
@@ -67,33 +72,32 @@ export default function NotificationPermissionScreen() {
     });
   };
 
-  const close = () => {
+  const exit = () => {
     if (forPlan) markPlanOfferAsked();
     router.back();
   };
+  const close = () => guard.close(exit);
 
-  const allow = async () => {
-    let answer: AlarmPermission;
-    try {
+  const allow = () =>
+    guard.allow<AlarmPermission>({
       // Already allowed: just turn it on, with no iOS prompt.
-      answer = permission === 'granted' ? permission : await requestNotificationPermission();
-    } catch {
+      request: () => (permission === 'granted' ? Promise.resolve(permission) : requestNotificationPermission()),
+      started: () => setAsking(true),
+      answered: (answer) => {
+        if (answer === 'granted') {
+          enable();
+          // The sheet closes, so the change is said rather than shown. A running rest gets its alarm now.
+          if (forRest) AccessibilityInfo.announceForAccessibilityWithOptions('Rest alarm on.', { queue: true });
+          // From a plan nothing on screen changes, so say where to change them.
+          if (forPlan) toast.show({ message: 'Notifications on. You can change them in Profile.', tone: 'success' });
+        } else {
+          toast.show({ message: 'Notifications stay off. You can allow them in iOS Settings.' });
+        }
+      },
       // Carry on as if denied.
-      toast.show({ message: "Couldn't ask for notification permission. You can turn it on in Settings." });
-      close();
-      return;
-    }
-    if (answer === 'granted') {
-      enable();
-      // The sheet closes, so the change is said rather than shown. A running rest gets its alarm now.
-      if (forRest) AccessibilityInfo.announceForAccessibilityWithOptions('Rest alarm on.', { queue: true });
-      // From a plan nothing on screen changes, so say where to change them.
-      if (forPlan) toast.show({ message: 'Notifications on. You can change them in Profile.', tone: 'success' });
-    } else {
-      toast.show({ message: 'Notifications stay off. You can allow them in iOS Settings.' });
-    }
-    close();
-  };
+      failed: () => toast.show({ message: "Couldn't ask for notification permission. You can turn it on in Settings." }),
+      exit,
+    });
 
   return (
     <>
@@ -166,11 +170,12 @@ export default function NotificationPermissionScreen() {
             title="Turn on"
             fullWidth
             disabled={chosenKinds.length === 0}
+            loading={asking}
             accessibilityHint={chosenKinds.length ? 'Turns on the notifications switched on above' : 'Switch one on above first'}
             onPress={allow}
           />
         ) : (
-          <Button title={forRest ? 'Turn on rest alarm' : 'Turn on notifications'} fullWidth onPress={allow} />
+          <Button title={forRest ? 'Turn on rest alarm' : 'Turn on notifications'} fullWidth loading={asking} onPress={allow} />
         )}
         <Button title="Not now" variant="ghost" onPress={close} style={styles.centerSelf} />
       </ScrollView>

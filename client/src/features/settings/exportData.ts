@@ -1,5 +1,6 @@
 import { effectiveLoadKg } from '@/data/calculations';
-import type { BodyweightEntry, Exercise, FormReport, Goal, Plan, Preferences, UnitSystem, WorkoutSession } from '@/data/types';
+import { beforeReopens } from '@/data/reopen';
+import type { BodyweightEntry, Exercise, FormReport, Goal, OnboardingAnswers, Plan, Preferences, UnitSystem, WorkoutSession } from '@/data/types';
 import { kgToLb } from '@/data/units';
 
 const csvCell = (value: unknown): string => {
@@ -13,7 +14,8 @@ const load = (kg: number | undefined, units: UnitSystem) => (kg === undefined ? 
 /**
  * One row per logged set, for spreadsheets (spec 2.3: CSV of workouts and sets). Bodyweight sets
  * show added load or assistance (whichever the set's kind uses), the bodyweight saved with the
- * set, and the load it counts as (its effective load).
+ * set, and the load it counts as (its effective load). A workout reopened for editing is still
+ * in, as it counts everywhere else (data/reopen.ts).
  */
 export function workoutsCsv(sessions: WorkoutSession[], exercisesById: Map<string, Exercise>, plans: Plan[], units: UnitSystem): string {
   const unit = units === 'imperial' ? 'lb' : 'kg';
@@ -40,7 +42,9 @@ export function workoutsCsv(sessions: WorkoutSession[], exercisesById: Map<strin
   ];
   const planName = new Map(plans.map((p) => [p.id, p.name]));
   const rows = [header.join(',')];
-  const completed = sessions.filter((s) => s.status === 'completed').sort((a, b) => (a.completedAt ?? '').localeCompare(b.completedAt ?? ''));
+  const completed = beforeReopens(sessions)
+    .filter((s) => s.status === 'completed')
+    .sort((a, b) => (a.completedAt ?? '').localeCompare(b.completedAt ?? ''));
   for (const s of completed) {
     for (const entry of s.blocks.flatMap((b) => b.exercises)) {
       const exercise = exercisesById.get(entry.exerciseId);
@@ -78,7 +82,10 @@ export function workoutsCsv(sessions: WorkoutSession[], exercisesById: Map<strin
   return rows.join('\n');
 }
 
-/** Everything, in the app's own format (spec 2.3; also covers data-access requests). Videos stay on the phone. */
+/**
+ * Everything, in the app's own format (spec 2.3; also covers data-access requests), including the
+ * onboarding answers kept on the phone (height, limitations and their note). Videos stay on the phone.
+ */
 export function everythingJson(input: {
   preferences: Preferences;
   exercises: Exercise[];
@@ -87,6 +94,7 @@ export function everythingJson(input: {
   bodyweight: BodyweightEntry[];
   goals: Goal[];
   formReports: FormReport[];
+  onboarding?: OnboardingAnswers;
 }): string {
   return JSON.stringify(
     {
@@ -102,6 +110,7 @@ export function everythingJson(input: {
       bodyweight: input.bodyweight,
       goals: input.goals,
       formReports: input.formReports,
+      onboarding: input.onboarding,
     },
     null,
     2,

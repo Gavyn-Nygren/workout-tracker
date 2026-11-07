@@ -24,13 +24,14 @@ const CATEGORIES = Object.keys(CATEGORY_LABEL) as StarterTemplate['category'][];
 
 /** Plans tab (roadmap G2.4): your plans, starter templates, and the exercise library. */
 export default function PlansScreen() {
-  const params = useLocalSearchParams<{ segment?: Segment }>();
-  const [segment, setSegment] = useState<Segment>(params.segment ?? 'plans');
+  // Kept in the route's params, so New plan's "Or start from a template" can go back to this screen
+  // and switch it to Templates.
+  const segment = useLocalSearchParams<{ segment?: Segment }>().segment ?? 'plans';
 
   return (
     <ScrollView contentContainerStyle={[styles.content, dashboard]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
       <View style={readable}>
-        <SegmentedControl label="Plans sections" options={SEGMENTS} value={segment} onChange={setSegment} />
+        <SegmentedControl label="Plans sections" options={SEGMENTS} value={segment} onChange={(next) => router.setParams({ segment: next })} />
       </View>
       {segment === 'plans' && <MyPlans />}
       {segment === 'templates' && <Templates />}

@@ -4,7 +4,7 @@ import { AccessibilityInfo, AppState } from 'react-native';
 
 import { useRepository } from '@/data/DataProvider';
 
-import { completionStamp, todayISO } from '@/data/dates';
+import { todayISO } from '@/data/dates';
 import {
   succeeded,
   useBodyweight,
@@ -26,7 +26,7 @@ import { spokenDuration } from '@/hooks/useNow';
 import { createLocalStore } from '@/lib/localStore';
 import { goalsAddedByReopen } from '../summary/goalsReached';
 import type { DayItem } from '../today/agenda';
-import { sessionForReopen, sessionFromPlan } from './buildSession';
+import { sessionForFinish, sessionForReopen, sessionFromPlan } from './buildSession';
 import { bodyweightForSet, completedNewestFirst, recordsAddedByReopen, withSessionWrite, type SessionWrite } from './history';
 import { continueAs, discardPlan, restoredRest, sessionToResume, type ActiveWorkoutMeta } from './persistence';
 import {
@@ -47,7 +47,7 @@ import {
 } from './rest';
 import { shouldOfferRestAlarm } from './restAlarm';
 import { markRestAlarmAsked, notificationPermission, restAlarmAsked, useRestAlarm } from './useRestAlarm';
-import { completionOf, countSets, setName, setNumber, workoutReducer, type ActiveWorkout, type SetCounts, type WorkoutAction } from './workoutReducer';
+import { countSets, setName, setNumber, workoutReducer, type ActiveWorkout, type SetCounts, type WorkoutAction } from './workoutReducer';
 
 export type { RestTimer } from './rest';
 export { restRemainingMs } from './rest';
@@ -598,7 +598,8 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       togglePauseRest,
       skipRest,
       end: async () => {
-        if (!workout) return false;
+        // A second tap while Finish or Discard is still saving does nothing: the workout closes then.
+        if (!workout || finishing.current) return false;
         const opened = generation.current;
         finishing.current = true;
         cancelAutosave();
@@ -612,18 +613,11 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
         return ok;
       },
       finish: async () => {
-        if (!workout) return null;
+        if (!workout || finishing.current) return null;
         const { session, mode } = workout;
         const reopened = mode === 'reopen';
         const now = new Date();
-        const finished: WorkoutSession = {
-          ...session,
-          status: 'completed',
-          completion: completionOf(session),
-          // The local date at Finish; reopening keeps the original moment and day (spec 2.5).
-          ...completionStamp(now, reopened ? session : undefined),
-          updatedAt: now.toISOString(),
-        };
+        const finished = sessionForFinish(session, reopened, now);
         // A reopened workout celebrates only records its edits added, not ones it already had.
         const newRecordCount = reopened ? recordsAddedByReopen(sessions.data ?? [], original.current, finished, exercisesById).length : 0;
         const newGoalIds = reopened ? goalsAddedByReopen(goals.data ?? [], sessions.data ?? [], original.current, finished, exercisesById, todayISO(now)).map((g) => g.id) : [];

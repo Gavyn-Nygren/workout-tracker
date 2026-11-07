@@ -4,6 +4,9 @@ import { StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing, tabularNums, typography } from '@/theme/tokens';
 import { AppText } from './AppText';
+import { formatNumber, parseNumber, shouldSyncText } from './numberText';
+
+export { parseNumber };
 
 type Props = {
   /** Read by VoiceOver, e.g. "Weight". */
@@ -24,19 +27,6 @@ type Props = {
 
 const SPOKEN_UNITS: Record<string, string> = { s: 'seconds', sec: 'seconds', min: 'minutes', lb: 'pounds', lbs: 'pounds', kg: 'kilograms', in: 'inches', cm: 'centimeters', '%': 'percent', '°': 'degrees' };
 
-/** Accepts both "." and "," as the decimal separator. */
-export function parseNumber(text: string, decimal: boolean): number | undefined {
-  const normalized = text.replace(',', '.').trim();
-  if (normalized === '' || normalized === '.') return undefined;
-  const value = decimal ? Number.parseFloat(normalized) : Number.parseInt(normalized, 10);
-  return Number.isFinite(value) ? value : undefined;
-}
-
-function formatNumber(value: number | undefined): string {
-  if (value === undefined) return '';
-  return String(Math.round(value * 100) / 100);
-}
-
 /** Compact numeric input for weights, reps, and times. Uses the number or decimal keypad. */
 /** Compact numeric input. Text grows up to `maxScale` with Dynamic Type and the field widens to match. */
 export function NumberField({ label, value, onChange, unit, decimal = false, placeholder, width = 88, maxScale = 2, onFocusChange }: Props) {
@@ -45,10 +35,11 @@ export function NumberField({ label, value, onChange, unit, decimal = false, pla
   const [text, setText] = useState(formatNumber(value));
   const [focused, setFocused] = useState(false);
 
-  // Follow outside changes (e.g. a stepper) without clobbering what the user is typing.
+  // Follow outside changes (e.g. a stepper, or PREVIOUS copied in while this field is focused)
+  // without clobbering what the user is typing.
   useEffect(() => {
-    if (!focused) setText(formatNumber(value));
-  }, [value, focused]);
+    setText((current) => (shouldSyncText(current, value, decimal, focused) ? formatNumber(value) : current));
+  }, [value, focused, decimal]);
 
   return (
     <View

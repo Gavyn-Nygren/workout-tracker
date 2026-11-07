@@ -21,7 +21,9 @@
 // - Weekly % (decision B): in a later week than last time, with every working set done and no
 //   miss, the weight lifted last time goes up by the percent. Weeks are the program's weeks for a
 //   fixed-length plan (as "Week N of M" counts them), otherwise calendar weeks from the week-start
-//   setting. A gap of several weeks still adds one step. It needs a weight to scale.
+//   setting. A program workout from the calendar counts in the week the plan first put it in, so a
+//   pushed or late one keeps its week. A gap of several weeks still adds one step. It needs a
+//   weight to scale.
 // - A miss repeats the weight, or with a deload rule, drops it by its percent once there have been
 //   N misses in a row at last time's weight. A different weight starts a fresh count.
 // - Every change rounds to the exercise's increment and moves at least one increment past the
@@ -34,6 +36,7 @@
 
 import { startOfWeek } from '@/data/dates';
 import { loadField, plannedWorkingField, roundingIncrementFor, type LoadField } from '@/data/logging';
+import { occurrenceIdFor, programWeek } from '@/data/schedule';
 import type {
   Exercise,
   ISODate,
@@ -45,11 +48,13 @@ import type {
   ProgressionRule,
   ProgressionSuggestion,
   RepTarget,
+  ScheduledOccurrence,
   SessionExercise,
   SetKind,
   SetPrescription,
   UnitSystem,
   Weekday,
+  WorkoutSession,
 } from '@/data/types';
 import { kgToLb, lbToKg, roundLoadKg } from '@/data/units';
 import { currentProgramWeek } from '@/features/plans/position';
@@ -68,6 +73,8 @@ export type ProgressionInput = {
   plan?: Plan;
   /** Pushes forward, which move a program's weeks (only the plan's own are used). */
   shifts?: readonly PlanShift[];
+  /** The plan's calendar workout being started, if it is one (not a repeat): its program week. */
+  occurrence?: Pick<ScheduledOccurrence, 'planId' | 'scheduledDate' | 'shiftedFromDate'>;
   /** The day the workout is done. */
   today: ISODate;
 };
@@ -178,16 +185,30 @@ function moved(liftedKg: number, rawKg: number, direction: 1 | -1, { units, incr
   return { kg: fromUnits(to * increment, units), minimumStep: to !== raw };
 }
 
-/** Whether `today` is in a later week than `last`: the program's weeks, or calendar weeks. */
-function laterWeek(last: ISODate, today: ISODate, input: Pick<ProgressionInput, 'plan' | 'shifts' | 'preferences'>): boolean {
-  const { plan, shifts } = input;
+/** The date the plan first put a session's workout on, read back from its occurrence id. */
+function originalDateOf({ occurrenceId, planId, planWorkoutId }: WorkoutSession): ISODate | undefined {
+  if (!occurrenceId || !planId || !planWorkoutId) return undefined;
+  const at = `occ_${planId}_`.length;
+  const date = occurrenceId.slice(at, at + 10);
+  return occurrenceIdFor(planId, date, planWorkoutId) === occurrenceId ? date : undefined;
+}
+
+/**
+ * Whether the workout now is in a later week than last time's, done on `lastDate`: the program's
+ * weeks, or calendar weeks. A program workout from the calendar is in the week the plan first put
+ * it in. Any other (a repeat, or one from another plan) is in the week the program was in that day.
+ */
+function laterWeek(last: WorkoutSession, lastDate: ISODate, input: Pick<ProgressionInput, 'plan' | 'shifts' | 'preferences' | 'occurrence' | 'today'>): boolean {
+  const { plan, shifts, occurrence, today } = input;
   if (plan?.schedule.type === 'fixed') {
-    const was = currentProgramWeek(plan, last, shifts);
-    const now = currentProgramWeek(plan, today, shifts);
+    const lastOriginal = last.planId === plan.id ? originalDateOf(last) : undefined;
+    const was = lastOriginal ? programWeek(plan, lastOriginal) : currentProgramWeek(plan, lastDate, shifts);
+    const nowOriginal = occurrence?.planId === plan.id ? (occurrence.shiftedFromDate ?? occurrence.scheduledDate) : undefined;
+    const now = nowOriginal ? programWeek(plan, nowOriginal) : currentProgramWeek(plan, today, shifts);
     if (was !== undefined && now !== undefined) return now > was;
   }
   const weekStartsOn = input.preferences.weekStartsOn ?? 1;
-  return startOfWeek(today, weekStartsOn) > startOfWeek(last, weekStartsOn);
+  return startOfWeek(today, weekStartsOn) > startOfWeek(lastDate, weekStartsOn);
 }
 
 /** Misses in a row at last time's weight, walking back from last time. */
@@ -257,7 +278,7 @@ export function progressionFor(input: ProgressionInput): Progression {
     rawKg = liftedKg + harder * rule.incrementKg;
   } else {
     const lastDate = last.session.completedDate;
-    if (!outcome.allDone || liftedKg <= 0 || !lastDate || !laterWeek(lastDate, input.today, input)) return plain;
+    if (!outcome.allDone || liftedKg <= 0 || !lastDate || !laterWeek(last.session, lastDate, input)) return plain;
     rawKg = liftedKg * (1 + (harder * rule.percent) / 100);
   }
   const step = moved(liftedKg, rawKg, harder, rounding);

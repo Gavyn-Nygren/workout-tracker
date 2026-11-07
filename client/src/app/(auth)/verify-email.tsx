@@ -1,9 +1,10 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Icon, useToast } from '@/components/ui';
 import { signIn } from '@/features/auth/authStore';
+import { firstParam } from '@/lib/params';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { readable } from '@/theme/layout';
 import { radius, spacing } from '@/theme/tokens';
@@ -14,7 +15,10 @@ const RESEND_SECONDS = 30;
 export default function VerifyEmailScreen() {
   const { colors } = useAppTheme();
   const toast = useToast();
-  const { email, name } = useLocalSearchParams<{ email: string; name?: string }>();
+  const params = useLocalSearchParams<{ email?: string | string[]; name?: string | string[] }>();
+  // A link can leave the email out or repeat it, so read the first value.
+  const email = firstParam(params.email);
+  const name = firstParam(params.name);
   const [cooldown, setCooldown] = useState(RESEND_SECONDS);
 
   useEffect(() => {
@@ -22,6 +26,9 @@ export default function VerifyEmailScreen() {
     const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
     return () => clearTimeout(t);
   }, [cooldown]);
+
+  // Opened without an email (only a link does that): there's nothing to verify yet.
+  if (!email) return <Redirect href="/sign-up" />;
 
   return (
     // Scrolls at large text sizes so every button stays reachable.

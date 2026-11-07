@@ -119,6 +119,22 @@ describe('Log weight: fixing a weigh-in', () => {
     assert.deepEqual(weighInChange(entry, { date: '2026-10-21', value: 180 }, 'imperial'), { date: '2026-10-21' });
   });
 
+  test('a weigh-in dated after today (logged before a flight west) keeps its date', () => {
+    const ahead = weighIn('2026-10-30', 80);
+    // As the sheet opens it: another day, picked on its own date.
+    const choice = dayChoiceOf(ahead.date, today);
+    assert.equal(choice, 'other');
+    const date = dateForChoice(choice, ahead.date, today, ahead.date);
+    assert.equal(date, ahead.date);
+    assert.deepEqual(weighInChange(ahead, { date, value: 79.5 }, 'metric'), { weightKg: 79.5 });
+    assert.deepEqual(weighInChange(ahead, { date, value: 80 }, 'metric'), {});
+    // Any other day after today is still today, as is a new weigh-in's.
+    assert.equal(dateForChoice('other', '2026-10-31', today, ahead.date), today);
+    assert.equal(dateForChoice('other', ahead.date, today), today);
+    // Past midnight it stays on its day, which is now Today.
+    assert.deepEqual(rollDayChoice('other', ahead.date, today, '2026-10-30', ahead.date), { choice: 'today', picked: ahead.date });
+  });
+
   test('a new weight: converted from the user unit', () => {
     assert.deepEqual(weighInChange(entry, { date: entry.date, value: 178.5 }, 'imperial'), { weightKg: lbToKg(178.5) });
     assert.deepEqual(weighInChange(entry, { date: '2026-10-19', value: 80 }, 'metric'), { date: '2026-10-19', weightKg: 80 });

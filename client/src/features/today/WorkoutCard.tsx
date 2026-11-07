@@ -12,6 +12,7 @@ import { SchemeOverride, useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import type { DayItem, DayItemStatus, SessionSummary } from './agenda';
 import { planLines, sessionLines } from './cardLines';
+import { startButton } from './startButton';
 
 type Props = {
   item: DayItem;
@@ -69,10 +70,7 @@ function CardBody({
   const { large } = useTextScale();
   const status = STATUS[item.status];
   const done = item.status === 'completed' || item.status === 'partial';
-  const position = total > 1 ? ` ${index + 1}/${total}` : '';
-  // VoiceOver reads "1/2" as "one half", so the spoken labels spell the position out.
-  const spokenPosition = total > 1 ? ` ${index + 1} of ${total}` : '';
-  const verb = item.status === 'in_progress' ? 'Resume' : 'Start';
+  const start = startButton(item, today, index, total);
   const isCore = /core|abs/i.test(item.name);
 
   const lines = done && item.session ? sessionLines(item.session.blocks.flatMap((b) => b.exercises), exercisesById, units) : planLines(item.workout, exercisesById);
@@ -152,29 +150,12 @@ function CardBody({
       {done && summary && <Stats summary={summary} units={units} />}
 
       <View style={styles.actions}>
-        {(item.status === 'planned' || item.status === 'missed' || item.status === 'in_progress') &&
-          (item.date > today ? (
-            <Button
-              title={`Start early${position}`}
-              accessibilityLabel={total > 1 ? `Start workout${spokenPosition} early` : undefined}
-              variant="secondary"
-              fullWidth
-              onPress={onStart}
-            />
-          ) : (
-            <Button
-              title={`${verb} Workout${position}`}
-              accessibilityLabel={total > 1 ? `${verb} workout${spokenPosition}` : undefined}
-              icon="play.fill"
-              fullWidth
-              onPress={onStart}
-            />
-          ))}
-        {item.status === 'skipped' && (
+        {start && (
           <Button
-            title={`Start anyway${position}`}
-            accessibilityLabel={total > 1 ? `Start workout${spokenPosition} anyway` : undefined}
-            variant="secondary"
+            title={start.title}
+            accessibilityLabel={start.accessibilityLabel}
+            variant={start.main ? 'primary' : 'secondary'}
+            icon={start.main ? 'play.fill' : undefined}
             fullWidth
             onPress={onStart}
           />

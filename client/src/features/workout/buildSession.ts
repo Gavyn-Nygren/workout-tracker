@@ -1,11 +1,13 @@
-import type { Exercise, ISODate, LoggedSet, PlannedExercise, PlanShift, PlanWorkout, ProgressionSuggestion, SessionExercise, SetPrescription, SuggestedSet, WorkoutSession } from '@/data/types';
-import { todayISO } from '@/data/dates';
+import type { Exercise, ISODate, LoggedSet, PlannedBlock, PlannedExercise, PlanShift, PlanWorkout, ProgressionSuggestion, SessionExercise, SetPrescription, SuggestedSet, WorkoutSession } from '@/data/types';
+import { completionStamp, todayISO } from '@/data/dates';
 import { kindForExercise, loadField, roundingIncrementFor, type LoadField } from '@/data/logging';
 import { roundLoadKg } from '@/data/units';
 import { newId } from '@/lib/id';
+import { diffAgainstPlan } from '../summary/planDiff';
 import type { DayItem } from '../today/agenda';
 import { slotHistory, type LastTime } from './history';
 import { isProgressionKind, progressionFor, repRange, topWorkingKg, type ProgressionPreferences } from './progression';
+import { completionOf } from './workoutReducer';
 
 type BuildInput = {
   item: DayItem;
@@ -40,6 +42,8 @@ function prefillEntry(planned: PlannedExercise, exercise: Exercise | undefined, 
     history: past,
     preferences: input.preferences,
     plan: input.item.plan,
+    // A repeat isn't the calendar workout, so it's in the week the program is in today.
+    occurrence: input.repeatOf ? undefined : input.item.occurrence,
     shifts: input.shifts,
     today: input.today ?? todayISO(),
   });
@@ -89,14 +93,26 @@ function prefillEntry(planned: PlannedExercise, exercise: Exercise | undefined, 
   return suggestion ? { sets, suggestion } : { sets };
 }
 
+/**
+ * What a repeat does (spec 2.5: the same exercises): the source workout's, in its order, with its
+ * swaps and the ones added during it. One done from the plan keeps the plan's prescription and
+ * rule; one added during it is prescribed what was done (planDiff.ts).
+ */
+function repeatedBlocks(source: WorkoutSession, workout: PlanWorkout | undefined, exercisesById: Map<string, Exercise>): PlannedBlock[] {
+  return diffAgainstPlan(source, workout ?? { id: '', name: source.name, blocks: [] }, exercisesById).blocks;
+}
+
 export function sessionFromPlan(input: BuildInput): WorkoutSession {
   const { item, exercisesById, repeatOf } = input;
   const workout: PlanWorkout | undefined = item.workout;
   const now = new Date().toISOString();
+  const planId = repeatOf ? repeatOf.planId : item.plan?.id;
+  const planWorkoutId = repeatOf ? repeatOf.planWorkoutId : workout?.id;
   // Which of the workout's entries for the same exercise each planned exercise is.
   const seen = new Map<string, number>();
   const plannedIds = (workout?.blocks ?? []).flatMap((b) => b.exercises.map((p) => p.id));
-  const blocks = (workout?.blocks ?? []).map((block) => ({
+  const fromPlan = new Set(plannedIds);
+  const blocks = (repeatOf ? repeatedBlocks(repeatOf, workout, exercisesById) : (workout?.blocks ?? [])).map((block) => ({
     id: newId('block'),
     type: block.type,
     roundRestSec: block.roundRestSec,
@@ -104,11 +120,13 @@ export function sessionFromPlan(input: BuildInput): WorkoutSession {
     exercises: block.exercises.map((planned): SessionExercise => {
       const nth = seen.get(planned.exerciseId) ?? 0;
       seen.set(planned.exerciseId, nth + 1);
-      const past = slotHistory(input.history, { exerciseId: planned.exerciseId, planId: item.plan?.id, planWorkoutId: workout?.id, plannedExerciseId: planned.id, nth, plannedIds });
+      // A repeat's exercise added during the source workout isn't one of the plan's.
+      const plannedExerciseId = fromPlan.has(planned.id) ? planned.id : undefined;
+      const past = slotHistory(input.history, { exerciseId: planned.exerciseId, planId, planWorkoutId, plannedExerciseId, nth, plannedIds });
       return {
         id: newId('entry'),
         exerciseId: planned.exerciseId,
-        plannedExerciseId: planned.id,
+        plannedExerciseId,
         skipped: false,
         notes: planned.notes,
         ...prefillEntry(planned, exercisesById.get(planned.exerciseId), past, input),
@@ -118,21 +136,41 @@ export function sessionFromPlan(input: BuildInput): WorkoutSession {
 
   return {
     id: newId('sess'),
-    name: item.name,
+    name: repeatOf?.name ?? item.name,
     occurrenceId: repeatOf ? undefined : item.occurrence?.id,
-    planId: item.plan?.id,
-    planWorkoutId: workout?.id,
+    planId,
+    planWorkoutId,
     status: 'in_progress',
     scheduledDate: repeatOf ? undefined : item.occurrence?.scheduledDate,
     startedAt: now,
     repeatedFromSessionId: repeatOf?.id,
+    planVersion: item.plan?.version,
     blocks,
     createdAt: now,
     updatedAt: now,
   };
 }
 
-/** Reopen edits the same session (spec 2.5); stats recalculate when it's finished again. */
+/**
+ * Reopen edits the same session (spec 2.5); stats recalculate when it's finished again. Until then
+ * it keeps a copy of itself as it was, which everything else reads (reopen.ts).
+ */
 export function sessionForReopen(session: WorkoutSession): WorkoutSession {
-  return { ...session, status: 'in_progress', completion: undefined, updatedAt: new Date().toISOString() };
+  const { beforeReopen: _, ...before } = session;
+  return { ...before, status: 'in_progress', completion: undefined, beforeReopen: before, updatedAt: new Date().toISOString() };
+}
+
+/**
+ * What Finish saves: completed, full or partial, on the local date at Finish. A reopened workout
+ * keeps its original moment and day (spec 2.5) and drops its copy from before the reopen.
+ */
+export function sessionForFinish(session: WorkoutSession, reopened: boolean, now: Date): WorkoutSession {
+  const { beforeReopen: _, ...finished } = session;
+  return {
+    ...finished,
+    status: 'completed',
+    completion: completionOf(session),
+    ...completionStamp(now, reopened ? session : undefined),
+    updatedAt: now.toISOString(),
+  };
 }

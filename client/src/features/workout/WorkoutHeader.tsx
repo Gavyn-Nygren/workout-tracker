@@ -4,11 +4,13 @@ import { AppText, Button, Icon, ProgressBar } from '@/components/ui';
 import { formatClock, spokenDuration, useNow } from '@/hooks/useNow';
 import { SchemeOverride, useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
+import { elapsedSeconds, type WorkoutClock } from './elapsed';
 import type { SetCounts } from './workoutReducer';
 
 type Props = {
   title: string;
-  startedAt?: string;
+  /** The workout's mode and times, for the elapsed clock. */
+  clock: WorkoutClock;
   counts: SetCounts;
   onMinimize: () => void;
   onFinish: () => void;
@@ -26,10 +28,11 @@ export function WorkoutHeader(props: Props) {
   );
 }
 
-function HeaderBody({ title, startedAt, counts, onMinimize, onFinish }: Props) {
+function HeaderBody({ title, clock, counts, onMinimize, onFinish }: Props) {
   const { colors } = useAppTheme();
-  const now = useNow(1000);
-  const elapsed = startedAt ? (now - Date.parse(startedAt)) / 1000 : 0;
+  // A reopened workout's clock is frozen, so it needn't tick.
+  const now = useNow(1000, clock.mode !== 'reopen');
+  const elapsed = elapsedSeconds(clock, now);
 
   return (
     <View style={[styles.wrap, { backgroundColor: colors.chrome, borderBottomColor: colors.border }]}>

@@ -1,3 +1,4 @@
+import { asBeforeReopen } from '@/data/reopen';
 import type { WorkoutSession } from '@/data/types';
 import type { RestTimer } from './rest';
 import { completionOf, type ActiveWorkout } from './workoutReducer';
@@ -55,10 +56,11 @@ export function sessionToResume(meta: ActiveWorkoutMeta | null, sessions: Workou
 
 /**
  * How an unfinished session picks back up without the phone's note: one that already has a
- * completion time was a reopened workout, so it continues as a reopen with itself marked finished
- * as the restore point. Finish then keeps its date, and Discard restores it instead of deleting it.
+ * completion time was a reopened workout, so it continues as a reopen with its copy from before the
+ * reopen as the restore point. Finish then keeps its date, and Discard restores it instead of deleting it.
  */
 export function continueAs(session: WorkoutSession): { mode: ActiveWorkout['mode']; original?: WorkoutSession } {
   if (!session.completedAt) return { mode: 'new' };
-  return { mode: 'reopen', original: { ...session, status: 'completed', completion: completionOf(session) } };
+  // The copy kept at the reopen (reopen.ts); one reopened before copies were kept is restored as it is now.
+  return { mode: 'reopen', original: session.beforeReopen ? asBeforeReopen(session) : { ...session, status: 'completed', completion: completionOf(session) } };
 }

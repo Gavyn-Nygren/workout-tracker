@@ -12,6 +12,7 @@ import {
   goalsReachedByWorkout,
   reachedAfter,
 } from '../src/features/summary/goalsReached';
+import { sessionForReopen } from '../src/features/workout/buildSession';
 
 const exercisesById = new Map(builtinExercises.map((e) => [e.id, e]));
 const TODAY = '2026-10-27';
@@ -56,6 +57,15 @@ describe('goals a workout reached', () => {
     const goals = [early, late, weekly];
     assert.deepEqual(goalsReachedByWorkout(goals, first.id, sessions, exercisesById, TODAY).map((g) => g.id), [early.id, weekly.id]);
     assert.deepEqual(goalsReachedByWorkout(goals, second.id, sessions, exercisesById, TODAY).map((g) => g.id), [late.id]);
+  });
+
+  test('a reopened workout keeps the goals it reached, and a later one doesn’t take them', () => {
+    const goal = liftGoal('2026-09-01', 100);
+    const first = bench('2026-10-10', [100, 5]);
+    const later = bench('2026-10-20', [100, 5]);
+    const sessions = [sessionForReopen(first), later];
+    assert.deepEqual(goalsReachedByWorkout([goal], first.id, sessions, exercisesById, TODAY).map((g) => g.id), [goal.id]);
+    assert.deepEqual(goalsReachedByWorkout([goal], later.id, sessions, exercisesById, TODAY), []);
   });
 
   test('ignores bodyweight and form goals', () => {

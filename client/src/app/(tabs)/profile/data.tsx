@@ -5,9 +5,11 @@ import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { AppText, Card, ListRow, SectionHeader, useToast } from '@/components/ui';
 import { todayISO } from '@/data/dates';
 import { useBodyweight, useExercises, useFormReports, useGoals, usePlans, useSessions } from '@/data/hooks';
+import { beforeReopens } from '@/data/reopen';
 import { everythingJson, workoutsCsv } from '@/features/settings/exportData';
 import { shareText } from '@/features/settings/shareFile';
 import { authStore, signOut } from '@/features/auth/authStore';
+import { onboardingAnswers } from '@/features/onboarding/answers';
 import { useSettings } from '@/features/settings/useSettings';
 import { spacing } from '@/theme/tokens';
 import { readable } from '@/theme/layout';
@@ -47,7 +49,16 @@ export default function DataAccountScreen() {
       } else {
         await shareText(
           `exercise-tracker-${stamp}.json`,
-          everythingJson({ preferences, exercises: exercises ?? [], plans: plans ?? [], sessions: sessions ?? [], bodyweight: bodyweight ?? [], goals: goals ?? [], formReports: formReports ?? [] }),
+          everythingJson({
+            preferences,
+            exercises: exercises ?? [],
+            plans: plans ?? [],
+            sessions: sessions ?? [],
+            bodyweight: bodyweight ?? [],
+            goals: goals ?? [],
+            formReports: formReports ?? [],
+            onboarding: onboardingAnswers.get(),
+          }),
           'application/json',
         );
       }
@@ -58,7 +69,8 @@ export default function DataAccountScreen() {
     }
   };
 
-  const completed = (sessions ?? []).filter((s) => s.status === 'completed').length;
+  // A workout reopened for editing still counts, as it does in the CSV.
+  const completed = beforeReopens(sessions ?? []).filter((s) => s.status === 'completed').length;
 
   return (
     <ScrollView contentContainerStyle={[styles.content, readable]}>
@@ -74,7 +86,7 @@ export default function DataAccountScreen() {
           />
           <ListRow
             title={busy === 'json' ? 'Preparing…' : 'Everything as JSON'}
-            subtitle={loadFailed ? "Couldn't load your data. Tap to try again." : ready ? 'Plans, workouts, bodyweight, goals, and form metrics' : 'Loading your data…'}
+            subtitle={loadFailed ? "Couldn't load your data. Tap to try again." : ready ? 'Plans, workouts, bodyweight, goals, form metrics, and setup answers' : 'Loading your data…'}
             icon="doc.text"
             onPress={() => !busy && run('json')}
             separator={false}

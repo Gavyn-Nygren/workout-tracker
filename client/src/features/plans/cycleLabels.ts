@@ -37,3 +37,15 @@ export function deleteDayPrompt(steps: readonly CycleStep[], index: number, name
   const after = index < steps.length - 1 ? "Later days move up one day, so what's scheduled from today on changes." : "The cycle gets one day shorter, so what's scheduled from today on changes.";
   return { title: `Delete Day ${index + 1}?`, message: off ? `${off} ${after}` : after };
 }
+
+/**
+ * The confirm before adding a day to the end of the cycle, or undefined when there's nothing to warn
+ * about. A date runs step (days since start % length), so a longer cycle can change today and the
+ * days after it. It doesn't when today is on the same step either way (always true in the first
+ * lap): the days then run as before and the new day comes after the current lap's last.
+ * `daysToday` is how far into its cycles the plan is today (cycleDaysToday in position.ts).
+ */
+export function addDayPrompt(length: number, daysToday: number): { title: string; message: string } | undefined {
+  if (!length || daysToday < 0 || daysToday % length === daysToday % (length + 1)) return undefined;
+  return { title: `Add Day ${length + 1}?`, message: "The cycle gets one day longer, so what's scheduled from today on changes." };
+}

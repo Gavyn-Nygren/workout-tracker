@@ -77,7 +77,7 @@ export function spokenLoad(kg: number, units: UnitSystem): string {
 }
 
 /** Whether a load shows as 0 in the user's unit. */
-const showsAsZero = (kg: number, units: UnitSystem) => formatLoadValue(Math.abs(kg), units) === '0';
+export const showsAsZero = (kg: number, units: UnitSystem) => formatLoadValue(Math.abs(kg), units) === '0';
 
 /**
  * A bodyweight lift's load as what was added to bodyweight: "Bodyweight", "+20 lb", or "−20 lb"
@@ -107,9 +107,9 @@ export function formatDuration(minutes: number): string {
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
 }
 
-/** "+1,240 lb" / "−320 lb" (true minus sign). */
+/** "+1,240 lb" / "−320 lb" (true minus sign), or "±0 lb" for a change that shows as 0. */
 export function formatSignedLoad(kg: number, units: UnitSystem): string {
-  const sign = kg > 0 ? '+' : kg < 0 ? '−' : '±';
+  const sign = showsAsZero(kg, units) ? '±' : kg > 0 ? '+' : '−';
   return `${sign}${formatLoad(Math.abs(kg), units)}`;
 }
 

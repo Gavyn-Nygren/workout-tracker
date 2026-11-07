@@ -165,6 +165,17 @@ describe('sessions and order', () => {
     assert.deepEqual(values(series('ex_bench_press', 'top_set', [done, reopened, open, skipped])), [100, 110]);
   });
 
+  test('a reopened workout plots its copy from before the reopen, not its edits', () => {
+    const done = session('2026-09-01', [entry('ex_bench_press', [lift(100, 5)])]);
+    const before = session('2026-09-08', [entry('ex_bench_press', [lift(140, 5)])]);
+    // Edited to 200, then the set unticked: neither shows until it's finished again.
+    const edited = { ...before, status: 'in_progress' as const, completion: undefined, beforeReopen: before };
+    const unticked = { ...edited, blocks: [{ ...before.blocks[0], exercises: [entry('ex_bench_press', [lift(200, 5, { completedAt: undefined })])] }] };
+    const typed = { ...edited, blocks: [{ ...before.blocks[0], exercises: [entry('ex_bench_press', [lift(200, 5)])] }] };
+    assert.deepEqual(values(series('ex_bench_press', 'top_set', [done, typed])), [100, 140]);
+    assert.deepEqual(values(series('ex_bench_press', 'top_set', [done, unticked])), [100, 140]);
+  });
+
   test('from leaves out earlier workouts', () => {
     const sessions = [session('2026-08-01', [entry('ex_bench_press', [lift(90, 5)])]), session('2026-10-01', [entry('ex_bench_press', [lift(100, 5)])])];
     assert.deepEqual(values(series('ex_bench_press', 'top_set', sessions, '2026-09-01')), [100]);

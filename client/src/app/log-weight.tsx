@@ -104,23 +104,25 @@ function LogWeightForm({ entries, editing, goals, units, celebrations }: FormPro
   if (shownToday !== today) {
     setShownToday(today);
     if (editing) {
-      const rolled = rollDayChoice(choice, picked, shownToday, today);
+      const rolled = rollDayChoice(choice, picked, shownToday, today, editing.date);
       setChoice(rolled.choice);
       setPicked(rolled.picked);
     }
   }
-  const date = dateForChoice(choice, picked, today);
+  const date = dateForChoice(choice, picked, today, editing?.date);
   const replaced = replacedOn(entries, date, editing?.id);
   // VoiceOver's hint for Save always says why it's off; the line under the field waits until
   // typing ends for a weight that's still too small (typing 180 passes through 1 and 18).
   const problem = weightProblem(value, units);
   const [typing, setTyping] = useState(false);
   const shownProblem = weightProblem(value, units, { editing: typing });
-  const endOfToday = useMemo(() => {
-    const d = fromISODate(today);
+  // The picker goes up to today, or to the weigh-in's own day when fixing one dated after today.
+  const lastPickable = editing && editing.date > today ? editing.date : today;
+  const maximumDate = useMemo(() => {
+    const d = fromISODate(lastPickable);
     d.setHours(23, 59, 59, 999);
     return d;
-  }, [today]);
+  }, [lastPickable]);
 
   const submit = async () => {
     if (value === undefined || !canSaveWeight(value, units) || pending) return;
@@ -206,11 +208,11 @@ function LogWeightForm({ entries, editing, goals, units, celebrations }: FormPro
               value={fromISODate(picked)}
               mode="date"
               display="compact"
-              maximumDate={endOfToday}
+              maximumDate={maximumDate}
               themeVariant={scheme}
               accentColor={colors.accentText}
               accessibilityLabel="Date"
-              onValueChange={(_, day) => setPicked(dateForChoice('other', toISODate(day), today))}
+              onValueChange={(_, day) => setPicked(dateForChoice('other', toISODate(day), today, editing?.date))}
             />
           </View>
         )}

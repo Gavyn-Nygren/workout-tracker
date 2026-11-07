@@ -245,8 +245,14 @@ export type PlanShift = Timestamps & {
    * where they were, and the push never moves them, even if their session is later deleted.
    */
   keptIds?: ID[];
-  /** The plan's other unstarted workouts on the missed day when it was pushed; they move with it. */
+  /** The plan's other unstarted workouts on the missed day when it was pushed that its dates don't cover; they move with it. */
   alongIds?: ID[];
+  /**
+   * Every unstarted workout on the missed day when it was pushed, the pushed one included: the
+   * missed workouts it moved. Edits never delete them, and Undo puts them back on that day.
+   * Pushes made before this was kept don't have it.
+   */
+  missedIds?: ID[];
 };
 
 /** One scheduled instance of a plan workout on the calendar. */
@@ -260,6 +266,8 @@ export type ScheduledOccurrence = {
   shiftedFromDate?: ISODate;
   /** The session that fulfilled this occurrence, if any. */
   sessionId?: ID;
+  /** Kept on a deleted one: it was missed when its plan was deleted, so it still counts as missed for Perfect Week (spec 2.9). */
+  missedWhenDeleted?: true;
 };
 
 // ---------------------------------------------------------------------------
@@ -385,8 +393,15 @@ export type WorkoutSession = Timestamps & {
   completedAt?: ISODateTime;
   /** "Repeat" creates a new session linked to the original. */
   repeatedFromSessionId?: ID;
+  /** The plan version it was built from, so the summary's "Update your plan?" never undoes a later edit. */
+  planVersion?: number;
   blocks: SessionBlock[];
   notes?: string;
+  /**
+   * While a finished workout is reopened: itself as it was before the reopen, which everything
+   * else reads until it's finished again (reopen.ts). Finish drops it.
+   */
+  beforeReopen?: Omit<WorkoutSession, 'beforeReopen'>;
 };
 
 // ---------------------------------------------------------------------------

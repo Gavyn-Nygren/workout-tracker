@@ -8,6 +8,7 @@ import { withRememberedRests } from '@/data/preferences';
 import { formatClock, spokenDuration } from '@/hooks/useNow';
 import { formatShortDate } from '@/lib/format';
 import { EQUIPMENT_ICON, EQUIPMENT_LABEL, MUSCLE_LABEL } from '@/features/exercises/ExerciseList';
+import { lastDone } from '@/features/plans/lastDone';
 import { RestStepper } from '@/features/settings/RestStepper';
 import { useSettings } from '@/features/settings/useSettings';
 import { formatBest } from '@/features/summary/SummaryCards';
@@ -42,16 +43,7 @@ export default function ExerciseScreen() {
       ),
     [plans, id],
   );
-  const last = useMemo(() => {
-    const done = (sessions ?? [])
-      .filter((s) => s.status === 'completed')
-      .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
-    for (const s of done) {
-      const entry = s.blocks.flatMap((b) => b.exercises).find((e) => e.exerciseId === id && e.sets.some((x) => x.completedAt));
-      if (entry) return { session: s, entry };
-    }
-    return undefined;
-  }, [sessions, id]);
+  const last = useMemo(() => lastDone(sessions ?? [], id), [sessions, id]);
 
   // "Last done" and "In your plans" wait for sessions and plans too, so they never flash "Not yet".
   const queries = [exercisesQuery, plansQuery, sessionsQuery];

@@ -3,14 +3,16 @@ import { useCallback, useState } from 'react';
 import { ActionSheetIOS, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Card, EmptyState, ErrorState, Icon, NotFoundState, ScreenSkeleton, SectionHeader, Stepper } from '@/components/ui';
-import { usePlan, usePreferences, useSavePlan } from '@/data/hooks';
+import { useToday } from '@/data/DataProvider';
+import { useOccurrences, usePlan, usePlanShifts, usePreferences, useSavePlan } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import { cycleSteps, weekPattern } from '@/data/schedule';
-import type { ID, Plan, PlanWorkout, Weekday } from '@/data/types';
+import type { ID, Plan, PlanShift, PlanWorkout, ScheduledOccurrence, Weekday } from '@/data/types';
 import { ReorderList } from '@/features/workout/ReorderList';
 import { plural, WEEKDAY_LONG, WEEKDAY_SHORT, weekdayOrder } from '@/lib/format';
-import { cycleDayNames, cycleDaySubtitle, cycleDayTitle, deleteDayPrompt, nameList } from '@/features/plans/cycleLabels';
+import { addDayPrompt, cycleDayNames, cycleDaySubtitle, cycleDayTitle, deleteDayPrompt, nameList } from '@/features/plans/cycleLabels';
 import { addCycleDay, deleteCycleDay, moveCycleDay, setProgramWeeks, toggleCycleWorkout, toggleWeekday } from '@/features/plans/planEdits';
+import { cycleDaysToday, shiftsOf } from '@/features/plans/position';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { readable, useTextScale } from '@/theme/layout';
@@ -54,6 +56,9 @@ export default function ScheduleScreen() {
 
 type EditorProps = { plan: Plan; save: (p: Plan) => void; busy: boolean };
 
+const NO_SHIFTS: PlanShift[] = [];
+const NO_OCCURRENCES: ScheduledOccurrence[] = [];
+
 /** `edit`, or nothing while a save is in flight (see `busy` in ScheduleScreen). */
 const unlessBusy =
   <A extends unknown[]>(busy: boolean, edit: (...args: A) => void) =>
@@ -89,7 +94,7 @@ function WeekEditor({ plan, save, busy }: EditorProps) {
             <Stepper
               label="Program length"
               value={plan.schedule.weeks}
-              onChange={(w) => save(setProgramWeeks(plan, w))}
+              onChange={unlessBusy(busy, (w: number) => save(setProgramWeeks(plan, w)))}
               min={1}
               max={52}
               unit="wk"
@@ -201,13 +206,20 @@ function DayRow({ title, spokenName, ids, names, first, onRemove, onAdd }: DayRo
  */
 function CycleEditor({ plan, save, busy, onDraggingChange }: EditorProps & { onDraggingChange: (dragging: boolean) => void }) {
   const { scheme } = useAppTheme();
+  const today = useToday();
+  // Where the cycle is today, as the plan screen reads it. Not waited for: until they load, today's date alone.
+  const shifts = usePlanShifts().data ?? NO_SHIFTS;
+  const todays = useOccurrences({ from: today, to: today }).data ?? NO_OCCURRENCES;
   const [reordering, setReordering] = useState(false);
   const steps = plan.schedule.type === 'rotating' ? cycleSteps(plan.schedule) : [];
   const names = new Map(plan.workouts.map((w) => [w.id, w.name]));
 
+  // False while a save is in flight, so VoiceOver isn't told the day moved.
   const onMove = useCallback(
     (from: number, to: number) => {
-      if (!busy) save(moveCycleDay(plan, from, to));
+      if (busy) return false;
+      save(moveCycleDay(plan, from, to));
+      return true;
     },
     [busy, plan, save],
   );
@@ -217,6 +229,17 @@ function CycleEditor({ plan, save, busy, onDraggingChange }: EditorProps & { onD
       { title, options: [...options.map((w) => w.name), 'Cancel'], cancelButtonIndex: options.length, userInterfaceStyle: scheme },
       (i) => i < options.length && onPick(options[i].id),
     );
+
+  // A longer cycle can change today and the days after it, so that asks first, like a delete.
+  const addDay = (workoutIds: ID[]) => {
+    const daysToday = cycleDaysToday(plan.schedule, plan.startDate, today, shiftsOf(plan.id, shifts), todays.filter((o) => o.planId === plan.id));
+    const prompt = addDayPrompt(steps.length, daysToday);
+    if (!prompt) return save(addCycleDay(plan, workoutIds));
+    Alert.alert(prompt.title, prompt.message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Add', onPress: () => save(addCycleDay(plan, workoutIds)) },
+    ]);
+  };
 
   const confirmDelete = (index: number) => {
     const { title, message } = deleteDayPrompt(steps, index, names);
@@ -287,8 +310,8 @@ function CycleEditor({ plan, save, busy, onDraggingChange }: EditorProps & { onD
         </Card>
       )}
       <View style={styles.buttons}>
-        <Button title="Add workout day" variant="secondary" size="sm" icon="plus" onPress={unlessBusy(busy, () => pick('Add a workout day', plan.workouts, (id) => save(addCycleDay(plan, [id]))))} />
-        <Button title="Add rest day" variant="ghost" size="sm" icon="bed.double" onPress={unlessBusy(busy, () => save(addCycleDay(plan, [])))} />
+        <Button title="Add workout day" variant="secondary" size="sm" icon="plus" onPress={unlessBusy(busy, () => pick('Add a workout day', plan.workouts, (id) => addDay([id])))} />
+        <Button title="Add rest day" variant="ghost" size="sm" icon="bed.double" onPress={unlessBusy(busy, () => addDay([]))} />
       </View>
     </View>
   );

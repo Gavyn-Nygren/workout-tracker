@@ -193,9 +193,32 @@ describe('workout lifecycle in the database', () => {
     assert.notEqual(repeat.id, finished.id);
     assert.equal(repeat.repeatedFromSessionId, finished.id);
     assert.equal(repeat.occurrenceId, undefined, 'the scheduled workout stays with the original');
+    assert.equal(repeat.planVersion, item.plan?.version, 'built from the plan version on its card');
     await repo.saveSession(complete(repeat));
     assert.equal((await repo.listSessions()).filter((s) => s.status === 'completed').length, 2);
     assert.equal((await itemOn(today)).session?.id, finished.id);
+  });
+
+  test('after its plan is deleted, a logged workout keeps its names on Today, and Repeat does its exercises', async () => {
+    const finished = complete(start(await itemOn(today)));
+    await repo.saveSession(finished);
+    const late = complete(start(await itemOn(MONDAY))); // Monday's, done today
+    await repo.saveSession(late);
+    await repo.deletePlan('p');
+
+    const cards = (await agenda()).get(today)!;
+    const card = cards.find((i) => !i.extra)!;
+    const extra = cards.find((i) => i.extra === 'late')!;
+    assert.deepEqual([card.name, card.plan?.name, card.status, card.workout?.id], ['Squat Day', 'Strength', 'completed', 'a']);
+    assert.deepEqual([extra.name, extra.plan?.name], ['Squat Day', 'Strength']);
+    for (const item of [card, extra]) {
+      const repeat = sessionFromPlan({ item, history: [late, finished], exercisesById, preferences: { ...defaultPreferences, units: 'metric' }, repeatOf: item.session });
+      assert.equal(repeat.name, 'Squat Day');
+      assert.deepEqual(
+        repeat.blocks.flatMap((b) => b.exercises.map((e) => [e.exerciseId, e.sets.length, e.sets[0].loadKg])),
+        [['ex_back_squat', 2, 100]],
+      );
+    }
   });
 
   test('deleting a finished workout removes it everywhere and recalculates', async () => {
@@ -218,6 +241,51 @@ describe('workout lifecycle in the database', () => {
     assert.equal(liveSets, 0);
   });
 
+  test('sets read back in their order after sets are removed and one is added (db-1)', async () => {
+    const done = (id: string, loadKg: number) => ({ id, kind: 'normal' as const, modifiers: [], reps: 5, loadKg, completedAt: `${today}T09:00:00.000Z` });
+    const session: WorkoutSession = {
+      id: 'live',
+      name: 'Squat Day',
+      status: 'in_progress',
+      startedAt: `${today}T08:30:00.000Z`,
+      blocks: [
+        {
+          id: 'b',
+          type: 'single',
+          exercises: [{ id: 'e', exerciseId: 'ex_back_squat', skipped: false, sets: [{ id: 'w1', kind: 'warmup', modifiers: [] }, { id: 'w2', kind: 'warmup', modifiers: [] }, done('s1', 100), done('s2', 102.5), done('s3', 105)] }],
+        },
+      ],
+      createdAt: STAMP,
+      updatedAt: STAMP,
+    };
+    // Each edit auto-saved, as the app does: both warm-ups removed, then a set added.
+    let workout: ActiveWorkout | null = { mode: 'new', session };
+    await repo.saveSession(session);
+    for (const action of [
+      { type: 'removeSet', entryId: 'e', setId: 'w1' },
+      { type: 'removeSet', entryId: 'e', setId: 'w2' },
+      { type: 'addSet', entryId: 'e' },
+    ] as const) {
+      workout = workoutReducer(workout, action);
+      await repo.saveSession(workout!.session);
+    }
+    const order = workout!.session.blocks[0].exercises[0].sets.map((x) => x.id);
+    assert.equal(order.length, 4);
+    const setIds = (s: WorkoutSession | undefined) => s?.blocks[0].exercises[0].sets.map((x) => x.id);
+    assert.deepEqual(setIds(await repo.getSession('live')), order);
+    assert.deepEqual(setIds((await repo.listSessions()).find((x) => x.id === 'live')), order);
+    const rows = db.getAllSync<{ id: string; position: number }>("SELECT id, position FROM logged_sets WHERE session_id = 'live' AND deleted_at IS NULL ORDER BY position", []);
+    assert.deepEqual(
+      rows.map(({ id, position }) => ({ id, position })),
+      order.map((id, position) => ({ id, position })),
+    );
+
+    const outbox = () => db.getFirstSync<{ n: number }>('SELECT COUNT(*) AS n FROM outbox', [])!.n;
+    const queued = outbox();
+    await repo.saveSession(workout!.session);
+    assert.equal(outbox(), queued, 'saving it unchanged writes nothing');
+  });
+
   test('deleting a workout also removes its form recordings and reports', async () => {
     const finished = complete(start(await itemOn(today)));
     await repo.saveSession(finished);
@@ -227,5 +295,89 @@ describe('workout lifecycle in the database', () => {
     await repo.deleteSession(finished.id);
     assert.equal(await repo.getRecording('rec1'), undefined);
     assert.equal(await repo.getFormReport('rep1'), undefined);
+  });
+});
+
+describe('Repeat (spec 2.5: the same exercises)', () => {
+  const metric = { ...defaultPreferences, units: 'metric' as const };
+  const range = { kind: 'normal' as const, modifiers: [], targetReps: { min: 8, max: 12 } };
+  const upper: Plan = {
+    ...plan,
+    id: 'u',
+    name: 'Upper Lower',
+    workouts: [
+      {
+        id: 'ua',
+        name: 'Upper A',
+        blocks: [
+          { id: 'ub1', type: 'single', exercises: [{ id: 'pe_squat', exerciseId: 'ex_back_squat', progression: { type: 'rep_range', incrementKg: 2.5, onMiss: { type: 'repeat' } }, sets: [range, range] }] },
+          { id: 'ub2', type: 'single', exercises: [{ id: 'pe_bench', exerciseId: 'ex_bench_press', sets: [range, range] }] },
+        ],
+      },
+    ],
+  };
+  const card = (session?: WorkoutSession): DayItem => ({ key: 'k', date: MONDAY, name: 'Upper A', status: session ? 'completed' : 'planned', plan: upper, workout: upper.workouts[0], session });
+
+  test('it does what the workout did: its swap and the exercise added during it, pre-filled, and the plan’s rule for the planned ones', () => {
+    // The source: bench swapped for incline bench and a leg curl added, every set done at 12 reps.
+    let workout: ActiveWorkout | null = { mode: 'new', session: sessionFromPlan({ item: card(), history: [], exercisesById, preferences: metric }) };
+    const bench = workout.session.blocks[1].exercises[0];
+    workout = workoutReducer(workout, { type: 'swapExercise', entryId: bench.id, exerciseId: 'ex_incline_bench_press' });
+    workout = workoutReducer(workout, { type: 'addExercise', exerciseId: 'ex_lying_leg_curl' });
+    const loads: Record<string, number> = { ex_back_squat: 100, ex_incline_bench_press: 60, ex_lying_leg_curl: 40 };
+    const done = `${MONDAY}T10:00:00.000Z`;
+    const source: WorkoutSession = {
+      ...workout!.session,
+      status: 'completed',
+      completion: 'full',
+      completedAt: done,
+      completedDate: MONDAY,
+      blocks: workout!.session.blocks.map((b) => ({ ...b, exercises: b.exercises.map((e) => ({ ...e, sets: e.sets.map((x) => ({ ...x, reps: 12, loadKg: loads[e.exerciseId], completedAt: done })) })) })),
+    };
+
+    const repeat = sessionFromPlan({ item: card(source), history: [source], exercisesById, preferences: metric, repeatOf: source });
+    const entries = repeat.blocks.flatMap((b) => b.exercises);
+    assert.deepEqual(
+      entries.map((e) => [e.exerciseId, e.plannedExerciseId, e.sets.length]),
+      [
+        ['ex_back_squat', 'pe_squat', 2],
+        ['ex_incline_bench_press', 'pe_bench', 2],
+        ['ex_lying_leg_curl', undefined, 3],
+      ],
+    );
+    assert.equal(entries[0].suggestion?.kind, 'increase', 'the plan’s rule still moves the squat up');
+    assert.ok(entries[0].sets.every((x) => x.loadKg! > 100));
+    assert.deepEqual(
+      entries.slice(1).map((e) => e.sets.map((x) => x.loadKg)),
+      [
+        [60, 60],
+        [40, 40, 40],
+      ],
+      'the others start from what was done',
+    );
+    assert.deepEqual([repeat.name, repeat.planId, repeat.planWorkoutId, repeat.repeatedFromSessionId, repeat.occurrenceId], ['Upper A', 'u', 'ua', source.id, undefined]);
+  });
+
+  test('with its plan workout gone, it still does the same exercises, under the same name', () => {
+    const done = `${MONDAY}T10:00:00.000Z`;
+    const first = sessionFromPlan({ item: card(), history: [], exercisesById, preferences: metric });
+    const source: WorkoutSession = {
+      ...first,
+      name: 'Upper B',
+      status: 'completed',
+      completedAt: done,
+      completedDate: MONDAY,
+      blocks: first.blocks.map((b) => ({ ...b, exercises: b.exercises.map((e) => ({ ...e, sets: e.sets.map((x) => ({ ...x, reps: 10, loadKg: 50, completedAt: done })) })) })),
+    };
+    const gone: DayItem = { key: 'k', date: MONDAY, name: 'Upper B', status: 'completed', session: source, extra: 'late' };
+    const repeat = sessionFromPlan({ item: gone, history: [source], exercisesById, preferences: metric, repeatOf: source });
+    assert.equal(repeat.name, 'Upper B');
+    assert.deepEqual(
+      repeat.blocks.flatMap((b) => b.exercises.map((e) => [e.exerciseId, e.plannedExerciseId, e.sets.map((x) => x.loadKg)])),
+      [
+        ['ex_back_squat', undefined, [50, 50]],
+        ['ex_bench_press', undefined, [50, 50]],
+      ],
+    );
   });
 });

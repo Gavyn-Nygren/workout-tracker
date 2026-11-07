@@ -353,6 +353,14 @@ function angledReports(formReports: FormReport[], exerciseId: ID, joint: Joint):
     });
 }
 
+/**
+ * A form report's "Depth over time" points: each ready report of the exercise with a trusted angle
+ * for the joint, oldest first. A report with no trusted angle is left out (spec 2.8), never shown as 0°.
+ */
+export function formTrend(formReports: FormReport[], exerciseId: ID, joint: Joint): { date: ISODate; value: number }[] {
+  return angledReports(formReports, exerciseId, joint).map(({ report, angle }) => ({ date: localDateOf(report.createdAt), value: angle }));
+}
+
 /** The newest ready report with a trusted angle for the joint: a form goal's current value, and its start when set. */
 export function latestFormAngle(formReports: FormReport[], exerciseId: ID, joint: Joint): { report: FormReport; angle: number } | undefined {
   return angledReports(formReports, exerciseId, joint).at(-1);

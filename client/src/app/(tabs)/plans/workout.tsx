@@ -38,7 +38,10 @@ export default function PlanWorkoutScreen() {
 
   const save = (next: Plan) => savePlan.mutate(next);
 
+  // Each edit starts from the plan as shown, so one made while another saves would undo it (as on
+  // the plan screen). Checked when the menu or prompt opens, not when it's answered.
   const openMenu = (block: PlannedBlock, blockIndex: number, planned: PlannedExercise) => {
+    if (savePlan.isPending) return;
     const grouped = block.type !== 'single';
     const options = [
       'Edit sets & reps',
@@ -73,8 +76,10 @@ export default function PlanWorkoutScreen() {
     );
   };
 
-  const rename = () =>
+  const rename = () => {
+    if (savePlan.isPending) return;
     Alert.prompt('Rename workout', undefined, (name) => name.trim() && save(updateWorkout(plan, workout.id, (w) => ({ ...w, name: name.trim() }))), 'plain-text', workout.name);
+  };
 
   const days = workoutDays(plan, workout.id, false, weekStartsOn);
 

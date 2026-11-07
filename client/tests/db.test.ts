@@ -121,9 +121,10 @@ describe('sessions', () => {
     assert.deepEqual(loaded!.blocks[0].exercises[0].sets.map((s) => s.id), [first.id, ...rest.map((s) => s.id)]);
     assert.equal(loaded!.blocks[0].exercises[0].sets[0].reps, (first.reps ?? 0) + 1);
     assert.ok(rawRow('logged_sets', removed.id)?.deleted_at, 'the removed set is a tombstone');
-    // One changed set, one deleted set, and the header (its set list changed) are queued for sync.
+    // The changed set, the sets after the deleted one (each moved up a place), the deleted set, and
+    // the header (its set list changed) are queued for sync.
     const ops = db.getAllSync<{ entity: string; op: string }>('SELECT entity, op FROM outbox WHERE seq > ?', [queued]);
-    assert.deepEqual(ops.filter((o) => o.entity === 'logged_set').map((o) => o.op).sort(), ['delete', 'upsert']);
+    assert.deepEqual(ops.filter((o) => o.entity === 'logged_set').map((o) => o.op).sort(), ['delete', ...rest.map(() => 'upsert'), 'upsert']);
   });
 
   test('a session started from the calendar links to its occurrence', async () => {

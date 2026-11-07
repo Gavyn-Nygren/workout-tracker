@@ -1,14 +1,15 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, ActionSheetIOS, Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Confetti, ErrorState, NotFoundState, ScreenSkeleton, ToastViewport, useToast } from '@/components/ui';
 import { useToday } from '@/data/DataProvider';
-import { succeeded, useDeleteSession, useExercises, useGoals, usePlans, usePreferences, useSessions, useUpdatePlanWorkout } from '@/data/hooks';
+import { succeeded, useDeleteSession, useExercises, useGoals, useOccurrences, usePlans, usePlanVersions, usePreferences, useSessions, useUpdatePlanWorkout } from '@/data/hooks';
 import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
 import { defaultPreferences } from '@/data/preferences';
-import { diffAgainstPlan } from '@/features/summary/planDiff';
+import { beforeReopens } from '@/data/reopen';
+import { planPromptFor, type PlanPrompt } from '@/features/summary/planDiff';
 import { goalReachedMessage, goalsReachedByWorkout } from '@/features/summary/goalsReached';
 import { ComparisonCard, ExercisesCard, GoalsReachedCard, RecordsCard, SavePlanCard } from '@/features/summary/SummaryCards';
 import { SummaryHero } from '@/features/summary/SummaryHero';
@@ -48,32 +49,38 @@ export default function SummaryScreen() {
   const updatePlanWorkout = useUpdatePlanWorkout();
 
   const exercisesById = useMemo(() => new Map((exercises.data ?? []).map((e) => [e.id, e])), [exercises.data]);
-  const session = sessions.data?.find((s) => s.id === sessionId);
+  // A reopened workout shows and counts as it was before the reopen, until it's finished again.
+  const allSessions = sessions.data && beforeReopens(sessions.data);
+  const session = allSessions?.find((s) => s.id === sessionId);
   const plan = plans.data?.find((p) => p.id === session?.planId);
-  const workout = plan?.workouts.find((w) => w.id === session?.planWorkoutId);
+  // The plan version a scheduled workout was built from is its occurrence's.
+  const scheduledDay = session?.scheduledDate ?? today;
+  const occurrences = useOccurrences({ from: scheduledDay, to: scheduledDay });
+  const planVersions = usePlanVersions();
 
   const summary = useMemo(
-    () => (session && sessions.data ? buildSummary(session, sessions.data, exercisesById) : undefined),
-    [session, sessions.data, exercisesById],
+    () => (session && allSessions ? buildSummary(session, allSessions, exercisesById) : undefined),
+    [session, allSessions, exercisesById],
   );
-  // Only offer plan updates right after finishing a new workout, before the plan has changed underneath it.
-  const diff = useMemo(
-    () => (fresh && session && workout ? diffAgainstPlan(session, workout, exercisesById) : undefined),
-    // The plan changes once the user accepts; keep the original comparison.
-    [fresh, session, exercisesById, workout?.id],
-  );
+  // Only offer plan updates right after finishing a new workout. Worked out once, when everything
+  // it reads is loaded and fresh: accepting changes the plan, and the card should stay as it was.
+  const [prompt, setPrompt] = useState<PlanPrompt | null>();
+  const promptReady = [plans, planVersions, occurrences, exercises].every((q) => q.data && !q.isFetching);
+  if (prompt === undefined && fresh && session && promptReady && plans.data && planVersions.data && occurrences.data) {
+    setPrompt(planPromptFor(session, { plans: plans.data, planVersions: planVersions.data, occurrences: occurrences.data }, exercisesById) ?? null);
+  }
 
   // A reopened workout already celebrated its records the first time, so only new ones count.
   const newRecordCount = reopened ? Number(params.newRecords ?? 0) || 0 : (fresh ? (summary?.records.length ?? 0) : 0);
   const newRecords = newRecordCount > 0;
   // Goals this workout reached; after a reopen, only those its edits reached.
   const reachedGoals = useMemo(() => {
-    if (!session || !sessions.data || !goals.data) return [];
-    const reached = goalsReachedByWorkout(goals.data, session.id, sessions.data, exercisesById, today);
+    if (!session || !allSessions || !goals.data) return [];
+    const reached = goalsReachedByWorkout(goals.data, session.id, allSessions, exercisesById, today);
     if (!reopened) return reached;
     const added = new Set((params.newGoals ?? '').split(',').filter(Boolean));
     return reached.filter((g) => added.has(g.id));
-  }, [session, sessions.data, goals.data, exercisesById, today, reopened, params.newGoals]);
+  }, [session, allSessions, goals.data, exercisesById, today, reopened, params.newGoals]);
   const newGoals = justFinished && reachedGoals.length > 0;
   const celebrate = (newRecords || newGoals) && preferences.celebrations;
   useEffect(() => {
@@ -133,12 +140,12 @@ export default function SummaryScreen() {
             )
           }
         />
-        {diff && diff.changes.length > 0 && plan && workout && (
+        {prompt && (
           <SavePlanCard
-            workoutName={workout.name}
-            planName={plan.name}
-            changes={diff.changes}
-            onSave={() => updatePlanWorkout.mutateAsync({ planId: plan.id, workoutId: workout.id, blocks: diff.blocks })}
+            workoutName={prompt.workout.name}
+            planName={prompt.plan.name}
+            changes={prompt.changes}
+            onSave={() => updatePlanWorkout.mutateAsync({ planId: prompt.plan.id, workoutId: prompt.workout.id, blocks: prompt.blocks })}
           />
         )}
         <GoalsReachedCard goals={reachedGoals} date={session.completedDate} />

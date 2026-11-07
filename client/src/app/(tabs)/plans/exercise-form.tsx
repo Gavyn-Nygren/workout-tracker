@@ -5,9 +5,9 @@ import { AccessibilityInfo, ScrollView, StyleSheet, View } from 'react-native';
 import { AppText, Button, Card, Chip, ErrorState, ListRow, NotFoundState, SectionHeader, SegmentedControl, Skeleton, TextField, Toggle, useToast } from '@/components/ui';
 import { succeeded, useExercises, useSaveExercise } from '@/data/hooks';
 import type { Equipment, Exercise, MuscleGroup } from '@/data/types';
-import { newId } from '@/lib/id';
 import { EQUIPMENT_LABEL, MUSCLE_LABEL } from '@/features/exercises/ExerciseList';
 import { exerciseMatches } from '@/features/exercises/search';
+import { customExercise } from '@/features/plans/customExercise';
 import { radius, spacing } from '@/theme/tokens';
 import { readable, useTextScale } from '@/theme/layout';
 
@@ -73,23 +73,7 @@ function ExerciseForm({ exercises, existing }: { exercises: Exercise[]; existing
       AccessibilityInfo.announceForAccessibility(nameError);
       return;
     }
-    const now = new Date().toISOString();
-    const exercise: Exercise = {
-      id: existing?.id ?? newId('ex'),
-      name: name.trim(),
-      source: 'custom',
-      baseMovementId: baseId,
-      equipment,
-      primaryMuscles: muscles.length ? muscles : (base?.primaryMuscles ?? []),
-      category,
-      isBodyweight,
-      // Inherits form analysis from the linked built-in movement.
-      formAnalysis: base?.formAnalysis,
-      instructions: instructions.trim() || undefined,
-      mediaUrl: mediaUrl.trim() || undefined,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    };
+    const exercise = customExercise({ name, baseId, equipment, muscles, category, isBodyweight, instructions, mediaUrl }, base, existing, new Date().toISOString());
     if (!(await succeeded(saveExercise.mutateAsync(exercise)))) return;
     router.back();
     toast.show({ message: existing ? 'Exercise updated.' : `${exercise.name} added to your exercises.`, tone: 'success' });

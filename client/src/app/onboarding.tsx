@@ -2,7 +2,7 @@ import type { SFSymbol } from 'expo-symbols';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { AccessibilityInfo, ActionSheetIOS, Pressable, ScrollView, StyleSheet, View, type ViewInstance } from 'react-native';
+import { AccessibilityInfo, ActionSheetIOS, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View, type ViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText, Button, Card, Chip, EmptyState, ErrorState, Icon, NumberField, PressableScale, Skeleton, Stepper, TextField, useToast } from '@/components/ui';
@@ -223,259 +223,263 @@ export default function OnboardingScreen() {
         )}
       </View>
 
-      <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-        {phase === 'weight' && (
-          <Question
-            titleRef={titleRef}
-            title={`Welcome, ${name}. What do you weigh?`}
-            subtitle="Pull-ups, dips, and other bodyweight exercises count your bodyweight in their load. You can update it any time in Profile."
-          >
-            <Card>
-              <View style={large ? styles.stack : styles.inline}>
-                <AppText variant="body" style={!large && styles.flex} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                  Bodyweight
-                </AppText>
-                <NumberField
-                  label={`Bodyweight in ${units === 'imperial' ? 'pounds' : 'kilograms'}`}
-                  value={weight}
-                  onChange={setWeight}
-                  unit={units === 'imperial' ? 'lb' : 'kg'}
-                  decimal
-                  width={110}
-                  placeholder={units === 'imperial' ? '180' : '82'}
-                  onFocusChange={setTypingWeight}
-                />
-              </View>
-            </Card>
-            {weightProblem(weight, units, { editing: typingWeight }) && (
-              <AppText variant="footnote" tone="error">
-                {weightProblem(weight, units)}
-              </AppText>
-            )}
-          </Question>
-        )}
-
-        {phase === 'questions' && step === -1 && (
-          <View style={styles.stack}>
-            <Heading titleRef={titleRef} variant="largeTitle" text="Let's set up your training." />
-            <AppText variant="body" tone="secondary">
-              A few quick questions so we can suggest a plan. Every one is optional.
-            </AppText>
-          </View>
-        )}
-
-        {phase === 'questions' && STEPS[step] === 'experience' && (
-          <Question titleRef={titleRef} title="How long have you been lifting?">
-            {EXPERIENCE.map((o) => (
-              <Option key={o.value} title={o.title} body={o.body} selected={answers.experience === o.value} onPress={() => set({ experience: o.value })} />
-            ))}
-          </Question>
-        )}
-
-        {phase === 'questions' && STEPS[step] === 'goal' && (
-          <Question titleRef={titleRef} title="What's your main goal?">
-            {GOALS.map((o) => (
-              <Option key={o.value} title={o.title} icon={o.icon} selected={answers.goal === o.value} onPress={() => set({ goal: o.value })} />
-            ))}
-          </Question>
-        )}
-
-        {phase === 'questions' && STEPS[step] === 'equipment' && (
-          <Question titleRef={titleRef} title="What equipment can you use?" subtitle="Pick everything you have regular access to.">
-            <View style={styles.wrap}>
-              {EQUIPMENT.map((o) => (
-                <Chip
-                  key={o.value}
-                  label={o.label}
-                  selected={equipment.includes(o.value)}
-                  onPress={() => set({ equipment: equipment.includes(o.value) ? equipment.filter((e) => e !== o.value) : [...equipment, o.value] })}
-                />
-              ))}
-            </View>
-            <Button title="Full gym" variant="ghost" size="sm" icon="building.2" onPress={() => set({ equipment: [...FULL_GYM] })} />
-          </Question>
-        )}
-
-        {phase === 'questions' && STEPS[step] === 'days' && (
-          <Question titleRef={titleRef} title="How many days a week can you train?">
-            <Card>
-              {/* Label above the control at accessibility sizes. The control speaks its own label. */}
-              <View style={large ? styles.stack : styles.inline}>
-                <AppText variant="body" style={!large && styles.flex} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                  Days per week
-                </AppText>
-                <Stepper label="Days per week" value={daysDraft} onChange={setDaysDraft} min={1} max={7} />
-              </View>
-            </Card>
-            <AppText variant="footnote" tone="secondary">
-              Pick what you can keep up most weeks. Rest days count as part of the plan.
-            </AppText>
-          </Question>
-        )}
-
-        {phase === 'questions' && STEPS[step] === 'body' && (
-          <Question titleRef={titleRef} title="About you" subtitle="Optional. It's never shared.">
-            <Card>
-              <View style={styles.stack}>
+      {/* The number pads have no return key, so Continue and Skip ride above the keyboard. The
+          ScrollView shrinks with them, so it needs no keyboard inset of its own. */}
+      <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={spacing.md} style={styles.flex}>
+        <ScrollView contentContainerStyle={[styles.content, readable]} keyboardShouldPersistTaps="handled">
+          {phase === 'weight' && (
+            <Question
+              titleRef={titleRef}
+              title={`Welcome, ${name}. What do you weigh?`}
+              subtitle="Pull-ups, dips, and other bodyweight exercises count your bodyweight in their load. You can update it any time in Profile."
+            >
+              <Card>
                 <View style={large ? styles.stack : styles.inline}>
                   <AppText variant="body" style={!large && styles.flex} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                    Height
+                    Bodyweight
                   </AppText>
-                  {/* In the units setting (cm with kilograms); stored in inches. */}
                   <NumberField
-                    label={heightLabel(units)}
-                    value={heightDraft}
-                    onChange={setHeightDraft}
-                    unit={heightUnit(units)}
-                    width={100}
-                    placeholder={units === 'imperial' ? '70' : '178'}
-                    onFocusChange={setTypingHeight}
+                    label={`Bodyweight in ${units === 'imperial' ? 'pounds' : 'kilograms'}`}
+                    value={weight}
+                    onChange={setWeight}
+                    unit={units === 'imperial' ? 'lb' : 'kg'}
+                    decimal
+                    width={110}
+                    placeholder={units === 'imperial' ? '180' : '82'}
+                    onFocusChange={setTypingWeight}
                   />
                 </View>
-              </View>
-            </Card>
-            {heightProblem(heightDraft, units, { editing: typingHeight }) && (
-              <AppText variant="footnote" tone="error">
-                {heightProblem(heightDraft, units)}
-              </AppText>
-            )}
-          </Question>
-        )}
+              </Card>
+              {weightProblem(weight, units, { editing: typingWeight }) && (
+                <AppText variant="footnote" tone="error">
+                  {weightProblem(weight, units)}
+                </AppText>
+              )}
+            </Question>
+          )}
 
-        {phase === 'questions' && STEPS[step] === 'limits' && (
-          <Question titleRef={titleRef} title="Anything to work around?" subtitle="Optional. This app doesn't give medical advice; check with a professional about pain or injuries.">
-            <View style={styles.wrap}>
-              {LIMITS.map((l) => (
-                <Chip key={l} label={l} selected={answers.limitations.includes(l)} onPress={() => set({ limitations: answers.limitations.includes(l) ? answers.limitations.filter((x) => x !== l) : [...answers.limitations, l] })} />
-              ))}
-            </View>
-            <TextField label="Notes (optional)" value={answers.limitationNote} onChangeText={(limitationNote) => set({ limitationNote })} placeholder="e.g. avoid overhead pressing" />
-          </Question>
-        )}
-
-        {phase === 'recommend' && (
-          <View style={styles.stack}>
-            {/* The heading says how well the picks fit (rules.ts): fit, closest, or a starting point when every question was skipped. */}
-            <Heading titleRef={titleRef} variant="largeTitle" text={templates ? results.title : COPY.heading.fit} />
-            {templates && results.picks.length > 0 && (
+          {phase === 'questions' && step === -1 && (
+            <View style={styles.stack}>
+              <Heading titleRef={titleRef} variant="largeTitle" text="Let's set up your training." />
               <AppText variant="body" tone="secondary">
-                {results.subtitle}
+                A few quick questions so we can suggest a plan. Every one is optional.
               </AppText>
-            )}
-            {templatesQuery.error ? (
-              <ErrorState title="Couldn't load plans" message="You can also pick one later in Plans." onRetry={() => templatesQuery.refetch()} />
-            ) : templatesQuery.isLoading ? (
-              <View style={styles.stack} accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }}>
-                <Skeleton height={190} radius={radius.card} />
-                <Skeleton height={160} radius={radius.card} />
+            </View>
+          )}
+
+          {phase === 'questions' && STEPS[step] === 'experience' && (
+            <Question titleRef={titleRef} title="How long have you been lifting?">
+              {EXPERIENCE.map((o) => (
+                <Option key={o.value} title={o.title} body={o.body} selected={answers.experience === o.value} onPress={() => set({ experience: o.value })} />
+              ))}
+            </Question>
+          )}
+
+          {phase === 'questions' && STEPS[step] === 'goal' && (
+            <Question titleRef={titleRef} title="What's your main goal?">
+              {GOALS.map((o) => (
+                <Option key={o.value} title={o.title} icon={o.icon} selected={answers.goal === o.value} onPress={() => set({ goal: o.value })} />
+              ))}
+            </Question>
+          )}
+
+          {phase === 'questions' && STEPS[step] === 'equipment' && (
+            <Question titleRef={titleRef} title="What equipment can you use?" subtitle="Pick everything you have regular access to.">
+              <View style={styles.wrap}>
+                {EQUIPMENT.map((o) => (
+                  <Chip
+                    key={o.value}
+                    label={o.label}
+                    selected={equipment.includes(o.value)}
+                    onPress={() => set({ equipment: equipment.includes(o.value) ? equipment.filter((e) => e !== o.value) : [...equipment, o.value] })}
+                  />
+                ))}
               </View>
-            ) : !results.picks.length ? (
-              <EmptyState icon="square.stack.3d.up" title="No plans to suggest" message="Browse them all, or build your own, in Plans." />
+              <Button title="Full gym" variant="ghost" size="sm" icon="building.2" onPress={() => set({ equipment: [...FULL_GYM] })} />
+            </Question>
+          )}
+
+          {phase === 'questions' && STEPS[step] === 'days' && (
+            <Question titleRef={titleRef} title="How many days a week can you train?">
+              <Card>
+                {/* Label above the control at accessibility sizes. The control speaks its own label. */}
+                <View style={large ? styles.stack : styles.inline}>
+                  <AppText variant="body" style={!large && styles.flex} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                    Days per week
+                  </AppText>
+                  <Stepper label="Days per week" value={daysDraft} onChange={setDaysDraft} min={1} max={7} />
+                </View>
+              </Card>
+              <AppText variant="footnote" tone="secondary">
+                Pick what you can keep up most weeks. Rest days count as part of the plan.
+              </AppText>
+            </Question>
+          )}
+
+          {phase === 'questions' && STEPS[step] === 'body' && (
+            <Question titleRef={titleRef} title="About you" subtitle="Optional. It's never shared.">
+              <Card>
+                <View style={styles.stack}>
+                  <View style={large ? styles.stack : styles.inline}>
+                    <AppText variant="body" style={!large && styles.flex} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                      Height
+                    </AppText>
+                    {/* In the units setting (cm with kilograms); stored in inches. */}
+                    <NumberField
+                      label={heightLabel(units)}
+                      value={heightDraft}
+                      onChange={setHeightDraft}
+                      unit={heightUnit(units)}
+                      width={100}
+                      placeholder={units === 'imperial' ? '70' : '178'}
+                      onFocusChange={setTypingHeight}
+                    />
+                  </View>
+                </View>
+              </Card>
+              {heightProblem(heightDraft, units, { editing: typingHeight }) && (
+                <AppText variant="footnote" tone="error">
+                  {heightProblem(heightDraft, units)}
+                </AppText>
+              )}
+            </Question>
+          )}
+
+          {phase === 'questions' && STEPS[step] === 'limits' && (
+            <Question titleRef={titleRef} title="Anything to work around?" subtitle="Optional. This app doesn't give medical advice; check with a professional about pain or injuries.">
+              <View style={styles.wrap}>
+                {LIMITS.map((l) => (
+                  <Chip key={l} label={l} selected={answers.limitations.includes(l)} onPress={() => set({ limitations: answers.limitations.includes(l) ? answers.limitations.filter((x) => x !== l) : [...answers.limitations, l] })} />
+                ))}
+              </View>
+              <TextField label="Notes (optional)" value={answers.limitationNote} onChangeText={(limitationNote) => set({ limitationNote })} placeholder="e.g. avoid overhead pressing" />
+            </Question>
+          )}
+
+          {phase === 'recommend' && (
+            <View style={styles.stack}>
+              {/* The heading says how well the picks fit (rules.ts): fit, closest, or a starting point when every question was skipped. */}
+              <Heading titleRef={titleRef} variant="largeTitle" text={templates ? results.title : COPY.heading.fit} />
+              {templates && results.picks.length > 0 && (
+                <AppText variant="body" tone="secondary">
+                  {results.subtitle}
+                </AppText>
+              )}
+              {templatesQuery.error ? (
+                <ErrorState title="Couldn't load plans" message="You can also pick one later in Plans." onRetry={() => templatesQuery.refetch()} />
+              ) : templatesQuery.isLoading ? (
+                <View style={styles.stack} accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }}>
+                  <Skeleton height={190} radius={radius.card} />
+                  <Skeleton height={160} radius={radius.card} />
+                </View>
+              ) : !results.picks.length ? (
+                <EmptyState icon="square.stack.3d.up" title="No plans to suggest" message="Browse them all, or build your own, in Plans." />
+              ) : (
+                results.picks.map((pick, i) => {
+                  const { template, option, reasons, notes } = pick;
+                  // Nothing was matched when every question was skipped, so no pick is called the best.
+                  const best = i === 0 && results.heading !== 'start';
+                  return (
+                    <Card key={template.id} style={best ? { borderColor: colors.accentText, borderWidth: 2 } : undefined}>
+                      <View style={styles.stack}>
+                        {best && (
+                          <View style={[styles.best, { backgroundColor: colors.accent }]}>
+                            <AppText variant="caption" weight="800" tone="onAccent" maxFontSizeMultiplier={DENSE_TEXT_MAX}>
+                              BEST MATCH
+                            </AppText>
+                          </View>
+                        )}
+                        <AppText variant="title3" weight="700" accessibilityRole="header">
+                          {template.name}
+                        </AppText>
+                        {/* The day version this card starts. */}
+                        <AppText variant="footnote" weight="600" numeric>
+                          {templateMeta(template, option)}
+                        </AppText>
+                        {reasons.map((r) => (
+                          <Line key={r} icon="checkmark" color={colors.successText} text={r} />
+                        ))}
+                        {/* Info lines are worth knowing but aren't a match, so they get no check mark. */}
+                        {notes.map((n) => (
+                          <Line key={n} icon="info.circle" color={colors.textSecondary} text={n} />
+                        ))}
+                        <Button
+                          title="Start this plan"
+                          accessibilityLabel={`Start ${template.name}`}
+                          variant={i === 0 ? 'primary' : 'secondary'}
+                          size="sm"
+                          loading={startingId === template.id}
+                          onPress={() => startPick(pick)}
+                        />
+                      </View>
+                    </Card>
+                  );
+                })
+              )}
+              <Button title="I'll build my own later" variant="ghost" onPress={() => setPhase('tour')} style={styles.centerSelf} />
+            </View>
+          )}
+
+          {phase === 'tour' && (
+            <View style={styles.stack}>
+              <Heading titleRef={titleRef} variant="largeTitle" text="Want a quick tour?" />
+              <AppText variant="body" tone="secondary">
+                {TOUR_PITCH}
+              </AppText>
+            </View>
+          )}
+        </ScrollView>
+
+        <View style={styles.footer}>
+          {phase === 'weight' &&
+            (large ? (
+              <>
+                <Button title="Continue" onPress={saveWeight} fullWidth disabled={!canContinueWithWeight(weight, units)} accessibilityHint={weightProblem(weight, units)} />
+                <Button title="Skip" accessibilityLabel="Skip bodyweight" variant="ghost" onPress={() => setPhase('questions')} style={styles.centerSelf} />
+              </>
             ) : (
-              results.picks.map((pick, i) => {
-                const { template, option, reasons, notes } = pick;
-                // Nothing was matched when every question was skipped, so no pick is called the best.
-                const best = i === 0 && results.heading !== 'start';
-                return (
-                  <Card key={template.id} style={best ? { borderColor: colors.accentText, borderWidth: 2 } : undefined}>
-                    <View style={styles.stack}>
-                      {best && (
-                        <View style={[styles.best, { backgroundColor: colors.accent }]}>
-                          <AppText variant="caption" weight="800" tone="onAccent" maxFontSizeMultiplier={DENSE_TEXT_MAX}>
-                            BEST MATCH
-                          </AppText>
-                        </View>
-                      )}
-                      <AppText variant="title3" weight="700" accessibilityRole="header">
-                        {template.name}
-                      </AppText>
-                      {/* The day version this card starts. */}
-                      <AppText variant="footnote" weight="600" numeric>
-                        {templateMeta(template, option)}
-                      </AppText>
-                      {reasons.map((r) => (
-                        <Line key={r} icon="checkmark" color={colors.successText} text={r} />
-                      ))}
-                      {/* Info lines are worth knowing but aren't a match, so they get no check mark. */}
-                      {notes.map((n) => (
-                        <Line key={n} icon="info.circle" color={colors.textSecondary} text={n} />
-                      ))}
-                      <Button
-                        title="Start this plan"
-                        accessibilityLabel={`Start ${template.name}`}
-                        variant={i === 0 ? 'primary' : 'secondary'}
-                        size="sm"
-                        loading={startingId === template.id}
-                        onPress={() => startPick(pick)}
-                      />
-                    </View>
-                  </Card>
-                );
-              })
-            )}
-            <Button title="I'll build my own later" variant="ghost" onPress={() => setPhase('tour')} style={styles.centerSelf} />
-          </View>
-        )}
-
-        {phase === 'tour' && (
-          <View style={styles.stack}>
-            <Heading titleRef={titleRef} variant="largeTitle" text="Want a quick tour?" />
-            <AppText variant="body" tone="secondary">
-              {TOUR_PITCH}
-            </AppText>
-          </View>
-        )}
-      </ScrollView>
-
-      <View style={styles.footer}>
-        {phase === 'weight' &&
-          (large ? (
+              <View style={styles.row}>
+                <Button title="Skip" accessibilityLabel="Skip bodyweight" variant="ghost" onPress={() => setPhase('questions')} />
+                <Button title="Continue" onPress={saveWeight} style={styles.flex} fullWidth disabled={!canContinueWithWeight(weight, units)} accessibilityHint={weightProblem(weight, units)} />
+              </View>
+            ))}
+          {phase === 'questions' && step === -1 && (
             <>
-              <Button title="Continue" onPress={saveWeight} fullWidth disabled={!canContinueWithWeight(weight, units)} accessibilityHint={weightProblem(weight, units)} />
-              <Button title="Skip" accessibilityLabel="Skip bodyweight" variant="ghost" onPress={() => setPhase('questions')} style={styles.centerSelf} />
+              <Button title="Get started" fullWidth onPress={() => setStep(0)} />
+              <Button title="Skip for now" variant="ghost" onPress={skipSetup} style={styles.centerSelf} />
             </>
-          ) : (
-            <View style={styles.row}>
-              <Button title="Skip" accessibilityLabel="Skip bodyweight" variant="ghost" onPress={() => setPhase('questions')} />
-              <Button title="Continue" onPress={saveWeight} style={styles.flex} fullWidth disabled={!canContinueWithWeight(weight, units)} accessibilityHint={weightProblem(weight, units)} />
-            </View>
-          ))}
-        {phase === 'questions' && step === -1 && (
-          <>
-            <Button title="Get started" fullWidth onPress={() => setStep(0)} />
-            <Button title="Skip for now" variant="ghost" onPress={skipSetup} style={styles.centerSelf} />
-          </>
-        )}
-        {phase === 'questions' &&
-          step >= 0 &&
-          (large ? (
-            // Stacked at accessibility sizes so neither title gets squeezed.
+          )}
+          {phase === 'questions' &&
+            step >= 0 &&
+            (large ? (
+              // Stacked at accessibility sizes so neither title gets squeezed.
+              <>
+                <Button title={continueTitle} onPress={continueQuestion} fullWidth disabled={continueBlocked} accessibilityHint={continueHint} />
+                <Button title="Skip" accessibilityLabel="Skip this question" variant="ghost" onPress={skipQuestion} style={styles.centerSelf} />
+              </>
+            ) : (
+              <View style={styles.row}>
+                <Button title="Skip" accessibilityLabel="Skip this question" variant="ghost" onPress={skipQuestion} />
+                <Button title={continueTitle} onPress={continueQuestion} style={styles.flex} fullWidth disabled={continueBlocked} accessibilityHint={continueHint} />
+              </View>
+            ))}
+          {phase === 'tour' && (
             <>
-              <Button title={continueTitle} onPress={continueQuestion} fullWidth disabled={continueBlocked} accessibilityHint={continueHint} />
-              <Button title="Skip" accessibilityLabel="Skip this question" variant="ghost" onPress={skipQuestion} style={styles.centerSelf} />
+              <Button
+                title="Take the tour"
+                icon="play.fill"
+                fullWidth
+                onPress={() => {
+                  // Finish onboarding first so the app is underneath; closing the tour lands there.
+                  completeOnboarding();
+                  setTimeout(() => router.push({ pathname: '/tutorial', params: { from: TOUR_FROM_ONBOARDING } }), 150);
+                }}
+              />
+              <Button title="Skip, take me to the app" variant="ghost" onPress={completeOnboarding} style={styles.centerSelf} />
             </>
-          ) : (
-            <View style={styles.row}>
-              <Button title="Skip" accessibilityLabel="Skip this question" variant="ghost" onPress={skipQuestion} />
-              <Button title={continueTitle} onPress={continueQuestion} style={styles.flex} fullWidth disabled={continueBlocked} accessibilityHint={continueHint} />
-            </View>
-          ))}
-        {phase === 'tour' && (
-          <>
-            <Button
-              title="Take the tour"
-              icon="play.fill"
-              fullWidth
-              onPress={() => {
-                // Finish onboarding first so the app is underneath; closing the tour lands there.
-                completeOnboarding();
-                setTimeout(() => router.push({ pathname: '/tutorial', params: { from: TOUR_FROM_ONBOARDING } }), 150);
-              }}
-            />
-            <Button title="Skip, take me to the app" variant="ghost" onPress={completeOnboarding} style={styles.centerSelf} />
-          </>
-        )}
-      </View>
+          )}
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }

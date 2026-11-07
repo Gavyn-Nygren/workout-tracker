@@ -9,6 +9,7 @@ import { DENSE_TEXT_MAX } from '@/theme/layout';
 import { SchemeOverride, useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { restRemainingMs, useActiveWorkout } from './ActiveWorkoutProvider';
+import { elapsedSeconds } from './elapsed';
 
 // The bar's measured height (0 when hidden), so toasts can sit above it at any text size.
 let height = 0;
@@ -53,8 +54,7 @@ function Body() {
   const now = useLiveNow(rest ? 500 : 1000);
   if (!workout) return null;
 
-  const startedAt = workout.session.startedAt ? Date.parse(workout.session.startedAt) : now;
-  const elapsedSec = (now - startedAt) / 1000;
+  const elapsedSec = elapsedSeconds(workout, now);
   const elapsed = formatClock(elapsedSec);
   const restSec = rest ? Math.ceil(restRemainingMs(rest, now) / 1000) : undefined;
   const restLeft = restSec !== undefined ? formatClock(restSec) : undefined;

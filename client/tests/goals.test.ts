@@ -6,6 +6,7 @@ import { addDays } from '../src/data/dates';
 import {
   bodyweightGoalStartKg,
   formGainDeg,
+  formTrend,
   goalAwaitsStart,
   goalDeadlineSetAt,
   goalEditStartsOver,
@@ -339,6 +340,21 @@ describe('form goals', () => {
     // A first recording that already meets the target reaches it.
     const met = goalStatus(goal, input({ formReports: [report('r1', '2026-09-05', [knee(69)])] }));
     assert.deepEqual([met.reached, met.reachedDate, met.fraction], [true, '2026-09-05', 1]);
+  });
+
+  test("formTrend leaves out a recording with no trusted angle, so it's never a 0° point (spec 2.8)", () => {
+    const formReports = [
+      report('r3', '2026-11-03', [knee(75.5)]),
+      report('r1', '2026-10-20', [knee(81)]),
+      report('r2', '2026-10-27', [rep({ knee: { minDeg: 60, maxDeg: 170 } }, 'low')]), // the camera wasn't sure
+      report('r4', '2026-11-04', [knee(70)], 'processing'),
+      { ...report('other', '2026-10-30', [knee(90)]), exerciseId: 'ex_front_squat' },
+    ];
+    assert.deepEqual(formTrend(formReports, 'ex_back_squat', 'knee'), [
+      { date: '2026-10-20', value: 81 },
+      { date: '2026-11-03', value: 75.5 },
+    ]);
+    assert.deepEqual(formTrend(formReports, 'ex_back_squat', 'hip'), [], 'no hip angle in any of them');
   });
 
   test('formGainDeg: deeper knees and hips, a higher ankle, in whole degrees (G3.10 review)', () => {

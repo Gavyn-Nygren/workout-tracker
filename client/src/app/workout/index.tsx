@@ -255,7 +255,7 @@ export default function ActiveWorkoutScreen() {
         }
       }}
     >
-      <WorkoutHeader title={session.name} startedAt={session.startedAt} counts={counts} onMinimize={() => router.back()} onFinish={finish} />
+      <WorkoutHeader title={session.name} clock={workout} counts={counts} onMinimize={() => router.back()} onFinish={finish} />
 
       <ScrollView
         ref={scrollRef}

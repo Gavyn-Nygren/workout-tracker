@@ -4,9 +4,9 @@ import { ActionSheetIOS, Alert, Pressable, ScrollView, StyleSheet, View } from '
 
 import { AppText, Button, Card, EmptyState, ErrorState, Icon, ListRow, NotFoundState, ScreenSkeleton, SectionHeader, useToast } from '@/components/ui';
 import { useToday } from '@/data/DataProvider';
-import { succeeded, useDeletePlan, usePlan, usePlanShifts, usePreferences, useSavePlan, useTemplates } from '@/data/hooks';
+import { succeeded, useDeletePlan, useOccurrences, usePlan, usePlanShifts, usePreferences, useSavePlan, useTemplates } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
-import type { Plan, PlanShift } from '@/data/types';
+import type { Plan, PlanShift, ScheduledOccurrence } from '@/data/types';
 import { formatShortDate } from '@/lib/format';
 import { describeSchedule, workoutDays, workoutStats } from '@/features/plans/describe';
 import { notePlanScheduled } from '@/features/notifications/planOfferStore';
@@ -19,6 +19,7 @@ import { spacing } from '@/theme/tokens';
 import { readable, useTextScale } from '@/theme/layout';
 
 const NO_SHIFTS: PlanShift[] = [];
+const NO_OCCURRENCES: ScheduledOccurrence[] = [];
 
 /** One plan: status, schedule week grid, and its workouts. */
 export default function PlanDetailScreen() {
@@ -31,6 +32,8 @@ export default function PlanDetailScreen() {
   const planQuery = usePlan(id);
   const templatesQuery = useTemplates();
   const shiftsQuery = usePlanShifts();
+  // Not waited for: until they load, the pushes alone give the week and the cycle step.
+  const todaysQuery = useOccurrences({ from: today, to: today });
   const savePlan = useSavePlan();
   const deletePlan = useDeletePlan();
   // Set while a delete finishes: its refetch finds nothing, and the screen shouldn't flash "Plan not found" on the way out.
@@ -45,7 +48,8 @@ export default function PlanDetailScreen() {
   const template = templatesQuery.data?.find((t) => t.id === plan.templateId);
   // After a push forward, the program week and the cycle step follow the moved workouts, like Today.
   const shifts = shiftsOf(plan.id, shiftsQuery.data ?? NO_SHIFTS);
-  const week = currentProgramWeek(plan, today, shifts);
+  const todays = (todaysQuery.data ?? NO_OCCURRENCES).filter((o) => o.planId === plan.id);
+  const week = currentProgramWeek(plan, today, shifts, todays);
 
   const openMenu = () => {
     const pauseLabel = plan.status === 'active' ? 'Pause plan' : 'Resume plan';
@@ -128,7 +132,7 @@ export default function PlanDetailScreen() {
                 .join('  ·  ')}
             </AppText>
             <AppText variant="footnote" tone="secondary">
-              {`Started ${formatShortDate(plan.startDate)}${template ? `  ·  From the ${template.name} template` : ''}`}
+              {`${plan.startDate > today ? 'Starts' : 'Started'} ${formatShortDate(plan.startDate)}${template ? `  ·  From the ${template.name} template` : ''}`}
             </AppText>
             <View style={[styles.note, { backgroundColor: colors.accentSubtle }]}>
               <Icon name="info.circle" color={colors.accentText} size={14} />
@@ -142,7 +146,14 @@ export default function PlanDetailScreen() {
         <View style={styles.section}>
           <SectionHeader title="Schedule" actionLabel="Edit" actionAccessibilityLabel="Edit schedule" onAction={() => router.push({ pathname: '/plans/schedule', params: { plan: plan.id } })} />
           <Card>
-            <ScheduleGrid schedule={plan.schedule} workouts={plan.workouts} today={plan.status === 'active' ? today : undefined} startDate={plan.startDate} shifts={shifts} />
+            <ScheduleGrid
+              schedule={plan.schedule}
+              workouts={plan.workouts}
+              today={plan.status === 'active' ? today : undefined}
+              startDate={plan.startDate}
+              shifts={shifts}
+              occurrences={todays}
+            />
           </Card>
         </View>
 

@@ -5,6 +5,7 @@ import { addDays, daysBetween, isISODate, startOfWeek, todayISO } from '../dates
 import { cleanProgress, withPreferenceDefaults } from '../preferences';
 import { deriveStreak } from '../progress';
 import { derivePersonalRecords } from '../records';
+import { asBeforeReopen, beforeReopens } from '../reopen';
 import { SCHEDULE_AHEAD_DAYS, type DataRepository, type DateRange } from '../repository';
 import { planShiftFor, scheduleOccurrences, shiftCovers, shiftedDate } from '../schedule';
 import type {
@@ -28,7 +29,7 @@ import type {
 } from '../types';
 import { plannedPerWeek, weekTargetsFromHistory, type WeekTarget, type WeekTargetLookup } from '../weekTargets';
 import { blankAutoFilledPlanRests } from './blankPlanRests';
-import { insertRowIfMissing, joinSessions, nowISO, PREFERENCES_ID, putRow, readAll, readAllSync, readOne, readOneSync, splitSession, tombstone } from './rows';
+import { insertRowIfMissing, joinSessions, nowISO, PREFERENCES_ID, putRow, readAll, readAllSync, readOne, readOneSync, splitSession, tombstone, tombstoneWith } from './rows';
 import type { SqlDb, SqlValue } from './sql';
 import { upgradeCycleSteps } from './upgradeCycleSteps';
 import { legacyStreakRule, upgradeToG310 } from './upgradeG310';
@@ -98,15 +99,27 @@ export function regroupedPlanned(week: ISODate, others: FrozenWeekTarget[], now:
   return found.filter((f) => f.slot.id === undefined || last.get(f.slot.id) === f).map((f) => f.slot);
 }
 
-/** A reopened workout (in progress again, its completion time kept) as it was before the reopen. */
-const asBeforeReopen = (s: WorkoutSession): WorkoutSession => (s.status === 'in_progress' && s.completedAt ? { ...s, status: 'completed' } : s);
-/** The same list with reopened workouts as they were before (the same array when there are none). */
-const beforeReopens = (sessions: WorkoutSession[]): WorkoutSession[] =>
-  sessions.some((s) => s.status === 'in_progress' && s.completedAt) ? sessions.map(asBeforeReopen) : sessions;
 /** Sessions that were finished, reopened ones included (in progress again only while open). */
 const FINISHED_CLAUSE = "status = 'completed' OR (status = 'in_progress' AND completed_at IS NOT NULL)";
 
 const occurrenceColumns = (o: ScheduledOccurrence) => ({ plan_id: o.planId, scheduled_date: o.scheduledDate, session_id: o.sessionId ?? null });
+/**
+ * Whether a push moved this workout off the day it was missed on (the missed workouts it moved).
+ * A push made before pushes kept `missedIds` tells by `onMissedDay` instead (asked only then).
+ */
+const pushedOffMissedDay = (shift: PlanShift, id: ID, onMissedDay: () => boolean) =>
+  shift.missedIds ? shift.missedIds.includes(id) : id === shift.occurrenceId || !!shift.alongIds?.includes(id) || onMissedDay();
+/**
+ * Whether a workout was on the day `shift` pushed from when the push was made: where the earlier
+ * pushes had put it, against where they had put the missed workout. `original` is its date before
+ * any push.
+ */
+const wasOnMissedDay = (shift: PlanShift, shifts: readonly PlanShift[], id: ID, original: ISODate) => {
+  const before = shifts.filter((s) => s.createdAt < shift.createdAt);
+  return shiftedDate(original, before, id) === shiftedDate(shift.fromDate, before, shift.occurrenceId);
+};
+/** A missed workout as its plan's delete keeps it: Perfect Week still counts it as missed (spec 2.9). */
+const missedWhenDeleted = (o: ScheduledOccurrence): ScheduledOccurrence => ({ ...o, missedWhenDeleted: true });
 const sessionColumns = (s: WorkoutSession) => ({
   status: s.status,
   day: s.completedDate ?? s.scheduledDate ?? null,
@@ -214,8 +227,11 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
 
   const listExercises = async (): Promise<Exercise[]> => [...builtinExercises, ...(await readAll<Exercise>(db, 'custom_exercises'))];
   const exerciseMap = async () => new Map((await listExercises()).map((e) => [e.id, e]));
+  /** Finished workouts in the order they were finished, reopened ones as they were before. */
   const chronological = (sessions: WorkoutSession[]) =>
-    sessions.filter((s) => s.status === 'completed').sort((a, b) => (a.completedAt ?? '').localeCompare(b.completedAt ?? ''));
+    beforeReopens(sessions)
+      .filter((s) => s.status === 'completed')
+      .sort((a, b) => (a.completedAt ?? '').localeCompare(b.completedAt ?? ''));
 
   /** Every personal record, derived once per write (the records read and badges share it). */
   const allRecords = () => {
@@ -373,12 +389,14 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
     const { weekStartsOn } = preferencesSync();
     const stored = await readAll<FrozenWeekTarget>(db, 'streak_weeks', 'week_starts_on = ? AND week_start < ?', [weekStartsOn, startOfWeek(day, weekStartsOn)]);
     const frozen = new Map(stored.map((w) => [w.weekStart, w]));
-    const weekly = weeklyGoalsSync(() => beforeReopens(sessions));
+    // A reopened workout counts as it was until it's finished or discarded (spec 2.5).
+    const finished = beforeReopens(sessions);
+    const weekly = weeklyGoalsSync(() => finished);
     const targets: WeekTargetLookup = (week) => {
       const kept = frozen.get(week);
       return kept ? { target: kept.target, source: kept.source, planned: kept.planned, frozen: true } : liveTarget(week, weekStartsOn, weekly);
     };
-    return deriveStreak(sessions, day, targets, weekStartsOn);
+    return deriveStreak(finished, day, targets, weekStartsOn);
   };
 
   /** The streak, worked out once per write and day (Home's streak and its badges share it). */
@@ -402,7 +420,7 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
     // Every finished week's planned count, weeks before the first counted workout too (Perfect Week).
     const frozenWeeks = await readAll<FrozenWeekTarget>(db, 'streak_weeks', 'week_starts_on = ?', [weekStartsOn]);
     return {
-      sessions,
+      sessions: beforeReopens(sessions),
       exercisesById,
       formReports: await readAll<FormReport>(db, 'form_reports'),
       records: await allRecords(),
@@ -410,6 +428,9 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
       frozenWeeks: frozenWeeks.map(({ weekStart, planned, plannedDates, plannedIds }) => ({ weekStart, planned, plannedDates, plannedIds })),
       // Every stored scheduled workout, past and upcoming (getStreak just filled the calendar).
       occurrences: await readAll<ScheduledOccurrence>(db, 'occurrences'),
+      missedByDelete: (
+        await db.getAllAsync<{ data: string }>("SELECT data FROM occurrences WHERE deleted_at IS NOT NULL AND json_extract(data, '$.missedWhenDeleted') = 1", [])
+      ).map((row) => JSON.parse(row.data) as ScheduledOccurrence),
       plans: await readAll<Plan>(db, 'plans'),
       planVersions: await readAll<Plan>(db, 'plan_versions'),
       bodyweight: await readAll<BodyweightEntry>(db, 'bodyweight'),
@@ -463,6 +484,11 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
   const commitPlan = (plan: Plan) => {
     putRow(db, 'plans', plan.id, plan, { status: plan.status });
     insertRowIfMissing(db, 'plan_versions', `${plan.id}@${plan.version}`, plan, { plan_id: plan.id, version: plan.version });
+    rebuildFuture(plan);
+  };
+
+  /** Rebuilds a plan's future workouts that haven't started from the plan as stored (commitPlan). */
+  const rebuildFuture = (plan: Plan) => {
     const day = today();
     const shifts = shiftsFor(plan.id);
     // Pushes can move workouts past the usual 4 weeks ahead, and an earlier save may have stored
@@ -474,14 +500,52 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
     const upcoming = scheduleOccurrences(plan, day, horizon, shifts);
     const wanted = new Set(upcoming.map((o) => o.id));
     // A missed workout the user pushed forward is still that missed workout: like a missed one on
-    // its day, an edit never deletes it, even if the plan no longer has its original day.
-    const pushedMiss = (from: string | null) => plan.status === 'active' && from !== null && from < day;
-    for (const { id, shifted_from } of future) if (!wanted.has(id) && !pushedMiss(shifted_from)) tombstone(db, 'occurrences', id);
+    // its day, an edit never deletes it, even if the plan no longer has its original day. Only the
+    // missed ones count: the later workouts a push moved weren't missed, so an edit rebuilds them.
+    const pushedMiss = (id: ID, from: string | null) =>
+      plan.status === 'active' && from !== null && from < day && shifts.some((s) => pushedOffMissedDay(s, id, () => wasOnMissedDay(s, shifts, id, from)));
+    for (const { id, shifted_from } of future) if (!wanted.has(id) && !pushedMiss(id, shifted_from)) tombstone(db, 'occurrences', id);
     for (const occ of upcoming) {
       const current = readOneSync<ScheduledOccurrence>(db, 'occurrences', occ.id);
       // Started workouts stay where they were done, and past ones on their day: an edit only rebuilds the future.
       if (current?.sessionId || (current && current.scheduledDate < day)) continue;
       putRow(db, 'occurrences', occ.id, occ, occurrenceColumns(occ));
+    }
+  };
+
+  /**
+   * After a push: stores each workout the plan and its pushes now put in the 4 weeks ahead (or as
+   * far as it has workouts stored) that has no row. An edit stores nothing for a workout whose
+   * date its pushes had left in the past (or removes it), and this push can move that date into
+   * the future. putRow brings back a removed one, as an edit does: each was removed when its plan
+   * didn't put it on a day ahead.
+   */
+  const storeUnstored = (plan: Plan) => {
+    const day = today();
+    let horizon = addDays(day, SCHEDULE_AHEAD_DAYS);
+    for (const { scheduled_date } of unstartedFuture(plan.id)) if (scheduled_date > horizon) horizon = scheduled_date;
+    for (const occ of scheduleOccurrences(plan, day, horizon, shiftsFor(plan.id))) {
+      if (!readOneSync(db, 'occurrences', occ.id)) putRow(db, 'occurrences', occ.id, occ, occurrenceColumns(occ));
+    }
+  };
+
+  /**
+   * Before an undone push's workouts move back (the push already removed): removes those added
+   * after the push (by an edit, or the push filling in what an edit left out) on dates it had
+   * moved into the future. Moved back, they'd land on a day that had passed before they were
+   * planned, as misses that never were. The push's missed workouts go back to the day they were
+   * missed on, and the rest it moved were on or after the day of the push. (The banner only
+   * pushes a plan's latest miss.)
+   */
+  const removeAddedSincePush = (shift: PlanShift) => {
+    const day = today();
+    const shifts = shiftsFor(shift.planId);
+    // Where the missed workout was when it was pushed, and the day of the push it moved to.
+    const missedOn = shiftedDate(shift.fromDate, shifts.filter((s) => s.createdAt <= shift.createdAt), shift.occurrenceId);
+    const pushedOn = addDays(missedOn, shift.days);
+    for (const { id, scheduled_date, shifted_from } of unstartedFuture(shift.planId)) {
+      const back = shiftedDate(shifted_from ?? scheduled_date, shifts, id);
+      if (back < day && back < pushedOn && !pushedOffMissedDay(shift, id, () => back === missedOn)) tombstone(db, 'occurrences', id);
     }
   };
 
@@ -572,9 +636,21 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
         const occ = session.occurrenceId ? readOneSync<ScheduledOccurrence>(db, 'occurrences', session.occurrenceId) : undefined;
         if (occ?.sessionId === sessionId) {
           const freed: ScheduledOccurrence = { ...occ, sessionId: undefined };
-          putRow(db, 'occurrences', occ.id, freed, occurrenceColumns(freed));
-          // An undo while it was started may have changed where it belongs.
-          placeUnstarted(occ.planId);
+          const plan = readOneSync<Plan>(db, 'plans', occ.planId);
+          if (!plan || (plan.status !== 'active' && occ.scheduledDate >= today())) {
+            // Its plan was deleted, or paused or archived with this one still ahead: it goes, as
+            // the plan's other unstarted workouts did (spec 2.5). Resuming brings it back; a
+            // deleted plan's missed one still counts as missed for Perfect Week.
+            const removed = !plan && occ.scheduledDate < today() ? missedWhenDeleted(freed) : freed;
+            tombstoneWith(db, 'occurrences', occ.id, removed, occurrenceColumns(removed));
+          } else {
+            putRow(db, 'occurrences', occ.id, freed, occurrenceColumns(freed));
+            // An undo while it was started may have changed where it belongs.
+            placeUnstarted(occ.planId);
+            // One still ahead is rebuilt from the plan as it is now, as an edit rebuilds the plan's
+            // other unstarted workouts: the plan may have changed or dropped it since it was started.
+            if (readOneSync<ScheduledOccurrence>(db, 'occurrences', occ.id)!.scheduledDate >= today()) rebuildFuture(plan);
+          }
         }
       }),
 
@@ -595,8 +671,11 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
       writeAfterFreeze(() => {
         tombstone(db, 'plans', planId);
         // Workouts that were never started go, past (missed) ones included; logged history stays.
-        const unstarted = db.getAllSync<{ id: string }>('SELECT id FROM occurrences WHERE plan_id = ? AND session_id IS NULL AND deleted_at IS NULL', [planId]);
-        for (const { id } of unstarted) tombstone(db, 'occurrences', id);
+        const day = today();
+        for (const occ of readAllSync<ScheduledOccurrence>(db, 'occurrences', 'plan_id = ? AND session_id IS NULL', [planId])) {
+          if (occ.scheduledDate < day) tombstoneWith(db, 'occurrences', occ.id, missedWhenDeleted(occ), occurrenceColumns(occ));
+          else tombstone(db, 'occurrences', occ.id);
+        }
         for (const shift of shiftsFor(planId)) tombstone(db, 'plan_shifts', shift.id);
       }),
 
@@ -611,13 +690,15 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
         const keptIds = readAllSync<ScheduledOccurrence>(db, 'occurrences', 'plan_id = ? AND session_id IS NOT NULL', [plan.id])
           .filter((o) => shiftCovers(planned, o.shiftedFromDate ?? o.scheduledDate))
           .map((o) => o.id);
-        // The plan's other unstarted workouts on the missed day move with it, wherever the plan first put them.
-        const alongIds = readAllSync<ScheduledOccurrence>(db, 'occurrences', 'plan_id = ? AND session_id IS NULL AND scheduled_date = ?', [plan.id, occurrence.scheduledDate])
-          .filter((o) => o.id !== occurrence.id && !shiftCovers(planned, o.shiftedFromDate ?? o.scheduledDate))
-          .map((o) => o.id);
-        const shift: PlanShift = { ...planned, ...(keptIds.length ? { keptIds } : {}), ...(alongIds.length ? { alongIds } : {}) };
+        // The plan's unstarted workouts on the missed day: the missed ones the push moves. Those its
+        // dates don't cover move with it, wherever the plan first put them.
+        const missed = readAllSync<ScheduledOccurrence>(db, 'occurrences', 'plan_id = ? AND session_id IS NULL AND scheduled_date = ?', [plan.id, occurrence.scheduledDate]);
+        const alongIds = missed.filter((o) => o.id !== occurrence.id && !shiftCovers(planned, o.shiftedFromDate ?? o.scheduledDate)).map((o) => o.id);
+        const missedIds = missed.map((o) => o.id);
+        const shift: PlanShift = { ...planned, ...(keptIds.length ? { keptIds } : {}), ...(alongIds.length ? { alongIds } : {}), missedIds };
         putRow(db, 'plan_shifts', shift.id, shift, { plan_id: plan.id });
         placeUnstarted(plan.id);
+        storeUnstored(plan);
       }),
 
     undoPlanShift: (shiftId) =>
@@ -625,6 +706,7 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
         const shift = readOneSync<PlanShift>(db, 'plan_shifts', shiftId);
         if (!shift) return;
         tombstone(db, 'plan_shifts', shift.id);
+        removeAddedSincePush(shift);
         placeUnstarted(shift.planId);
         // Workouts moved back leave room at the end of the 4 weeks ahead; the next read fills it.
         scheduledThrough = null;

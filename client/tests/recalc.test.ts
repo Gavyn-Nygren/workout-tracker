@@ -10,7 +10,9 @@ import { createSqliteRepository, type SqliteRepository } from '../src/data/db/sq
 import { newRecords } from '../src/data/records';
 import type { Goal, ISODate, LoggedSet, PRType, WorkoutSession } from '../src/data/types';
 import { epley1RM } from '../src/data/units';
-import { sessionForReopen } from '../src/features/workout/buildSession';
+import { beforeReopens } from '../src/data/reopen';
+import { exerciseLogs, metricPoints } from '../src/features/progress/series';
+import { sessionForFinish, sessionForReopen } from '../src/features/workout/buildSession';
 import { discardPlan } from '../src/features/workout/persistence';
 import { workoutReducer, type ActiveWorkout } from '../src/features/workout/workoutReducer';
 import { openTestDatabase } from './support/nodeSqlite';
@@ -122,13 +124,78 @@ describe('reopening a finished workout', () => {
     const streak = await repo.getStreak();
 
     const { original } = await reopen('w2', 140);
-    assert.notDeepEqual(await repo.listPersonalRecords(), records, 'the auto-saved edit is in the database');
+    assert.equal((await repo.getSession('w2'))!.blocks[0].exercises[0].sets[0].loadKg, 140, 'the auto-saved edit is in the database');
+    assert.deepEqual(await repo.listPersonalRecords(), records, 'but it counts as it was until it’s finished');
 
     const plan = discardPlan({ mode: 'reopen', original }, original.id);
     assert.equal(plan.kind, 'restore');
     if (plan.kind === 'restore') await repo.saveSession(plan.session);
     assert.deepEqual(await repo.listPersonalRecords(), records);
     assert.deepEqual(await repo.getStreak(), streak);
+  });
+});
+
+describe('while a finished workout is reopened (spec 2.5, 2.10)', () => {
+  // A weekly goal of 1 and four weeks in a row, ending this week. Last week's workout (w3) holds
+  // the records and the plate badges.
+  beforeEach(async () => {
+    fresh();
+    await repo.saveGoal(weeklyGoal(1));
+    const loads = [70, 80, 145, 90];
+    for (const [i, day] of WEEKS.slice(3).entries()) await repo.saveSession(squat(`w${i + 1}`, day, loads[i]));
+  });
+
+  const derived = async () => ({ streak: await repo.getStreak(), records: await repo.listPersonalRecords(), badges: await repo.listBadges() });
+  /** Progress's e1RM points for squat, read as Progress reads them. */
+  const e1rmPoints = async () => {
+    const exercise = (await repo.getExercise('ex_back_squat'))!;
+    return metricPoints(exerciseLogs(beforeReopens(await repo.listSessions())).get(exercise.id) ?? [], exercise, 'e1rm').map((p) => Math.round(p.value));
+  };
+
+  test('the streak, records, badges and Progress show it as it was through every edit, until Finish', async () => {
+    const before = await derived();
+    assert.equal(before.streak.currentWeeks, 4);
+    assert.ok(before.badges.some((b) => b.badgeKey === 'streak_4_weeks'));
+    assert.ok(before.badges.some((b) => b.badgeKey === 'squat_3_plate'));
+    assert.ok(before.records.some((r) => r.sessionId === 'w3'));
+    const points = await e1rmPoints();
+    assert.equal(points.length, 4);
+
+    const original = (await repo.getSession('w3'))!;
+    const entry = original.blocks[0].exercises[0];
+    const setId = entry.sets[0].id;
+    let open: ActiveWorkout | null = { mode: 'reopen', session: sessionForReopen(original) };
+    await repo.saveSession(open.session); // the reopen's auto-save
+    assert.deepEqual((await repo.getSession('w3'))!.beforeReopen, original, 'the copy is saved whole, sets included');
+    assert.deepEqual(await derived(), before, 'just reopened');
+
+    open = workoutReducer(open, { type: 'updateSet', entryId: entry.id, setId, patch: { loadKg: 200 } });
+    await repo.saveSession(open!.session);
+    assert.deepEqual(await derived(), before, 'edited to 200');
+    assert.deepEqual(await e1rmPoints(), points);
+
+    open = workoutReducer(open, { type: 'uncompleteSet', entryId: entry.id, setId });
+    await repo.saveSession(open!.session);
+    assert.deepEqual(await derived(), before, 'its only set unticked');
+    assert.deepEqual(await e1rmPoints(), points, 'it doesn’t drop out of Progress');
+
+    // Finish counts the edits, keeps the workout's day, and drops the copy.
+    open = workoutReducer(open, { type: 'completeSet', entryId: entry.id, setId, completedAt: '2026-10-21T18:00:00.000Z' });
+    await repo.saveSession(sessionForFinish(open!.session, true, new Date('2026-10-21T18:05:00.000Z')));
+    const saved = (await repo.getSession('w3'))!;
+    assert.deepEqual([saved.status, saved.completedDate, saved.beforeReopen], ['completed', WEEKS[5], undefined]);
+    assert.deepEqual((await recordsOf('heaviest_weight')).find((r) => r.sessionId === 'w3'), { sessionId: 'w3', value: 200, previousValue: 80 });
+    assert.equal((await repo.getStreak()).currentWeeks, 4);
+  });
+
+  test('one reopened before the copy was kept still counts, with its edits', async () => {
+    const original = (await repo.getSession('w3'))!;
+    const { beforeReopen: _, ...old } = sessionForReopen(original);
+    const entry = original.blocks[0].exercises[0];
+    const edited = workoutReducer({ mode: 'reopen', session: old }, { type: 'updateSet', entryId: entry.id, setId: entry.sets[0].id, patch: { loadKg: 150 } })!;
+    await repo.saveSession(edited.session);
+    assert.equal((await repo.getStreak()).currentWeeks, 4);
+    assert.equal((await recordsOf('heaviest_weight')).find((r) => r.sessionId === 'w3')?.value, 150);
   });
 });
 

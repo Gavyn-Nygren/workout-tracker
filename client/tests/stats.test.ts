@@ -10,8 +10,10 @@ import { buildWins } from '../src/features/home/wins';
 import { exerciseSeries } from '../src/features/progress/series';
 import { workoutsCsv } from '../src/features/settings/exportData';
 import { buildSummary } from '../src/features/summary/summarize';
+import { exerciseChange, holdChange, loadChange } from '../src/features/summary/summaryChanges';
 import { summarizeSession } from '../src/features/today/agenda';
 import { sessionLines } from '../src/features/today/cardLines';
+import { sessionForReopen } from '../src/features/workout/buildSession';
 import { formatAddedLoad, spokenAddedLoad } from '../src/lib/format';
 
 const exercisesById = new Map(builtinExercises.map((e) => [e.id, e]));
@@ -82,6 +84,65 @@ describe('workout summary', () => {
     const heaviest = summary.records.find((r) => r.type === 'heaviest_weight')!;
     assert.deepEqual([heaviest.value, heaviest.previousValue], [115, 100]);
     assert.deepEqual(summary.exercises[0].prTypes.sort(), ['e1rm', 'heaviest_weight', 'volume']);
+  });
+});
+
+describe('workout summary: last time', () => {
+  const bench = (day: string, kg: number) => session(day, [entry('ex_bench_press', [set({ loadKg: kg, reps: 5 })])], { name: 'Push' });
+
+  test('a reopened workout counts as it was before the reopen, in its own summary and the others', () => {
+    const z = bench('2026-10-20', 90);
+    const a = bench('2026-10-27', 100);
+    const b = bench('2026-10-29', 95);
+    const all = [z, sessionForReopen(a), b];
+    const later = buildSummary(b, all, exercisesById);
+    assert.deepEqual(later.records, []);
+    assert.equal(later.previous?.session.id, a.id);
+    assert.deepEqual(later.exercises[0].delta, { amount: -5, kind: 'load' });
+    const own = buildSummary(all[1], all, exercisesById);
+    assert.deepEqual(own.records.map((r) => r.type).sort(), ['e1rm', 'heaviest_weight', 'volume']);
+    assert.deepEqual(own.exercises[0].prTypes.sort(), ['e1rm', 'heaviest_weight', 'volume']);
+    assert.equal(own.previous?.session.id, z.id);
+  });
+
+  test('an exercise done twice compares each entry with the same one last time', () => {
+    const heavyAndBackOff = (day: string, heavy?: LoggedSet, backOff?: LoggedSet) =>
+      session(day, [], {
+        blocks: [
+          { id: 'b1', type: 'single', exercises: [entry('ex_bench_press', [heavy ?? set({ loadKg: 100, reps: 3 })])] },
+          { id: 'b2', type: 'single', exercises: [entry('ex_bench_press', [backOff ?? set({ loadKg: 80, reps: 8 })])] },
+        ],
+      });
+    const first = heavyAndBackOff('2026-10-01');
+    const again = heavyAndBackOff('2026-10-08');
+    const deltas = (all: WorkoutSession[]) => buildSummary(again, all, exercisesById).exercises.map((e) => e.delta?.amount);
+    assert.deepEqual(deltas([first, again]), [0, 0]);
+    // Done once last time: both compare with that one.
+    const once = session('2026-10-01', [entry('ex_bench_press', [set({ loadKg: 90, reps: 5 })])]);
+    assert.deepEqual(deltas([once, again]), [10, -10]);
+    // Last time's back-off wasn't done, so the back-off compares with the time before.
+    const noBackOff = heavyAndBackOff('2026-10-05', set({ loadKg: 105, reps: 3 }), set({ loadKg: 80, reps: 8, completedAt: undefined }));
+    assert.deepEqual(deltas([first, noBackOff, again]), [-5, 0]);
+  });
+});
+
+describe('workout summary: changes as shown', () => {
+  test('a change that shows as 0 in the user’s unit is hidden, with no arrow', () => {
+    // 45 lb logged last time, 20.4 kg now: 0.01 kg apart.
+    const bar = buildSummary(session('2026-10-08', [entry('ex_bench_press', [set({ loadKg: 20.4, reps: 5 })])]), [session('2026-10-01', [entry('ex_bench_press', [set({ loadKg: lbToKg(45), reps: 5 })])])], exercisesById);
+    assert.equal(exerciseChange(bar.exercises[0], 'metric'), undefined);
+    // 100 kg last time, 220.5 lb (what 100 kg shows as) now.
+    const same = buildSummary(session('2026-10-08', [entry('ex_bench_press', [set({ loadKg: lbToKg(220.5), reps: 5 })])]), [session('2026-10-01', [entry('ex_bench_press', [set({ loadKg: 100, reps: 5 })])])], exercisesById);
+    assert.equal(exerciseChange(same.exercises[0], 'imperial'), undefined);
+    assert.deepEqual(loadChange(lbToKg(220.5) - 100, 'imperial'), { text: '±0 lb', direction: 'same', spoken: 'no change' });
+    assert.equal(exerciseChange({ delta: { amount: 0.4, kind: 'hold' } }, 'metric'), undefined);
+  });
+
+  test('a real change shows its size, arrow, and spoken text', () => {
+    assert.deepEqual(exerciseChange({ delta: { amount: 2.5, kind: 'load' } }, 'metric'), { text: '+2.5 kg', direction: 'up', spoken: 'up 2.5 kilograms' });
+    assert.deepEqual(exerciseChange({ delta: { amount: -lbToKg(5), kind: 'bodyweight' } }, 'imperial'), { text: '−5 lb', direction: 'down', spoken: 'down 5 pounds' });
+    assert.deepEqual(holdChange(15), { text: '+15 s', direction: 'up', spoken: 'up 15 seconds' });
+    assert.deepEqual(loadChange(-320, 'metric'), { text: '−320 kg', direction: 'down', spoken: 'down 320 kilograms' });
   });
 });
 

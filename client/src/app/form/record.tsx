@@ -9,6 +9,7 @@ import { useExercises, useFormReports } from '@/data/hooks';
 import { useHaptics } from '@/hooks/useHaptics';
 import { formatClock, spokenDuration } from '@/hooks/useNow';
 import { formatShortDate } from '@/lib/format';
+import { numberParam } from '@/lib/params';
 import { FORM_ANALYSIS_PREVIEW } from '@/features/form/preview';
 import { SkeletonFigure, useRepLoop } from '@/features/form/SkeletonFigure';
 import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
@@ -53,7 +54,8 @@ function Recorder() {
   const targetReps = set?.reps ?? 6;
 
   const [phase, setPhase] = useState<Phase>('countdown');
-  const [count, setCount] = useState(Number(params.countdown ?? 5));
+  // 5 or 10 from setup (spec 2.8: 5-10 s). A link could carry anything, and NaN would never count down.
+  const [count, setCount] = useState(() => numberParam(params.countdown, { min: 5, max: 10, fallback: 5 }));
   const [step, setStep] = useState(0);
   const [reps, setReps] = useState(targetReps);
   const loop = useRepLoop({ playing: phase === 'recording', repSeconds: REP_SECONDS, maxReps: targetReps });

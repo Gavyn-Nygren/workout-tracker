@@ -19,20 +19,24 @@ export function dayChoiceOf(date: ISODate, today: ISODate): DayChoice {
   return 'other';
 }
 
-/** The date a choice means; 'other' keeps the picked date, never later than today. */
-export function dateForChoice(choice: DayChoice, picked: ISODate, today: ISODate): ISODate {
+/**
+ * The date a choice means; 'other' keeps the picked date, never later than today. `keep` is the
+ * date of the weigh-in being fixed: it stays as it is even when it's after today (logged before a
+ * flight west or a clock change), so Save never moves it to a day the user didn't pick.
+ */
+export function dateForChoice(choice: DayChoice, picked: ISODate, today: ISODate, keep?: ISODate): ISODate {
   if (choice === 'today') return today;
   if (choice === 'yesterday') return addDays(today, -1);
-  return picked > today ? today : picked;
+  return picked > today && picked !== keep ? today : picked;
 }
 
 /**
  * When the day changes while a weigh-in is being fixed (the sheet left open past midnight), the
  * same date as a choice for the new day: yesterday's "Today" becomes "Yesterday", so Save never
- * moves the weigh-in to a day the user didn't pick.
+ * moves the weigh-in to a day the user didn't pick. `keep` is as for dateForChoice.
  */
-export function rollDayChoice(choice: DayChoice, picked: ISODate, oldToday: ISODate, newToday: ISODate): { choice: DayChoice; picked: ISODate } {
-  const date = dateForChoice(choice, picked, oldToday);
+export function rollDayChoice(choice: DayChoice, picked: ISODate, oldToday: ISODate, newToday: ISODate, keep?: ISODate): { choice: DayChoice; picked: ISODate } {
+  const date = dateForChoice(choice, picked, oldToday, keep);
   const next = dayChoiceOf(date, newToday);
   return { choice: next, picked: next === 'other' ? date : picked };
 }

@@ -333,6 +333,8 @@ export type BadgeInput = {
   frozenWeeks?: FrozenWeekPlan[];
   /** Every stored scheduled workout from every plan, past and upcoming, on its date after pushes. */
   occurrences: ScheduledOccurrence[];
+  /** Missed workouts deleted with their plan. Perfect Week still counts them as missed (spec 2.9). */
+  missedByDelete?: ScheduledOccurrence[];
   /** Current plans (not deleted). */
   plans: Plan[];
   /** Every saved version of every plan, so a deleted or edited program still resolves. */
@@ -476,17 +478,25 @@ function measurer(input: BadgeInput): (measure: BadgeMeasure) => Reading {
       // What was planned in each finished week when it ended: every one of those workouts must still
       // be in the week, and done (holdsPlanned).
       const plannedThen = new Map<ISODate, FrozenWeekPlan>((input.frozenWeeks ?? (input.streak.weeks ?? []).filter((w) => w.frozen)).map((w) => [w.weekStart, w]));
+      // Missed workouts a plan delete took out of each week, even one that hadn't ended yet.
+      const deletedMissed = new Map<ISODate, number>();
+      for (const occ of input.missedByDelete ?? []) {
+        const week = startOfWeek(occ.scheduledDate, input.weekStartsOn);
+        deletedMissed.set(week, (deletedMissed.get(week) ?? 0) + 1);
+      }
       let earned: ISODate | undefined;
       for (const [week, occurrences] of weeks) {
         const done = occurrences.map(doneBy);
-        if (done.some((s) => !s) || !holdsPlanned(plannedThen.get(week), occurrences)) continue;
+        if (deletedMissed.has(week) || done.some((s) => !s) || !holdsPlanned(plannedThen.get(week), occurrences)) continue;
         // Dated by the workout that completed the week's last one.
         const last = (done as WorkoutSession[]).sort(byCompletion).at(-1)!.completedDate!;
         if (!earned || last < earned) earned = last;
       }
-      const thisWeek = weeks.get(startOfWeek(input.today, input.weekStartsOn)) ?? [];
+      const thisWeekStart = startOfWeek(input.today, input.weekStartsOn);
+      const thisWeek = weeks.get(thisWeekStart) ?? [];
       const doneThisWeek = thisWeek.filter((o) => doneBy(o)).length;
-      return { reachedOn: () => earned, progress: () => ({ current: doneThisWeek, target: thisWeek.length }) };
+      const target = thisWeek.length + (deletedMissed.get(thisWeekStart) ?? 0);
+      return { reachedOn: () => earned, progress: () => ({ current: doneThisWeek, target }) };
     },
 
     program: () => {

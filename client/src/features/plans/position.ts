@@ -31,11 +31,29 @@ export function nextWorkout(plan: Plan, today: ISODate, shifts: readonly PlanShi
 /**
  * The 1-based week a fixed-length program is in today, after its pushes. A program pushed past
  * its original end stays in its last week until its last pushed workout's day has passed.
- * Undefined for other plan types, before the start, and after the end. Other plans' pushes are ignored.
+ * Undefined for other plan types, before the start, and after the end. `occurrences` are the
+ * stored workouts on `today` (see todaysOriginal). Other plans' pushes and workouts are ignored.
  */
-export function currentProgramWeek(plan: Plan, today: ISODate, shifts: readonly PlanShift[] = []): number | undefined {
-  const own = shiftsOf(plan.id, shifts);
-  return programWeek(plan, originalDateFor(today, own, keptOn(plan.schedule, plan.startDate, own), landedOn(plan.schedule, plan.startDate, own)));
+export function currentProgramWeek(plan: Plan, today: ISODate, shifts: readonly PlanShift[] = [], occurrences: readonly ScheduledOccurrence[] = []): number | undefined {
+  const own = occurrences.filter((o) => o.planId === plan.id);
+  return programWeek(plan, todaysOriginal(plan.schedule, plan.startDate, today, shiftsOf(plan.id, shifts), own));
+}
+
+/**
+ * The date the plan first put today's workouts on, so the step or week is what Today shows. It
+ * reads the plan's stored workouts on `today`, which know which were started: the unstarted ones,
+ * or the started ones when all are (the earliest date if they differ). Pushes alone can't tell: a
+ * workout one push kept, whose session was deleted later, is moved from its old day by the next
+ * push, so it can land before today with a later date than today's. On a rest day, where the
+ * pattern has got to after the pushes (originalDateFor). `shifts` and `occurrences` must be this
+ * plan's own.
+ */
+function todaysOriginal(schedule: PlanSchedule, startDate: ISODate, today: ISODate, shifts: readonly PlanShift[], occurrences: readonly ScheduledOccurrence[]): ISODate {
+  const onToday = occurrences.filter((o) => o.scheduledDate === today);
+  const unstarted = onToday.filter((o) => !o.sessionId);
+  const originals = (unstarted.length ? unstarted : onToday).map((o) => o.shiftedFromDate ?? o.scheduledDate);
+  if (originals.length) return originals.reduce((a, b) => (a < b ? a : b));
+  return originalDateFor(today, shifts, keptOn(schedule, startDate, shifts), landedOn(schedule, startDate, shifts));
 }
 
 /**
@@ -73,14 +91,35 @@ function landedOn(schedule: PlanSchedule, startDate: ISODate, shifts: readonly P
 }
 
 /**
- * Which step of a rotating cycle (0-based) today is, after the plan's pushes. `shifts` must be
- * this plan's own. Undefined for other plan types, an empty cycle, or before the plan starts.
+ * Which step of a rotating cycle (0-based) today is, after the plan's pushes: the one Today shows.
+ * `shifts` and `occurrences` (the stored workouts on `today`, see todaysOriginal) must be this
+ * plan's own. Undefined for other plan types, an empty cycle, or before the plan starts.
  */
-export function currentRotatingStep(schedule: PlanSchedule, startDate: ISODate, today: ISODate, shifts: readonly PlanShift[] = []): number | undefined {
+export function currentRotatingStep(
+  schedule: PlanSchedule,
+  startDate: ISODate,
+  today: ISODate,
+  shifts: readonly PlanShift[] = [],
+  occurrences: readonly ScheduledOccurrence[] = [],
+): number | undefined {
   const length = schedule.type === 'rotating' ? cycleSteps(schedule).length : 0;
   if (!length) return undefined;
-  const offset = daysBetween(startDate, originalDateFor(today, shifts, keptOn(schedule, startDate, shifts), landedOn(schedule, startDate, shifts)));
+  const offset = cycleDaysToday(schedule, startDate, today, shifts, occurrences);
   return offset < 0 ? undefined : offset % length;
+}
+
+/**
+ * How many days into its cycles a rotating plan is today, after its pushes (the day Today shows).
+ * Negative before the plan starts. Same inputs as currentRotatingStep.
+ */
+export function cycleDaysToday(
+  schedule: PlanSchedule,
+  startDate: ISODate,
+  today: ISODate,
+  shifts: readonly PlanShift[] = [],
+  occurrences: readonly ScheduledOccurrence[] = [],
+): number {
+  return daysBetween(startDate, todaysOriginal(schedule, startDate, today, shifts, occurrences));
 }
 
 /**

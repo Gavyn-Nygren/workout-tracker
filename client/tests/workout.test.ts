@@ -3,8 +3,9 @@ import { describe, test } from 'node:test';
 
 import { builtinExercises } from '../src/data/content';
 import { derivePersonalRecords, deriveRecordBests, livePRSetIds, newRecords, sessionsBefore } from '../src/data/records';
+import { asBeforeReopen } from '../src/data/reopen';
 import type { LoggedSet, PersonalRecord, WorkoutSession } from '../src/data/types';
-import { sessionForReopen } from '../src/features/workout/buildSession';
+import { sessionForFinish, sessionForReopen } from '../src/features/workout/buildSession';
 import { bodyweightForSet, lastEntryFor, recordsAddedByReopen } from '../src/features/workout/history';
 import { continueAs, discardPlan, sessionToResume } from '../src/features/workout/persistence';
 import { countSets, workoutReducer, type ActiveWorkout } from '../src/features/workout/workoutReducer';
@@ -191,9 +192,37 @@ describe('finishing a reopened workout (G3.6)', () => {
   });
 });
 
+describe('the copy a reopened workout keeps (spec 2.10)', () => {
+  test('it reads as it was until Finish, which saves the edits and drops the copy', () => {
+    const finished = workoutOn('2026-10-08', [[SQUAT, [lifted('2026-10-08', 100, 5, 0, { id: 'top' })]]]);
+    const reopened = sessionForReopen(finished);
+    assert.deepEqual(reopened.beforeReopen, finished);
+    const edited = edit(open(reopened, 'reopen'), 'top', { loadKg: 200 })!.session;
+    assert.deepEqual(asBeforeReopen(edited), finished);
+
+    const saved = sessionForFinish(edited, true, new Date(`${TODAY}T18:00:00.000Z`));
+    assert.equal('beforeReopen' in saved, false);
+    assert.deepEqual([saved.status, saved.completion, saved.completedAt, saved.completedDate], ['completed', 'full', finished.completedAt, '2026-10-08']);
+    assert.equal(saved.blocks[0].exercises[0].sets[0].loadKg, 200);
+  });
+
+  test('the copy is never nested, even from a session that still has one', () => {
+    const finished = workoutOn('2026-10-08', [[SQUAT, [lifted('2026-10-08', 100, 5)]]]);
+    const stale = { ...finished, beforeReopen: { ...finished, name: 'Old name' } };
+    assert.deepEqual(sessionForReopen(stale).beforeReopen, finished);
+  });
+
+  test('a new workout finishes now', () => {
+    const now = new Date(`${TODAY}T18:00:00.000Z`);
+    const saved = sessionForFinish(workoutOn(TODAY, [[SQUAT, [lifted(TODAY, 100, 5), set({ loadKg: 100, reps: 5 })]]], 'in_progress'), false, now);
+    assert.deepEqual([saved.status, saved.completion, saved.completedAt], ['completed', 'partial', now.toISOString()]);
+  });
+});
+
 describe('resuming without the phone’s note', () => {
   test('a reopened workout resumes as a reopen; its restore point keeps the date, and discarding restores it', () => {
-    const finished = workoutOn('2026-10-08', [[SQUAT, [lifted('2026-10-08', 100, 5), set({ loadKg: 100, reps: 5 })]]]);
+    // Finished with one set never logged, so partial.
+    const finished: WorkoutSession = { ...workoutOn('2026-10-08', [[SQUAT, [lifted('2026-10-08', 100, 5), set({ loadKg: 100, reps: 5 })]]]), completion: 'partial' };
     const reopened = { ...sessionForReopen(finished), startedAt: `${TODAY}T09:00:00.000Z` };
     const found = sessionToResume(null, [reopened]);
     assert.equal(found?.session.id, finished.id);
@@ -204,6 +233,7 @@ describe('resuming without the phone’s note', () => {
     assert.equal(restorePoint.completedAt, finished.completedAt);
     assert.equal(restorePoint.completedDate, '2026-10-08');
     assert.equal(restorePoint.completion, 'partial', 'one set was never logged');
+    assert.deepEqual(restorePoint, finished, 'as it was before the reopen, without the copy');
     assert.deepEqual(discardPlan(found!.meta, reopened.id), { kind: 'restore', session: restorePoint });
   });
 

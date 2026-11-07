@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText, Button, EmptyState } from '@/components/ui';
@@ -14,16 +14,23 @@ export default function ReorderSheet() {
   const { colors } = useAppTheme();
   const { workout, exercisesById, dispatch } = useActiveWorkout();
 
-  const items: ReorderItem[] = (workout?.session.blocks ?? []).map((block) => {
-    const names = block.exercises.map((e) => exercisesById.get(e.exerciseId)?.name ?? 'Exercise');
-    const sets = block.exercises.reduce((n, e) => n + e.sets.length, 0);
-    const grouped = block.type === 'superset' || block.type === 'circuit';
-    return {
-      id: block.id,
-      title: grouped ? `${block.type === 'superset' ? 'Superset' : 'Circuit'}: ${names.join(' + ')}` : names[0],
-      subtitle: plural(sets, 'set'),
-    };
-  });
+  // Kept across renders: new items rebuild the list's drag handlers, and a rebuild mid-drag (the
+  // rest ending, a notice clearing) would drop the distance already dragged.
+  const blocks = workout?.session.blocks;
+  const items = useMemo<ReorderItem[]>(
+    () =>
+      (blocks ?? []).map((block) => {
+        const names = block.exercises.map((e) => exercisesById.get(e.exerciseId)?.name ?? 'Exercise');
+        const sets = block.exercises.reduce((n, e) => n + e.sets.length, 0);
+        const grouped = block.type === 'superset' || block.type === 'circuit';
+        return {
+          id: block.id,
+          title: grouped ? `${block.type === 'superset' ? 'Superset' : 'Circuit'}: ${names.join(' + ')}` : names[0],
+          subtitle: plural(sets, 'set'),
+        };
+      }),
+    [blocks, exercisesById],
+  );
 
   const onMove = useCallback((from: number, to: number) => dispatch({ type: 'moveBlock', from, to }), [dispatch]);
   const [dragging, setDragging] = useState(false);

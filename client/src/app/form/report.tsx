@@ -12,7 +12,7 @@ import { succeeded, useDeleteFormReport, useDeleteRecordingVideo, useExercises, 
 import { defaultPreferences } from '@/data/preferences';
 import type { FormReport, Joint, Observation } from '@/data/types';
 import { formatLoad, formatShortDate } from '@/lib/format';
-import { reportAngle } from '@/features/home/goals';
+import { formTrend, reportAngle } from '@/features/home/goals';
 import { goalReachedMessage, goalsReachedByFormReport } from '@/features/summary/goalsReached';
 import { RepDotChart } from '@/features/form/RepDotChart';
 import { SkeletonFigure, useRepLoop } from '@/features/form/SkeletonFigure';
@@ -123,10 +123,8 @@ export default function FormReportScreen() {
   const repTime = average(report.reps.map((r) => r.durationSec));
   const lowCount = report.reps.length - trusted.length;
 
-  const trend = [...(reports ?? [])]
-    .filter((r) => r.status === 'ready' && r.exerciseId === report.exerciseId)
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    .map((r) => ({ date: localDateOf(r.createdAt), value: reportAngle(r, joint) ?? 0 }));
+  // Recordings with no trusted angle are left out, as goals leave them out.
+  const trend = formTrend(reports ?? [], report.exerciseId, joint);
 
   const confirmDeleteVideo = () =>
     Alert.alert('Delete the video?', 'The replay is removed from this phone. Angles, reps, charts, and trends are kept.', [

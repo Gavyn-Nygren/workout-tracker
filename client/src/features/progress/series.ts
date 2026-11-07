@@ -1,6 +1,6 @@
 import { countsForPRs, countsForVolume, effectiveLoadKg, isWorkingSet, recordLoadKg, setE1RM, setVolumeKg } from '@/data/calculations';
 import { addDays, daysBetween, fromISODate } from '@/data/dates';
-import { isFinishedSession } from '@/data/reopen';
+import { asBeforeReopen, isFinishedSession } from '@/data/reopen';
 import type { Exercise, ISODate, LoggedSet, UnitSystem, WorkoutSession } from '@/data/types';
 import { kgToLb } from '@/data/units';
 
@@ -118,7 +118,7 @@ export function exerciseLogs(sessions: WorkoutSession[]): Map<string, ExerciseLo
   const cached = logIndex.get(sessions);
   if (cached) return cached;
   const index = new Map<string, ExerciseLog[]>();
-  for (const session of sessions.filter(isFinishedSession).sort(byCompletion)) {
+  for (const session of sessions.filter(isFinishedSession).map(asBeforeReopen).sort(byCompletion)) {
     const byExercise = new Map<string, LoggedSet[]>();
     for (const block of session.blocks) {
       for (const entry of block.exercises) {

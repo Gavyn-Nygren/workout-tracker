@@ -407,55 +407,62 @@ describe('through the repository, the pushes the Plans tab reads keep what was d
   }
 });
 
+/** A plan in a fresh database, with the steps the tests below take on its calendar. */
+async function calendar(plan: Plan) {
+  const db = openTestDatabase();
+  migrate(db);
+  eraseAllData(db);
+  let today = day(0);
+  const repo = createSqliteRepository(db, { today: () => today });
+  const moveTo = (on: ISODate) => {
+    today = on;
+    repo.forgetCache();
+  };
+  const originallyOn = async (original: ISODate, workout: string) => {
+    const found = (await repo.listOccurrences({ from: day(-7), to: day(60) })).find((o) => (o.shiftedFromDate ?? o.scheduledDate) === original && o.planWorkoutId === workout);
+    assert.ok(found, `${workout} originally on ${original}`);
+    return found;
+  };
+  let sessions = 0;
+  /** Logs the workout as done today; gives its session's id. */
+  const done = async (original: ISODate, workout: string) => {
+    const o = await originallyOn(original, workout);
+    const at = (h: number) => `${today}T${h}:00:00.000Z`;
+    const id = `s${++sessions}`;
+    await repo.saveSession({
+      id,
+      name: 'Done',
+      occurrenceId: o.id,
+      planId: o.planId,
+      planWorkoutId: o.planWorkoutId,
+      status: 'completed',
+      completion: 'full',
+      scheduledDate: o.scheduledDate,
+      startedAt: at(14),
+      completedAt: at(15),
+      completedDate: today,
+      blocks: [],
+      createdAt: at(14),
+      updatedAt: at(15),
+    });
+    return id;
+  };
+  let pushes = 0;
+  const pushIt = async (original: ISODate, workout: string) => repo.pushPlanForward((await originallyOn(original, workout)).id, `shift_${++pushes}`);
+  /** The original date of the plan's unstarted workouts on Today, when they all come from one. */
+  const todaysOriginal = async (on: ISODate) => {
+    const originals = new Set((await repo.listOccurrences({ from: on, to: on })).filter((o) => o.planId === plan.id && !o.sessionId).map((o) => o.shiftedFromDate ?? o.scheduledDate));
+    return originals.size === 1 ? [...originals][0] : undefined;
+  };
+  /** The plan's workouts on Today's date, as stored (what the Plans tab reads). */
+  const todays = async (on: ISODate) => (await repo.listOccurrences({ from: on, to: on })).filter((o) => o.planId === plan.id);
+  await repo.savePlan(plan);
+  return { repo, moveTo, done, pushIt, todaysOriginal, todays, shifts: async () => shiftsOf(plan.id, await repo.listPlanShifts()) };
+}
+
 describe('through the repository, a workout an earlier push moved, then done and kept by a later push', () => {
   // A workout moved by one push, then done, and kept by the next push still counts as kept, so the
   // step or week stays with the workout Today shows (a review found the cycle's ring jumping to it).
-  async function calendar(plan: Plan) {
-    const db = openTestDatabase();
-    migrate(db);
-    eraseAllData(db);
-    let today = day(0);
-    const repo = createSqliteRepository(db, { today: () => today });
-    const moveTo = (on: ISODate) => {
-      today = on;
-      repo.forgetCache();
-    };
-    const originallyOn = async (original: ISODate, workout: string) => {
-      const found = (await repo.listOccurrences({ from: day(-7), to: day(60) })).find((o) => (o.shiftedFromDate ?? o.scheduledDate) === original && o.planWorkoutId === workout);
-      assert.ok(found, `${workout} originally on ${original}`);
-      return found;
-    };
-    let sessions = 0;
-    const done = async (original: ISODate, workout: string) => {
-      const o = await originallyOn(original, workout);
-      const at = (h: number) => `${today}T${h}:00:00.000Z`;
-      await repo.saveSession({
-        id: `s${++sessions}`,
-        name: 'Done',
-        occurrenceId: o.id,
-        planId: o.planId,
-        planWorkoutId: o.planWorkoutId,
-        status: 'completed',
-        completion: 'full',
-        scheduledDate: o.scheduledDate,
-        startedAt: at(14),
-        completedAt: at(15),
-        completedDate: today,
-        blocks: [],
-        createdAt: at(14),
-        updatedAt: at(15),
-      });
-    };
-    let pushes = 0;
-    const pushIt = async (original: ISODate, workout: string) => repo.pushPlanForward((await originallyOn(original, workout)).id, `shift_${++pushes}`);
-    /** The original date of the plan's unstarted workouts on Today, when they all come from one. */
-    const todaysOriginal = async (on: ISODate) => {
-      const originals = new Set((await repo.listOccurrences({ from: on, to: on })).filter((o) => o.planId === plan.id && !o.sessionId).map((o) => o.shiftedFromDate ?? o.scheduledDate));
-      return originals.size === 1 ? [...originals][0] : undefined;
-    };
-    await repo.savePlan(plan);
-    return { repo, moveTo, done, pushIt, todaysOriginal, shifts: async () => shiftsOf(plan.id, await repo.listPlanShifts()) };
-  }
 
   test("rotating [A, B, C]: A pushed and done, C done where the push put it, then B pushed: Friday is B's step, not the done C's", async () => {
     const plan = makePlan('rot', cycle(['a'], ['b'], ['c']));
@@ -503,6 +510,89 @@ describe('through the repository, a workout an earlier push moved, then done and
     assert.equal(week(day(9)), 1);
     assert.equal(week(day(12)), 1);
     assert.equal(week(day(13)), 2);
+  });
+});
+
+describe("through the repository, a kept workout's session deleted, then the plan pushed again", () => {
+  // A push keeps a later workout that was done before it. If that workout's session is deleted
+  // (or discarded, or unskipped), the push still lists it as kept, so it stays on its day, and the
+  // next push moves it from there to a day before today. The pushes alone then point the step or
+  // week at it, so the Plans tab reads the stored workouts Today shows instead.
+
+  test('rotating [A, B]: B done, A pushed, B deleted, A pushed again: Friday rings A, as Today shows', async () => {
+    const plan = makePlan('known', cycle(['a'], ['b']));
+    const cal = await calendar(plan);
+    cal.moveTo(day(1));
+    const b = await cal.done(day(1), 'b'); // Monday's A missed, Tuesday's B done
+    cal.moveTo(day(2));
+    await cal.pushIt(day(0), 'a'); // A to Wednesday, keeping B
+    await cal.repo.deleteSession(b);
+    cal.moveTo(day(4));
+    await cal.pushIt(day(0), 'a'); // A missed again, pushed to Friday: B moves to Thursday
+
+    const shifts = await cal.shifts();
+    const todays = await cal.todays(day(4));
+    assert.deepEqual(
+      todays.map((o) => [o.planWorkoutId, o.shiftedFromDate]),
+      [['a', day(0)]],
+      "Today on Friday: Monday's A",
+    );
+    assert.equal(currentRotatingStep(plan.schedule, plan.startDate, day(4), shifts, todays), 0, 'day 1, A');
+    for (const on of [day(6), day(7)]) {
+      cal.moveTo(on);
+      const original = await cal.todaysOriginal(on);
+      assert.ok(original, `${on}: one day's workouts on Today`);
+      assert.equal(currentRotatingStep(plan.schedule, plan.startDate, on, shifts, await cal.todays(on)), daysBetween(plan.startDate, original) % 2, `${on}: the step of what Today shows`);
+    }
+  });
+
+  test("program: week 2's Monday done, week 1's Sunday pushed, Monday deleted, Sunday pushed again: Thursday is still week 1", async () => {
+    const plan = makePlan('known-program', {
+      type: 'fixed',
+      weeks: 2,
+      days: [
+        { week: 1, weekday: 7, workoutIds: ['a'] },
+        { week: 2, weekday: 1, workoutIds: ['b'] },
+        { week: 2, weekday: 5, workoutIds: ['c'] },
+      ],
+    });
+    const cal = await calendar(plan);
+    cal.moveTo(day(7));
+    const b = await cal.done(day(7), 'b'); // Sunday's A missed, Monday's B done
+    cal.moveTo(day(8));
+    await cal.pushIt(day(6), 'a'); // A to Tuesday, keeping B
+    await cal.repo.deleteSession(b);
+    cal.moveTo(day(10));
+    await cal.pushIt(day(6), 'a'); // A missed again, pushed to Thursday: B moves to Wednesday
+
+    const shifts = await cal.shifts();
+    const todays = await cal.todays(day(10));
+    assert.deepEqual(
+      todays.map((o) => [o.planWorkoutId, o.shiftedFromDate]),
+      [['a', day(6)]],
+      "Today on Thursday: week 1's A",
+    );
+    assert.equal(currentProgramWeek(plan, day(10), shifts, todays), 1);
+  });
+
+  test('the stored workouts decide: the unstarted ones, else the earliest started one, else the pushes', () => {
+    const plan = rotating(); // A, B, rest
+    const stored = (workout: string, original: ISODate, on: ISODate, sessionId?: string): ScheduledOccurrence => ({
+      id: occurrenceIdFor(plan.id, original, workout),
+      planId: plan.id,
+      planVersion: 1,
+      planWorkoutId: workout,
+      scheduledDate: on,
+      ...(original !== on && { shiftedFromDate: original }),
+      ...(sessionId && { sessionId }),
+    });
+    const step = (on: ISODate, todays: ScheduledOccurrence[]) => currentRotatingStep(plan.schedule, plan.startDate, on, [], todays);
+
+    assert.equal(step(day(1), [stored('a', day(0), day(1), 's1'), stored('b', day(1), day(1))]), 1, 'B, still to do, not the done A');
+    assert.equal(step(day(1), [stored('b', day(1), day(1), 's2'), stored('a', day(0), day(1), 's1')]), 0, 'both done: the earlier');
+    assert.equal(step(day(2), [stored('b', day(1), day(1))]), 2, "another day's workouts don't count: rest, from the pattern");
+    const week = currentProgramWeek(program(), day(7), [], [{ ...stored('h3', day(4), day(7)), planId: 'other' }]);
+    assert.equal(week, 2, "another plan's workouts don't count");
   });
 });
 

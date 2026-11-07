@@ -1,8 +1,8 @@
 import { StyleSheet, View } from 'react-native';
 
 import { AppText, Card, Icon, PressableScale } from '@/components/ui';
-import { usePlanShifts } from '@/data/hooks';
-import type { ISODate, Plan, PlanShift } from '@/data/types';
+import { useOccurrences, usePlanShifts } from '@/data/hooks';
+import type { ISODate, Plan, PlanShift, ScheduledOccurrence } from '@/data/types';
 import { formatLongDate, formatShortDate } from '@/lib/format';
 import { DENSE_TEXT_MAX, useTextScale } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
@@ -12,6 +12,7 @@ import { currentProgramWeek, nextWorkout, shiftsOf } from './position';
 import { ScheduleGrid } from './ScheduleGrid';
 
 const NO_SHIFTS: PlanShift[] = [];
+const NO_OCCURRENCES: ScheduledOccurrence[] = [];
 
 export function StatusPill({ status }: { status: Plan['status'] }) {
   const { colors } = useAppTheme();
@@ -32,8 +33,9 @@ export function PlanCard({ plan, today, onPress }: { plan: Plan; today: ISODate;
   const { large } = useTextScale();
   // After a push forward, "Next", the week and the cycle step follow the moved workouts, like Today.
   const shifts = shiftsOf(plan.id, usePlanShifts().data ?? NO_SHIFTS);
+  const todays = (useOccurrences({ from: today, to: today }).data ?? NO_OCCURRENCES).filter((o) => o.planId === plan.id);
   const next = nextWorkout(plan, today, shifts);
-  const week = currentProgramWeek(plan, today, shifts);
+  const week = currentProgramWeek(plan, today, shifts, todays);
   const spoken = [
     `${plan.name}, ${plan.status}`,
     `${describeSchedule(plan.schedule)}${week ? `, week ${week}` : ''}`,
@@ -56,7 +58,14 @@ export function PlanCard({ plan, today, onPress }: { plan: Plan; today: ISODate;
             </View>
             <StatusPill status={plan.status} />
           </View>
-          <ScheduleGrid schedule={plan.schedule} workouts={plan.workouts} today={plan.status === 'active' ? today : undefined} startDate={plan.startDate} shifts={shifts} />
+          <ScheduleGrid
+            schedule={plan.schedule}
+            workouts={plan.workouts}
+            today={plan.status === 'active' ? today : undefined}
+            startDate={plan.startDate}
+            shifts={shifts}
+            occurrences={todays}
+          />
           {next && (
             <View style={styles.next}>
               <Icon name="calendar" color={colors.accentText} size={14} />

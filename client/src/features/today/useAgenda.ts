@@ -47,11 +47,14 @@ export function useAgenda() {
     [occurrences.data, sessions.data, plans.data, planVersions.data, today],
   );
   const exercisesById = exerciseMapOf(exercises.data ?? NO_EXERCISES);
+  const planStatus = useMemo(() => new Map((plans.data ?? []).map((p) => [p.id, p.status])), [plans.data]);
 
   return {
     today,
     range,
     agenda,
+    /** Each plan that still exists, by id: a deleted plan's workouts can stay on the calendar as history. */
+    planStatus,
     exercisesById,
     records: records.data ?? [],
     units: preferences.data?.units ?? 'imperial',

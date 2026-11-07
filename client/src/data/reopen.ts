@@ -1,6 +1,7 @@
-// Reopened workouts (spec 2.5): a finished workout that's reopened is in progress again, with its
-// completion time and date kept. Until it's finished again or discarded, it counts as it was before
-// the reopen, so browsing Progress or History mid-edit never makes a finished workout disappear.
+// Reopened workouts (spec 2.5, 2.10): a finished workout that's reopened is in progress again, with
+// its completion time and date kept, and a copy of itself as it was (sessionForReopen). Until it's
+// finished again or discarded, it counts as that copy, so browsing Progress or History mid-edit
+// never shows the edits or makes a finished workout disappear.
 import type { WorkoutSession } from './types';
 
 /** A finished workout that's been reopened and is open now (in progress, completion time kept). */
@@ -8,9 +9,14 @@ export function isReopened(session: Pick<WorkoutSession, 'status' | 'completedAt
   return session.status === 'in_progress' && Boolean(session.completedAt);
 }
 
-/** A reopened workout as it was before the reopen (finished); any other session as it is. */
+/**
+ * A reopened workout as it was before the reopen (finished); any other session as it is. One
+ * reopened before the copy was kept counts with its edits.
+ */
 export function asBeforeReopen(session: WorkoutSession): WorkoutSession {
-  return isReopened(session) ? { ...session, status: 'completed' } : session;
+  if (!isReopened(session)) return session;
+  const { beforeReopen, ...open } = session;
+  return { ...(beforeReopen ?? open), status: 'completed' };
 }
 
 const mapped = new WeakMap<readonly WorkoutSession[], WorkoutSession[]>();

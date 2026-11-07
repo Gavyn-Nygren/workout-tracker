@@ -13,6 +13,7 @@ import { deriveStreak } from '../src/data/progress';
 import { SCHEDULE_AHEAD_DAYS } from '../src/data/repository';
 import { fixedFromPattern, originalDateFor, planShiftFor, scheduledWorkoutIds, scheduleOccurrences, shiftedDate, workoutsOn } from '../src/data/schedule';
 import type { Goal, ISODate, LoggedSet, Plan, PlanSchedule, PlanShift, PlanWorkout, ScheduledOccurrence, Weekday, WorkoutSession } from '../src/data/types';
+import { moveCycleDay, removeWorkout, toggleCycleWorkout, toggleWeekday } from '../src/features/plans/planEdits';
 import { nextWorkout } from '../src/features/plans/position';
 import { buildAgenda, latestMissed, type DayItem } from '../src/features/today/agenda';
 import { askingMessage, askingTitle, missedBannerState, pushedMessage, undoneMessage, type MissedBannerState } from '../src/features/today/missed';
@@ -1235,6 +1236,249 @@ describe("Today's banner through pushes, undos, unskips and plan edits", () => {
 
     await repo.undoPlanShift('push');
     assert.deepEqual(await dated('w', day(0), day(13)), [[day(0), 'a'], [day(3), 'b'], [day(5), 'b'], [day(7), 'a'], [day(12), 'b']], 'Undo puts B back on Thursday');
+  });
+});
+
+describe('pushes, then plan edits and Undo: only the missed workouts a push moved are kept', () => {
+  // A push moves a missed workout to today and the plan's later workouts along. Those later
+  // workouts were never missed, so an edit rebuilds them, and Undo never leaves one on a day
+  // that had passed before it was planned.
+  const abc = () => makePlan('abc', cycle(['a'], ['b'], ['c']));
+  /** A, rest, with B ready to put on a day. */
+  const aRest = () => makePlan('ar', cycle(['a'], []), { workouts: [planWorkout('a'), planWorkout('b')] });
+  const edit = async (planId: string, change: (plan: Plan) => Plan) => repo.savePlan(change((await repo.getPlan(planId))!));
+  /** What the Today banner asks about, built the way the app builds it. */
+  async function bannerAsks() {
+    const state = missedBannerState({ agenda: await agenda(), today, plans: await repo.listPlans(), shifts: await repo.listPlanShifts(), dismissed: new Set(), weekStartsOn: 1 });
+    assert.equal(state?.kind, 'asking', 'the banner asks about a missed workout');
+    return state as Extract<MissedBannerState, { kind: 'asking' }>;
+  }
+
+  test('rotating: two weeks after a 1-day push, swapping the first two days leaves today one workout, and the week target as it was', async () => {
+    await plansSavedMonday([abc()], day(1));
+    await pushLatestMissed('push'); // Tuesday: Monday's A
+    setToday(day(16)); // Two weeks on, every workout sits a day after the date the plan first put it on.
+    const planned = (await repo.getStreak()).thisWeekPlanned;
+    assert.deepEqual(await dated('abc', today, today), [[today, 'a']]);
+
+    await edit('abc', (plan) => moveCycleDay(plan, 0, 1)); // B, A, C
+    assert.deepEqual(await dated('abc', today, addDays(today, 2)), [[today, 'b'], [addDays(today, 1), 'a'], [addDays(today, 2), 'c']], 'today runs the new Day 1, and nothing else');
+    assert.equal((await repo.getStreak()).thisWeekPlanned, planned, 'this week plans as many as before');
+    await assertCalendarFollowsPushes('abc');
+  });
+
+  test('rotating: after two pushes, deleting a workout from the plan takes it off every day ahead; the pushed one stays', async () => {
+    await plansSavedMonday([abc()], day(1));
+    await pushLatestMissed('push1'); // Tuesday: Monday's A
+    setToday(day(2));
+    const pushed = await pushLatestMissed('push2'); // Wednesday: A, missed again
+    assert.deepEqual(await dated('abc', today, addDays(today, 2)), [[today, 'a'], [addDays(today, 1), 'b'], [addDays(today, 2), 'c']]);
+
+    await edit('abc', (plan) => removeWorkout(plan, 'b'));
+    assert.deepEqual((await allOf('abc')).filter((o) => o.scheduledDate >= today && o.planWorkoutId === 'b'), [], 'no B ahead');
+    assert.deepEqual((await occurrences(today, today, 'abc')).map((o) => o.id), [pushed.occurrence.id], 'the missed A is still today');
+    await assertCalendarFollowsPushes('abc');
+  });
+
+  test('weekly: after three pushes, taking a workout off its weekday takes it off this week', async () => {
+    // X on Mondays, Y on Wednesdays, Z on Fridays. Monday's X is missed and pushed on Tuesday,
+    // Wednesday and Thursday, which carries Wednesday's Y to Saturday. Y was never missed.
+    await plansSavedMonday([makePlan('xyz', weeklyDays([[1, ['x']], [3, ['y']], [5, ['z']]]))], day(1));
+    for (const n of [1, 2, 3]) {
+      setToday(day(n));
+      await pushLatestMissed(`push${n}`);
+    }
+    assert.deepEqual(await dated('xyz', today, day(6)), [[day(3), 'x'], [day(5), 'y'], [day(6), 'z']]);
+
+    await edit('xyz', (plan) => toggleWeekday(plan, 3, 'y'));
+    assert.deepEqual(await dated('xyz', today, day(6)), [[day(3), 'x'], [day(6), 'z']], 'no Y on Saturday; the missed X stays today');
+    await assertCalendarFollowsPushes('xyz');
+    await assertUsualWeek('xyz', day(7));
+  });
+
+  test('weekly, pushes stored before they kept missedIds: a workout missed beside the pushed one survives an edit', async () => {
+    // A on Thursdays, B on Saturdays, C on Sundays. Thursday's A is pushed on Saturday, onto B's
+    // day. Both are missed, and Sunday's push takes them on: B was on the missed day.
+    await plansSavedMonday([makePlan('w', weeklyDays([[4, ['a']], [6, ['b']], [7, ['c']]]))], day(5));
+    await pushLatestMissed('push1');
+    setToday(day(6));
+    await pushLatestMissed('push2');
+    const pushed = await dated('w', today, today);
+    assert.ok(pushed.some(([, w]) => w === 'b'), 'B was pushed to Sunday');
+    // As an older build stored them.
+    db.runSync("UPDATE plan_shifts SET data = json_remove(data, '$.missedIds')", []);
+    repo.forgetCache();
+
+    await edit('w', (plan) => toggleWeekday(plan, 6, 'b'));
+    assert.deepEqual(await dated('w', today, today), pushed, 'the missed workouts stay today');
+  });
+
+  test('weekly: a workout pushed along with the missed one, after an earlier push kept it, survives an edit that drops its weekday', async () => {
+    // Tuesday: Wednesday's B is skipped ahead of time. Wednesday: Monday's A is pushed to today,
+    // and the push keeps the skipped B on its day; then B is unskipped. Thursday: A is pushed
+    // again, with B, which was missed beside it on Wednesday.
+    fresh(day(0));
+    await repo.savePlan(makePlan('mwf', weeklyDays([[1, ['a']], [3, ['b']], [5, ['c']]])));
+    const a = await occurrenceOf('mwf', day(0));
+    setToday(day(1));
+    await repo.saveSession(skipped('skip', await occurrenceOf('mwf', day(2))));
+    setToday(day(2));
+    await repo.pushPlanForward(a.id, 'push1');
+    await repo.deleteSession('skip');
+    setToday(day(3));
+    await repo.pushPlanForward(a.id, 'push2');
+    const thisWeek: [ISODate, string][] = [[day(3), 'a'], [day(3), 'b'], [day(6), 'c']];
+    assert.deepEqual(await dated('mwf', day(0), day(6)), thisWeek);
+
+    await edit('mwf', (plan) => toggleWeekday(plan, 3, 'b'));
+    assert.deepEqual(await dated('mwf', day(0), day(6)), thisWeek, 'the missed B stays today');
+    await repo.undoPlanShift('push2');
+    assert.deepEqual(await dated('mwf', day(0), day(6)), [[day(2), 'a'], [day(2), 'b'], [day(6), 'c']], 'Undo puts both back on Wednesday');
+  });
+
+  test('rotating: a rest day filled in between two pushes has its workout on the calendar as soon as the second is made', async () => {
+    // A, rest. Monday's A is pushed on Wednesday and missed again. Friday: Day 2 gets B, then A is
+    // pushed again, so the cycle from today runs A, B, A, B. B's first date had passed when Day 2
+    // got it; the second push brings it to Saturday.
+    await plansSavedMonday([aRest()], day(2));
+    await pushLatestMissed('push1');
+    setToday(day(4));
+    await repo.listOccurrences({ from: today, to: today }); // Today opens, and the day's top-up runs.
+    await edit('ar', (plan) => toggleCycleWorkout(plan, 1, 'b'));
+    await pushLatestMissed('push2');
+    assert.deepEqual(await dated('ar', day(4), day(7)), [[day(4), 'a'], [day(5), 'b'], [day(6), 'a'], [day(7), 'b']]);
+    await assertCalendarFollowsPushes('ar');
+  });
+
+  test('rotating: a workout an earlier edit removed is back once a push moves its date ahead', async () => {
+    // A, rest. Monday: Day 2 gets B and loses it again, which removes Tuesday's B. Wednesday: Day 2
+    // gets B again (Tuesday has passed, so nothing is stored for it), then Monday's A is pushed to
+    // today, which moves Tuesday's B to Thursday.
+    fresh(day(0));
+    await repo.savePlan(aRest());
+    await edit('ar', (plan) => toggleCycleWorkout(plan, 1, 'b'));
+    await edit('ar', (plan) => toggleCycleWorkout(plan, 1, 'b'));
+    setToday(day(2));
+    await edit('ar', (plan) => toggleCycleWorkout(plan, 1, 'b'));
+    await pushLatestMissed('push');
+    assert.deepEqual(await dated('ar', day(2), day(5)), [[day(2), 'a'], [day(3), 'b'], [day(4), 'a'], [day(5), 'b']]);
+    await assertCalendarFollowsPushes('ar');
+    setToday(day(3));
+    await assertCalendarFollowsPushes('ar');
+    assert.deepEqual(await dated('ar', day(3), day(3)), [[day(3), 'b']], 'still there the next day');
+  });
+
+  test('rotating: a rest day filled in after a push, then Undo, leaves no workout on a day that had passed', async () => {
+    // A, rest. Wednesday: Monday's A is pushed to today, Day 2 gets B (so Thursday has Tuesday's
+    // B), and the push is undone. Tuesday had passed before Day 2 got B.
+    await plansSavedMonday([aRest()], day(2));
+    await pushLatestMissed('push');
+    await edit('ar', (plan) => toggleCycleWorkout(plan, 1, 'b'));
+    assert.deepEqual(await dated('ar', day(2), day(3)), [[day(2), 'a'], [day(3), 'b']]);
+
+    await repo.undoPlanShift('push');
+    assert.deepEqual(await dated('ar', day(0), day(6)), [[day(0), 'a'], [day(2), 'a'], [day(3), 'b'], [day(4), 'a'], [day(5), 'b'], [day(6), 'a']]);
+    assert.deepEqual(await itemsOn(day(1)), [], 'nothing missed on Tuesday');
+    assert.equal((await repo.getStreak()).thisWeekPlanned, 6);
+    assert.equal((await bannerAsks()).occurrenceId, (await occurrenceOf('ar', day(0))).id, "the banner asks about Monday's A again");
+    await assertCalendarFollowsPushes('ar');
+  });
+
+  test('rotating: a workout added to the missed day after a push goes when the push is undone', async () => {
+    // A, rest. Wednesday: Monday's A is pushed to today, then Day 1 gets B too, so today has both.
+    // Undo puts A back on Monday, where B never was.
+    await plansSavedMonday([aRest()], day(2));
+    await pushLatestMissed('push');
+    await edit('ar', (plan) => toggleCycleWorkout(plan, 0, 'b'));
+    assert.deepEqual(await dated('ar', day(2), day(2)), [[day(2), 'a'], [day(2), 'b']]);
+
+    await repo.undoPlanShift('push');
+    assert.deepEqual(await dated('ar', day(0), day(2)), [[day(0), 'a'], [day(2), 'a'], [day(2), 'b']], 'Monday has only A');
+    assert.deepEqual(
+      (await bannerAsks()).items.map((i) => i.key),
+      [(await occurrenceOf('ar', day(0))).id],
+      "the banner asks about Monday's A alone",
+    );
+    await assertCalendarFollowsPushes('ar');
+  });
+});
+
+describe('a workout freed after its plan was deleted or paused', () => {
+  // Plan a has a workout on Mondays, plan b on Thursdays and Fridays.
+  const a = () => makePlan('a', weeklyDays([[1, ['a1']]]));
+  const b = () => makePlan('b', weeklyDays([[4, ['b4']], [5, ['b5']]]));
+  const perfectWeek = async () => (await repo.listBadges()).find((x) => x.badgeKey === 'perfect_week')?.earnedDate;
+
+  test("deleting a deleted plan's logged workout leaves nothing of that plan, and this week plans only what's left", async () => {
+    await plansSavedMonday([a(), b()], day(0));
+    await repo.saveSession(finished('done_a', day(0), await occurrenceOf('a', day(0))));
+    setToday(day(2));
+    await repo.deletePlan('a');
+    assert.equal((await repo.getStreak()).thisWeekPlanned, 3, 'the logged workout still counts');
+
+    await repo.deleteSession('done_a');
+    assert.deepEqual(await allOf('a'), [], 'plan a has nothing left on the calendar');
+    assert.equal((await repo.getStreak()).thisWeekPlanned, 2);
+    // Both of b's are done. Monday's, deleted with its plan once it was missed, keeps the week from being perfect.
+    for (const n of [3, 4]) {
+      setToday(day(n));
+      await repo.saveSession(finished(`done_b${n}`, day(n), await occurrenceOf('b', day(n))));
+    }
+    assert.equal(await perfectWeek(), undefined);
+  });
+
+  test("unskipping a deleted plan's skipped workout leaves nothing of that plan", async () => {
+    await plansSavedMonday([a(), b()], day(0));
+    await repo.saveSession(skipped('skip', await occurrenceOf('a', day(0))));
+    setToday(day(2));
+    await repo.deletePlan('a');
+    await repo.deleteSession('skip');
+    assert.deepEqual(await allOf('a'), []);
+    assert.equal((await repo.getStreak()).thisWeekPlanned, 2);
+  });
+
+  test('discarding a workout started before its plan was paused takes it off the calendar; resuming brings it back', async () => {
+    await plansSavedMonday([a(), b()], day(3));
+    await repo.saveSession(started('going', day(3), await occurrenceOf('b', day(3))));
+    await repo.savePlan({ ...(await repo.getPlan('b'))!, status: 'paused' });
+    await repo.deleteSession('going'); // discarded
+    assert.deepEqual((await allOf('b')).filter((o) => o.scheduledDate >= today), [], 'nothing of b from today on');
+    assert.deepEqual(await itemsOn(today), []);
+    assert.equal((await repo.getStreak()).thisWeekPlanned, 1, "a's Monday only");
+
+    await repo.savePlan({ ...(await repo.getPlan('b'))!, status: 'active' });
+    assert.deepEqual(await dated('b', today, day(4)), [[day(3), 'b4'], [day(4), 'b5']]);
+  });
+
+  test("deleting a deleted plan's workout from a finished week leaves that week's stored target", async () => {
+    await plansSavedMonday([a(), b()], day(0));
+    const monday = await occurrenceOf('a', day(0));
+    await repo.saveSession(finished('done_a', day(0), monday));
+    setToday(day(8));
+    const stored = () => db.getFirstSync<{ data: string }>('SELECT data FROM streak_weeks WHERE week_start = ? AND deleted_at IS NULL', [day(0)])?.data;
+    await repo.getStreak(); // last week is stored
+    const before = stored();
+    assert.ok(before?.includes(monday.id));
+
+    await repo.deletePlan('a');
+    await repo.deleteSession('done_a');
+    assert.equal(stored(), before);
+    assert.deepEqual(await allOf('a'), []);
+  });
+
+  test('unskipping a workout ahead brings it back as the plan has it now, or not at all once the plan dropped it', async () => {
+    await plansSavedMonday([makePlan('w', weeklyDays([[1, ['a1']], [6, ['s']]]))], day(0));
+    await repo.saveSession(skipped('skip', await occurrenceOf('w', day(5))));
+    await repo.updatePlanWorkout('w', 's', planWorkout('s', 8).blocks);
+    await repo.deleteSession('skip');
+    const back = await occurrenceOf('w', day(5));
+    assert.equal(back.planVersion, (await repo.getPlan('w'))!.version, 'with the workout as it is now');
+
+    await repo.saveSession(skipped('skip2', back));
+    await repo.savePlan(toggleWeekday((await repo.getPlan('w'))!, 6, 's')); // Saturday comes off the plan
+    await repo.deleteSession('skip2');
+    assert.deepEqual(await dated('w', day(5), day(5)), [], 'Saturday is empty');
+    await assertCalendarFollowsPushes('w');
   });
 });
 

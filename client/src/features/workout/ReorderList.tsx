@@ -17,7 +17,8 @@ export type ReorderItem = {
 
 type Props = {
   items: ReorderItem[];
-  onMove: (from: number, to: number) => void;
+  /** Return false when the move is dropped (a save still in flight), so VoiceOver doesn't confirm it. */
+  onMove: (from: number, to: number) => boolean | void;
   /** Lets a parent ScrollView stop scrolling while a row is being dragged. */
   onDraggingChange?: (dragging: boolean) => void;
   /**
@@ -57,7 +58,10 @@ export function ReorderList({ items, onMove, onDraggingChange, onDelete }: Props
   const moveBy = (index: number, delta: number) => {
     const to = index + delta;
     if (to < 0 || to >= items.length) return;
-    onMove(index, to);
+    if (onMove(index, to) === false) {
+      AccessibilityInfo.announceForAccessibility('Still saving. Try again.');
+      return;
+    }
     AccessibilityInfo.announceForAccessibility(`${spoken(items[index])}, position ${to + 1} of ${items.length}`);
   };
 

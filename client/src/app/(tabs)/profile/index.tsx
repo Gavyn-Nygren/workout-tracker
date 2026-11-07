@@ -6,12 +6,15 @@ import { useDevData } from '@/data/DataProvider';
 import { useBodyweight, usePersonalRecords, useSessions, useStreak } from '@/data/hooks';
 import { NOTIFICATION_TOGGLES } from '@/data/preferences';
 import { workoutCount } from '@/data/progress';
+import { beforeReopens } from '@/data/reopen';
 import { formatClock, spokenDuration } from '@/hooks/useNow';
 import { formatLoad } from '@/lib/format';
 import { authStore, resetFirstRun } from '@/features/auth/authStore';
 import { useNotificationDevTools } from '@/features/notifications/notificationsApi';
 import { resetPlanOffer } from '@/features/notifications/planOfferStore';
+import { swapData } from '@/features/settings/devData';
 import { useSettings } from '@/features/settings/useSettings';
+import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
 import { useNotificationPermission } from '@/features/workout/useRestAlarm';
 import { useAppTheme, type ThemePreference } from '@/theme/ThemeProvider';
 import { Columns, dashboard, DENSE_TEXT_MAX, useTextScale } from '@/theme/layout';
@@ -33,6 +36,7 @@ export default function ProfileScreen() {
   const { large } = useTextScale();
   const toast = useToast();
   const devData = useDevData();
+  const { workout } = useActiveWorkout();
   const notificationPermission = useNotificationPermission();
   const notificationTools = useNotificationDevTools();
   const auth = authStore.use();
@@ -44,8 +48,9 @@ export default function ProfileScreen() {
   const latestWeight = weighIns?.length ? [...weighIns].sort((x, y) => x.date.localeCompare(y.date))[weighIns.length - 1] : undefined;
   const { data: records } = usePersonalRecords();
 
-  // Workouts with at least one completed working set; every record counts, as on the summary.
-  const workouts = workoutCount(sessions ?? []);
+  // Workouts with at least one completed working set (a reopened one as it was); every record
+  // counts, as on the summary.
+  const workouts = workoutCount(beforeReopens(sessions ?? []));
   const prCount = records?.length ?? 0;
   const rest = preferences.restDefaultsSec;
   const notificationsOn = COUNTED_NOTIFICATIONS.filter((key) => preferences.notifications[key]).length;
@@ -75,6 +80,45 @@ export default function ProfileScreen() {
     } catch {
       toast.show({ message: "Couldn't read the pending notifications. Try again.", tone: 'error' });
     }
+  };
+  // Developer: Load sample data and Erase all data. An open workout would save itself back into
+  // the new data, so it has to be finished or discarded first.
+  const swap = async ({ title, message, action, run, failed }: { title: string; message: string; action: string; run: () => Promise<void>; failed: string }) => {
+    const confirm = () =>
+      new Promise<boolean>((resolve) =>
+        Alert.alert(title, message, [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+          { text: action, style: 'destructive', onPress: () => resolve(true) },
+        ]),
+      );
+    const result = await swapData({ workoutOpen: workout !== null, confirm, swap: run });
+    if (result === 'workout-open') Alert.alert('Finish or discard your workout first', 'An open workout would be saved back into the new data.');
+    if (result === 'failed') toast.show({ message: failed, tone: 'error' });
+    return result === 'done';
+  };
+  const loadSample = async () => {
+    const loaded = await swap({
+      title: 'Load sample data?',
+      message: devData.holdsSampleData()
+        ? 'The sample data starts over, ending today. Weigh-ins you entered yourself stay. Settings stay, but Progress gets the sample’s pins and graphs again.'
+        : 'Every workout, plan, goal, and recording is replaced with sample data, and so is every weigh-in except the one from setup. Settings stay, but Progress gets the sample’s pins and graphs.',
+      action: 'Load sample data',
+      run: devData.loadSample,
+      failed: "Couldn't load the sample data. Try again.",
+    });
+    if (loaded) toast.show({ message: 'Sample data loaded.', tone: 'success' });
+  };
+  const eraseAll = async () => {
+    const erased = await swap({
+      title: 'Erase all data?',
+      message: devData.holdsSampleData()
+        ? 'The sample workouts, plans, weigh-ins, goals, and recordings are deleted from this phone. Weigh-ins you entered yourself stay. Settings stay, but Progress goes back to its default pins and graphs.'
+        : 'Every workout, plan, goal, and recording is deleted from this phone, and so is every weigh-in except the one from setup. Settings stay, but Progress goes back to its default pins and graphs. This can’t be undone.',
+      action: 'Erase',
+      run: devData.eraseAll,
+      failed: "Couldn't erase the data. Try again.",
+    });
+    if (erased) toast.show({ message: 'All data erased.' });
   };
   const go = (pathname: '/profile/units' | '/profile/workout' | '/profile/notifications' | '/profile/privacy' | '/profile/data' | '/profile/about') => router.push(pathname);
 
@@ -191,48 +235,14 @@ export default function ProfileScreen() {
                     title="Load sample data"
                     subtitle="Replace everything with eight weeks of sample workouts ending today"
                     icon="tray.and.arrow.down"
-                    onPress={() =>
-                      Alert.alert(
-                        'Load sample data?',
-                        devData.holdsSampleData()
-                          ? 'The sample data starts over, ending today. Weigh-ins you entered yourself stay. Settings stay, but Progress gets the sample’s pins and graphs again.'
-                          : 'Every workout, plan, goal, and recording is replaced with sample data, and so is every weigh-in except the one from setup. Settings stay, but Progress gets the sample’s pins and graphs.',
-                        [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Load sample data',
-                          style: 'destructive',
-                          onPress: async () => {
-                            await devData.loadSample();
-                            toast.show({ message: 'Sample data loaded.', tone: 'success' });
-                          },
-                        },
-                      ])
-                    }
+                    onPress={() => void loadSample()}
                   />
                   <ListRow
                     title="Erase all data"
                     subtitle={devData.holdsSampleData() ? 'Remove the sample data and start using the app for real' : 'Remove your workouts, plans, goals, recordings, and weigh-ins'}
                     icon="trash"
                     destructive
-                    onPress={() =>
-                      Alert.alert(
-                        'Erase all data?',
-                        devData.holdsSampleData()
-                          ? 'The sample workouts, plans, weigh-ins, goals, and recordings are deleted from this phone. Weigh-ins you entered yourself stay. Settings stay, but Progress goes back to its default pins and graphs.'
-                          : 'Every workout, plan, goal, and recording is deleted from this phone, and so is every weigh-in except the one from setup. Settings stay, but Progress goes back to its default pins and graphs. This can’t be undone.',
-                        [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Erase',
-                          style: 'destructive',
-                          onPress: async () => {
-                            await devData.eraseAll();
-                            toast.show({ message: 'All data erased.' });
-                          },
-                        },
-                      ])
-                    }
+                    onPress={() => void eraseAll()}
                   />
                   <ListRow
                     title="Restart first-run setup"

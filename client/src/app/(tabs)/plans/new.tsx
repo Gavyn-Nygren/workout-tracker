@@ -101,7 +101,7 @@ export default function NewPlanScreen() {
               </PressableScale>
             );
           })}
-          <Button title="Or start from a template" variant="ghost" icon="square.stack.3d.up" style={styles.centerSelf} onPress={() => router.replace({ pathname: '/plans', params: { segment: 'templates' } })} />
+          <Button title="Or start from a template" variant="ghost" icon="square.stack.3d.up" style={styles.centerSelf} onPress={() => router.dismissTo({ pathname: '/plans', params: { segment: 'templates' } })} />
         </View>
       )}
 

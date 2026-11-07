@@ -262,6 +262,24 @@ describe('badges from the stored history', () => {
     assert.equal(await earned('perfect_week'), undefined, 'Monday and Wednesday were missed');
   });
 
+  test("deleting a plan in the week of its missed workout doesn't make that week perfect", async () => {
+    const weekly: Plan = { ...program, id: 'mwf', schedule: { type: 'weekly', days: ([1, 3, 5] as Weekday[]).map((weekday) => ({ weekday, workoutIds: [`w${weekday}`] })) } };
+    fresh(day(0));
+    await repo.savePlan(weekly);
+    // Monday is missed and Wednesday done. Thursday the plan is deleted, Monday's missed workout with it.
+    setToday(day(2));
+    const wednesday = (await repo.listOccurrences({ from: day(2), to: day(2) }))[0];
+    await repo.saveSession(finished('wed', day(2), { occurrence: wednesday }));
+    setToday(day(3));
+    await repo.deletePlan(weekly.id);
+    assert.equal(await earned('perfect_week'), undefined);
+    const progress = (await repo.getBadges()).progress.find((b) => b.badgeKey === 'perfect_week');
+    assert.equal(progress?.progressLabel, '1 / 2 workouts this week', "Monday still counts; Friday's went with the plan");
+
+    setToday(day(7));
+    assert.equal(await earned('perfect_week'), undefined, 'nor once the week has ended');
+  });
+
   test("pushing a program's missed workouts out of a week before anything was done doesn't make it perfect later (G3.10 review)", async () => {
     const twoWeeks: Plan = {
       ...program,

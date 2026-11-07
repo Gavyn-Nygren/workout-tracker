@@ -2,6 +2,7 @@
 // The goal rules live in src/data/goals.ts; this only picks what each moment celebrates.
 import { goalStatus, goalsReachedBy, type GoalInput, type GoalSource } from '@/data/goals';
 import { daysBetween, localDateOf } from '@/data/dates';
+import { beforeReopens } from '@/data/reopen';
 import type { BodyweightEntry, Exercise, FormReport, Goal, ID, ISODate, WorkoutSession } from '@/data/types';
 import { plural } from '@/lib/format';
 
@@ -21,9 +22,12 @@ const workoutInput = (sessions: WorkoutSession[], exercisesById: Map<string, Exe
   today,
 });
 
-/** Goals a finished workout reached: the summary's "Goal reached". */
+/**
+ * Goals a finished workout reached: the summary's "Goal reached". A reopened workout counts as it
+ * was before the reopen (reopen.ts).
+ */
 export function goalsReachedByWorkout(goals: Goal[], sessionId: ID, sessions: WorkoutSession[], exercisesById: Map<string, Exercise>, today: ISODate): Goal[] {
-  return goalsReachedBy(workoutGoals(goals), { sessionId }, workoutInput(sessions, exercisesById, today));
+  return goalsReachedBy(workoutGoals(goals), { sessionId }, workoutInput(beforeReopens(sessions), exercisesById, today));
 }
 
 /**

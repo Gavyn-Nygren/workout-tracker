@@ -30,13 +30,14 @@ function recordChange(db: SqlDb, table: UserTable, id: string, op: 'upsert' | 'd
 
 /**
  * Inserts or updates a row, reviving it if it was a tombstone. Does nothing (and records nothing
- * for sync) when the stored row is already identical. Returns whether it wrote.
+ * for sync) when the stored row is already identical, its columns included. Returns whether it wrote.
  */
 export function putRow(db: SqlDb, table: UserTable, id: string, data: object, columns: Record<string, SqlValue> = {}, at = nowISO()): boolean {
   const json = JSON.stringify(data);
-  const existing = db.getFirstSync<{ data: string; deleted_at: string | null }>(`SELECT data, deleted_at FROM ${table} WHERE id = ?`, [id]);
-  if (existing && existing.data === json && existing.deleted_at === null) return false;
   const extra = Object.keys(columns);
+  // The columns count too: a set's position is kept only in its column, not in its data.
+  const existing = db.getFirstSync<Record<string, SqlValue>>(`SELECT ${['data', 'deleted_at', ...extra].join(', ')} FROM ${table} WHERE id = ?`, [id]);
+  if (existing && existing.data === json && existing.deleted_at === null && extra.every((c) => existing[c] === (columns[c] ?? null))) return false;
   const names = ['id', ...extra, 'data', 'updated_at', 'deleted_at'];
   const updates = [...extra, 'data', 'updated_at', 'deleted_at'].map((c) => `${c} = excluded.${c}`).join(', ');
   db.runSync(
@@ -64,6 +65,23 @@ export function insertRowIfMissing(db: SqlDb, table: UserTable, id: string, data
 /** Marks a row deleted (a tombstone, so the delete can sync). Returns whether it was live. */
 export function tombstone(db: SqlDb, table: UserTable, id: string, at = nowISO()): boolean {
   const { changes } = db.runSync(`UPDATE ${table} SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`, [at, at, id]);
+  if (changes) recordChange(db, table, id, 'delete', at);
+  return changes > 0;
+}
+
+/**
+ * Like tombstone, but the deleted row keeps new data (and `columns`), for a delete that notes
+ * something about the row. Returns whether it was live.
+ */
+export function tombstoneWith(db: SqlDb, table: UserTable, id: string, data: object, columns: Record<string, SqlValue> = {}, at = nowISO()): boolean {
+  const extra = Object.keys(columns);
+  const { changes } = db.runSync(`UPDATE ${table} SET ${[...extra, 'data'].map((c) => `${c} = ?`).join(', ')}, deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`, [
+    ...extra.map((c) => columns[c]),
+    JSON.stringify(data),
+    at,
+    at,
+    id,
+  ]);
   if (changes) recordChange(db, table, id, 'delete', at);
   return changes > 0;
 }

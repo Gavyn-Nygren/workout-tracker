@@ -6,7 +6,7 @@ import { isoWeekday } from '@/data/dates';
 import { usePreferences } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
 import { cycleSteps, weekPattern } from '@/data/schedule';
-import type { ISODate, PlanSchedule, PlanShift, PlanWorkout, Weekday } from '@/data/types';
+import type { ISODate, PlanSchedule, PlanShift, PlanWorkout, ScheduledOccurrence, Weekday } from '@/data/types';
 import { WEEKDAY_LETTER, WEEKDAY_LONG, weekdayOrder } from '@/lib/format';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
@@ -22,6 +22,8 @@ type Props = {
   startDate?: ISODate;
   /** This plan's pushes forward, so a rotating cycle's highlighted step matches Today. */
   shifts?: readonly PlanShift[];
+  /** This plan's workouts on `today`, as Today shows them, for the same. */
+  occurrences?: readonly ScheduledOccurrence[];
   onPressDay?: (weekday: Weekday) => void;
 };
 
@@ -31,13 +33,13 @@ type Props = {
  * a row of day pills, each listing its workouts one per line ("Rest" when it has none), with
  * today's day ringed.
  */
-export function ScheduleGrid({ schedule, workouts, today, startDate, shifts, onPressDay }: Props) {
+export function ScheduleGrid({ schedule, workouts, today, startDate, shifts, occurrences, onPressDay }: Props) {
   const { colors } = useAppTheme();
   const weekStartsOn = usePreferences().data?.weekStartsOn ?? defaultPreferences.weekStartsOn;
   const names = new Map(workouts.map((w) => [w.id, w.name]));
 
   if (schedule.type === 'rotating') {
-    const step = today && startDate ? currentRotatingStep(schedule, startDate, today, shifts) : undefined;
+    const step = today && startDate ? currentRotatingStep(schedule, startDate, today, shifts, occurrences) : undefined;
     const steps = cycleSteps(schedule).map((s) => cycleDayNames(s, names));
     return (
       <View

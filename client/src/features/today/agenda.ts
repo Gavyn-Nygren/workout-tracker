@@ -51,12 +51,18 @@ export function buildAgenda(input: {
   };
   const plansById = new Map(plans.map((p) => [p.id, p]));
   const versions = new Map(planVersions.map((p) => [`${p.id}@${p.version}`, p]));
-  /** The plan as it was when this workout was scheduled; editing a plan only changes unstarted future workouts. */
+  /**
+   * The plan as it was when this workout was scheduled; editing a plan only changes unstarted
+   * future workouts. A deleted plan's saved version still names its logged workouts.
+   */
   const planFor = (occurrence: ScheduledOccurrence) => {
     const current = plansById.get(occurrence.planId);
-    if (!current || current.version === occurrence.planVersion) return current;
+    if (current?.version === occurrence.planVersion) return current;
     return versions.get(`${occurrence.planId}@${occurrence.planVersion}`) ?? current;
   };
+  /** A deleted plan's latest saved version, for its workouts done on another day. */
+  const latestVersions = new Map<string, Plan>();
+  for (const p of planVersions) if (!plansById.has(p.id) && (latestVersions.get(p.id)?.version ?? -Infinity) < p.version) latestVersions.set(p.id, p);
   const sessionsById = new Map(sessions.map((s) => [s.id, s]));
   const occurrencesById = new Map(occurrences.map((o) => [o.id, o]));
 
@@ -69,7 +75,7 @@ export function buildAgenda(input: {
     add({
       key: occurrence.id,
       date: occurrence.scheduledDate,
-      name: workout?.name ?? 'Workout',
+      name: workout?.name ?? session?.name ?? 'Workout',
       status: statusFor(session, occurrence.scheduledDate, today),
       plan,
       workout,
@@ -83,7 +89,7 @@ export function buildAgenda(input: {
     if (session.status !== 'completed' || !session.completedDate) continue;
     const occurrence = session.occurrenceId ? occurrencesById.get(session.occurrenceId) : undefined;
     if (occurrence?.scheduledDate === session.completedDate) continue;
-    const plan = session.planId ? plansById.get(session.planId) : undefined;
+    const plan = session.planId ? (plansById.get(session.planId) ?? latestVersions.get(session.planId)) : undefined;
     add({
       key: `${session.id}_extra`,
       date: session.completedDate,

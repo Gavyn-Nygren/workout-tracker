@@ -7,6 +7,7 @@ import type { Goal } from '@/data/types';
 import { EarnedRow, GoalRow, NextUpList, WinsFeed } from '@/features/home/HomeParts';
 import { useHomeData } from '@/features/home/useHomeData';
 import { WeeklySnapshot } from '@/features/home/WeeklySnapshot';
+import { requestTodayFocus } from '@/features/today/focusToday';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { Columns, dashboard } from '@/theme/layout';
 import { radius, spacing } from '@/theme/tokens';
@@ -60,6 +61,12 @@ export default function HomeScreen() {
       },
     );
 
+  // Today keeps whichever day was browsed last, so ask it for today's.
+  const openToday = () => {
+    router.navigate('/');
+    requestTodayFocus();
+  };
+
   // Goals reached over a week ago leave the list; this row opens them.
   const completedRow = completedGoals.length > 0 && (
     <ListRow
@@ -79,7 +86,7 @@ export default function HomeScreen() {
       <Columns
         left={
           <>
-            <WeeklySnapshot streak={streak} week={week} today={today} onPress={() => router.navigate('/')} />
+            <WeeklySnapshot streak={streak} week={week} today={today} onPress={openToday} />
 
             <View style={styles.section}>
               <SectionHeader title="Goals" actionLabel="Add" actionAccessibilityLabel="Add goal" onAction={() => router.push('/goal')} />
@@ -134,7 +141,7 @@ export default function HomeScreen() {
               )}
             </View>
 
-            <Button title="Start today's workout" variant="secondary" icon="play.fill" fullWidth onPress={() => router.navigate('/')} />
+            <Button title="Start today's workout" variant="secondary" icon="play.fill" fullWidth onPress={openToday} />
           </>
         }
       />

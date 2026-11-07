@@ -7,6 +7,7 @@ import { migrate } from '../src/data/db/schema';
 import { createSqliteRepository } from '../src/data/db/sqliteRepository';
 import type { LoadField } from '../src/data/logging';
 import { defaultRounding } from '../src/data/preferences';
+import { occurrenceIdFor } from '../src/data/schedule';
 import type {
   ISODate,
   LoggedSet,
@@ -14,6 +15,7 @@ import type {
   Plan,
   PlannedExercise,
   PlanSchedule,
+  PlanShift,
   ProgressionRule,
   ProgressionSuggestion,
   RepTarget,
@@ -30,7 +32,7 @@ import type { DayItem } from '../src/features/today/agenda';
 import { sessionForReopen, sessionFromPlan } from '../src/features/workout/buildSession';
 import { completedNewestFirst, lastTimes, slotHistory, withSessionWrite } from '../src/features/workout/history';
 import { sessionToResume } from '../src/features/workout/persistence';
-import { canUndoSuggestion, describeSuggestion, suggestionLine, undoSuggestion, type ProgressionPreferences } from '../src/features/workout/progression';
+import { canUndoSuggestion, describeSuggestion, progressionFor, suggestionLine, undoSuggestion, type ProgressionPreferences } from '../src/features/workout/progression';
 import { workoutReducer, type ActiveWorkout, type WorkoutAction } from '../src/features/workout/workoutReducer';
 import { spokenLoad } from '../src/lib/format';
 import { openTestDatabase } from './support/nodeSqlite';
@@ -336,6 +338,75 @@ describe('weekly % rule (decision B)', () => {
     assert.equal(first(planned, [lifted('2026-10-16')], { today: '2026-10-19', plan: program(planned) }).suggestion, undefined);
     // Wednesday is week 3 and Thursday week 4, in the same calendar week.
     assert.equal(first(planned, [lifted('2026-10-21')], { today: '2026-10-22', plan: program(planned) }).suggestion?.kind, 'increase');
+  });
+
+  describe('a program workout counts in the week the plan first put it in', () => {
+    // From Monday 2026-10-05. Week 1: W on Wednesday 10-07 and Sunday 10-11. Week 2: B on Monday
+    // 10-12, W on Wednesday 10-14.
+    const planned = fives();
+    const plan = planWith(
+      [planned],
+      {
+        type: 'fixed',
+        weeks: 2,
+        days: [
+          { week: 1, weekday: 3, workoutIds: [W] },
+          { week: 1, weekday: 7, workoutIds: [W] },
+          { week: 2, weekday: 1, workoutIds: ['pw_b'] },
+          { week: 2, weekday: 3, workoutIds: [W] },
+        ],
+      },
+      '2026-10-05',
+    );
+    /** Last time: W from `original`, done on `date`. */
+    const lastTime = (original: ISODate, date: ISODate) => {
+      const session = { ...lifted(date), occurrenceId: occurrenceIdFor(PLAN_ID, original, W) };
+      return [{ session, entry: session.blocks[0].exercises[0] }];
+    };
+    /** W from `original`, on the calendar on `on`. */
+    const calendarW = (original: ISODate, on: ISODate = original) => ({ planId: PLAN_ID, scheduledDate: on, ...(original !== on && { shiftedFromDate: original }) });
+    const suggestion = (history: ReturnType<typeof lastTime>, today: ISODate, occurrence?: ReturnType<typeof calendarW>, shifts?: PlanShift[]) =>
+      progressionFor({ planned, exercise: byId.get(SQUAT), history, preferences: LB, plan, shifts, occurrence, today }).suggestion?.kind;
+
+    test("last time's late workout is in its own week: week 1's Sunday done on Monday, then week 2's Wednesday goes up", () => {
+      const history = lastTime('2026-10-11', '2026-10-12');
+      assert.equal(suggestion(history, '2026-10-14', calendarW('2026-10-14')), 'increase');
+      assert.equal(suggestion(history, '2026-10-14'), 'increase', 'also without the calendar workout');
+    });
+
+    test("a late workout now is in its own week: week 1's Sunday started on Monday keeps week 1's weight", () => {
+      assert.equal(suggestion(lastTime('2026-10-07', '2026-10-07'), '2026-10-12', calendarW('2026-10-11')), undefined);
+    });
+
+    test('after a kept workout lost its session and the plan was pushed again, the week is still the workout’s', () => {
+      // Sunday's W missed and Monday's B done. On Tuesday W is pushed 2 days (keeping B), B's
+      // session is deleted, W is missed again, and on Thursday it is pushed 2 more. The pushes alone
+      // put Thursday in week 2, through B moved to Wednesday.
+      const shift = (id: string, createdAt: string, keptIds?: string[]): PlanShift => ({
+        id,
+        planId: PLAN_ID,
+        occurrenceId: occurrenceIdFor(PLAN_ID, '2026-10-11', W),
+        fromDate: '2026-10-11',
+        days: 2,
+        ...(keptIds && { keptIds }),
+        createdAt,
+        updatedAt: createdAt,
+      });
+      const shifts = [shift('sh1', '2026-10-13T12:00:00.000Z', [occurrenceIdFor(PLAN_ID, '2026-10-12', 'pw_b')]), shift('sh2', '2026-10-15T12:00:00.000Z')];
+      assert.equal(suggestion(lastTime('2026-10-07', '2026-10-07'), '2026-10-15', calendarW('2026-10-11', '2026-10-15'), shifts), undefined, "Thursday's W is week 1's");
+      // Then week 2's Wednesday W, pushed to Sunday, is the first of week 2.
+      assert.equal(suggestion(lastTime('2026-10-11', '2026-10-15'), '2026-10-18', calendarW('2026-10-14', '2026-10-18'), shifts), 'increase', "Sunday's W is week 2's");
+    });
+
+    test('starting the workout from its calendar card uses that week; a repeat uses the week it is now', () => {
+      // Week 1's Wednesday done, then week 1's Sunday W started late on Monday 10-12 (week 2).
+      const done = { ...lifted('2026-10-07'), occurrenceId: occurrenceIdFor(PLAN_ID, '2026-10-07', W) };
+      const occurrence = { id: occurrenceIdFor(PLAN_ID, '2026-10-11', W), planId: PLAN_ID, planWorkoutId: W, planVersion: 1, scheduledDate: '2026-10-11' };
+      const build = (repeatOf?: WorkoutSession) =>
+        sessionFromPlan({ item: { ...itemFor(plan, '2026-10-11'), occurrence }, history: [done], exercisesById: byId, preferences: LB, today: '2026-10-12', repeatOf }).blocks[0].exercises[0];
+      assert.equal(build().suggestion, undefined, "Sunday's W is week 1's, like last time");
+      assert.equal(build(done).suggestion?.kind, 'increase', 'a repeat is done in week 2');
+    });
   });
 
   test('every set has to be done: an unfinished last time keeps the weight', () => {

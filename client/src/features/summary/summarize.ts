@@ -1,5 +1,6 @@
 import { countsForPRs, effectiveLoadKg, isWorkingSet, setVolumeKg, signedAddedKg, usesBodyweight } from '@/data/calculations';
 import { derivePersonalRecords } from '@/data/records';
+import { asBeforeReopen, beforeReopens } from '@/data/reopen';
 import type { Exercise, PersonalRecord, PRType, SessionExercise, WorkoutSession } from '@/data/types';
 
 export type BestSet =
@@ -97,29 +98,37 @@ function amountOf(best: BestSet): number {
   return best.kind === 'load' ? best.loadKg : best.kind === 'bodyweight' ? best.addedKg : best.seconds;
 }
 
-/** Everything the workout summary shows (G2.3). `allSessions` should include `session`. */
+/**
+ * Everything the workout summary shows (G2.3). `allSessions` should include `session`. A reopened
+ * workout counts as it was before the reopen, this one included (reopen.ts).
+ */
 export function buildSummary(session: WorkoutSession, allSessions: WorkoutSession[], exercisesById: Map<string, Exercise>): WorkoutSummary {
-  const completed = allSessions.filter((s) => s.status === 'completed' && s.id !== session.id);
-  const chronological = [...completed, session].sort((a, b) => (a.completedAt ?? '').localeCompare(b.completedAt ?? ''));
-  const records = derivePersonalRecords(chronological, exercisesById).filter((r) => r.sessionId === session.id);
-  const earlier = completed.filter((s) => (s.completedAt ?? '') < (session.completedAt ?? '')).sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
+  const self = asBeforeReopen(session);
+  const completed = beforeReopens(allSessions).filter((s) => s.status === 'completed' && s.id !== self.id);
+  const chronological = [...completed, self].sort((a, b) => (a.completedAt ?? '').localeCompare(b.completedAt ?? ''));
+  const records = derivePersonalRecords(chronological, exercisesById).filter((r) => r.sessionId === self.id);
+  const earlier = completed.filter((s) => (s.completedAt ?? '') < (self.completedAt ?? '')).sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
 
-  // The last time the exercise had a completed set, even in an exercise skipped part-way.
-  const lastEntry = (exerciseId: string) => {
+  // The last time the exercise had a completed set, even in an exercise skipped part-way. An
+  // exercise done more than once compares by position, as the PREVIOUS column does: the second
+  // with last time's second, or its only one. A workout where that entry wasn't done is passed over.
+  const lastEntry = (exerciseId: string, nth: number) => {
     for (const s of earlier) {
-      for (const block of s.blocks) {
-        const entry = block.exercises.find((e) => e.exerciseId === exerciseId && e.sets.some((x) => x.completedAt && isWorkingSet(x)));
-        if (entry) return entry;
-      }
+      const same = s.blocks.flatMap((b) => b.exercises).filter((e) => e.exerciseId === exerciseId);
+      const entry = same[nth] ?? same[0];
+      if (entry?.sets.some((x) => x.completedAt && isWorkingSet(x))) return entry;
     }
     return undefined;
   };
 
-  const exercises: ExerciseSummary[] = session.blocks.flatMap((block) =>
+  const seen = new Map<string, number>();
+  const exercises: ExerciseSummary[] = self.blocks.flatMap((block) =>
     block.exercises.map((entry) => {
+      const nth = seen.get(entry.exerciseId) ?? 0;
+      seen.set(entry.exerciseId, nth + 1);
       const exercise = exercisesById.get(entry.exerciseId);
       const best = bestSet(entry, exercise);
-      const previousEntry = lastEntry(entry.exerciseId);
+      const previousEntry = lastEntry(entry.exerciseId, nth);
       const previousBest = previousEntry ? bestSet(previousEntry, exercise) : undefined;
       const delta = best && previousBest && best.kind === previousBest.kind ? { amount: amountOf(best) - amountOf(previousBest), kind: best.kind } : undefined;
       const { done, total } = workingSetCounts(entry);
@@ -137,10 +146,10 @@ export function buildSummary(session: WorkoutSession, allSessions: WorkoutSessio
     }),
   );
 
-  const previousSession = earlier.find((s) => (session.planWorkoutId ? s.planWorkoutId === session.planWorkoutId : s.name === session.name));
+  const previousSession = earlier.find((s) => (self.planWorkoutId ? s.planWorkoutId === self.planWorkoutId : s.name === self.name));
   const previous = previousSession
     ? { session: previousSession, ...totals(previousSession, exercisesById), minutes: minutesOf(previousSession) }
     : undefined;
 
-  return { ...totals(session, exercisesById), minutes: minutesOf(session), records, exercises, previous };
+  return { ...totals(self, exercisesById), minutes: minutesOf(self), records, exercises, previous };
 }

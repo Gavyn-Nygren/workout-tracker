@@ -6,12 +6,13 @@ import { AppText, Button, Card, Icon, PRBadge, SectionHeader } from '@/component
 import { succeeded } from '@/data/hooks';
 import type { Goal, ISODate, PersonalRecord, PRType, UnitSystem } from '@/data/types';
 import { spokenDuration } from '@/hooks/useNow';
-import { formatAddedLoad, formatDuration, formatLoad, formatShortDate, formatSigned, formatSignedLoad, plural, spokenAddedLoad, spokenLoad } from '@/lib/format';
+import { formatAddedLoad, formatDuration, formatLoad, formatShortDate, formatSigned, plural, spokenAddedLoad, spokenLoad } from '@/lib/format';
 import { useTextScale } from '@/theme/layout';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { reachedAfter } from './goalsReached';
 import type { BestSet, ExerciseSummary, WorkoutSummary } from './summarize';
+import { exerciseChange, loadChange } from './summaryChanges';
 
 const PR_LABEL: Record<PRType, string> = {
   heaviest_weight: 'Heaviest weight',
@@ -105,7 +106,7 @@ const direction = (n: number) => (n > 0.01 ? 'up' : n < -0.01 ? 'down' : 'same')
 export function ComparisonCard({ summary, units, name }: { summary: WorkoutSummary; units: UnitSystem; name: string }) {
   const { previous } = summary;
   if (!previous) return null;
-  const volume = summary.volumeKg - previous.volumeKg;
+  const volume = loadChange(summary.volumeKg - previous.volumeKg, units);
   const minutes = summary.minutes !== undefined && previous.minutes !== undefined ? summary.minutes - previous.minutes : undefined;
   const sets = summary.setsDone - previous.setsDone;
 
@@ -116,8 +117,8 @@ export function ComparisonCard({ summary, units, name }: { summary: WorkoutSumma
         <Row
           label="Volume"
           value={formatLoad(summary.volumeKg, units)}
-          delta={<Delta text={formatSignedLoad(volume, units)} direction={direction(volume)} />}
-          spoken={`Volume: ${spokenLoad(summary.volumeKg, units)}, ${spokenChange(volume, (n) => spokenLoad(n, units))} vs last time`}
+          delta={<Delta text={volume.text} direction={volume.direction} />}
+          spoken={`Volume: ${spokenLoad(summary.volumeKg, units)}, ${volume.spoken} vs last time`}
         />
         {minutes !== undefined && summary.minutes !== undefined && (
           // Time isn't better or worse either way, so both directions are neutral.
@@ -266,11 +267,6 @@ export function GoalsReachedCard({ goals, date }: { goals: Goal[]; date?: ISODat
   );
 }
 
-function formatExerciseDelta(e: ExerciseSummary, units: UnitSystem): string | undefined {
-  if (!e.delta || Math.abs(e.delta.amount) < 0.01) return undefined;
-  return e.delta.kind === 'hold' ? formatSigned(e.delta.amount, 's') : formatSignedLoad(e.delta.amount, units);
-}
-
 export function ExercisesCard({ summary, units }: { summary: WorkoutSummary; units: UnitSystem }) {
   const { colors } = useAppTheme();
   const { large } = useTextScale();
@@ -279,15 +275,14 @@ export function ExercisesCard({ summary, units }: { summary: WorkoutSummary; uni
       <SectionHeader title="Exercises" />
       <Card padding="none">
         {summary.exercises.map((e, i) => {
-          const delta = formatExerciseDelta(e, units);
+          const change = exerciseChange(e, units);
           const line = exerciseLine(e, units);
           const pr = e.prTypes.length > 0;
-          const spokenDelta =
-            delta && e.delta ? `, ${spokenChange(e.delta.amount, (n) => (e.delta!.kind === 'hold' ? spokenDuration(n) : spokenLoad(n, units)))} since last time` : '';
-          const marks = (pr || delta) && (
+          const spokenDelta = change ? `, ${change.spoken} since last time` : '';
+          const marks = (pr || change) && (
             <>
               {pr && <Icon name="star.fill" color={colors.prOnSurface} size={14} />}
-              {delta && <Delta text={delta} direction={direction(e.delta!.amount)} />}
+              {change && <Delta text={change.text} direction={change.direction} />}
             </>
           );
           return (

@@ -3,7 +3,9 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { cycleDayNames, cycleDaySubtitle, cycleDayTitle, deleteDayPrompt, nameList } from '../src/features/plans/cycleLabels';
+import { addDays } from '../src/data/dates';
+import { workoutsOn } from '../src/data/schedule';
+import { addDayPrompt, cycleDayNames, cycleDaySubtitle, cycleDayTitle, deleteDayPrompt, nameList } from '../src/features/plans/cycleLabels';
 import { cycle } from './support/cycles';
 
 const names = new Map([
@@ -70,5 +72,36 @@ describe('deleting a cycle day asks first', () => {
   test('the last day has no later days, so the cycle just gets shorter', () => {
     assert.equal(deleteDayPrompt(steps, 3, names).message, "Core comes off the cycle but stays in the plan. The cycle gets one day shorter, so what's scheduled from today on changes.");
     assert.equal(deleteDayPrompt(cycle(['legs'], []).steps, 1, names).message, "The cycle gets one day shorter, so what's scheduled from today on changes.");
+  });
+});
+
+describe('adding a cycle day (owner\'s pick: warn first, like delete)', () => {
+  const START = '2026-10-05';
+  const steps = [['a'], ['b'], ['c']];
+
+  test('no warning in the first lap, before the start, or for an empty cycle', () => {
+    for (const day of [0, 1, 2]) assert.equal(addDayPrompt(3, day), undefined, `day ${day}`);
+    assert.equal(addDayPrompt(3, -4), undefined);
+    assert.equal(addDayPrompt(0, 10), undefined);
+  });
+
+  test('a warning once the cycle has gone round, unless today lands on the same day either way', () => {
+    assert.deepEqual(addDayPrompt(3, 3), { title: 'Add Day 4?', message: "The cycle gets one day longer, so what's scheduled from today on changes." });
+    // 12 days in: Day 1 with 3 days and with 4, so the days run as before and the new one comes after Day 3.
+    assert.equal(addDayPrompt(3, 12), undefined);
+  });
+
+  test('it warns exactly when today, or a day before the new one would come, changes', () => {
+    const before = cycle(...steps);
+    const after = cycle(...steps, []);
+    for (let days = 0; days < 40; days++) {
+      const today = addDays(START, days);
+      // The days from today to the end of the current lap, where the new day should come next.
+      const lapLeft = steps.length - (days % steps.length);
+      const changed = Array.from({ length: lapLeft }, (_, k) => addDays(today, k)).some(
+        (d) => workoutsOn(before, START, d).join() !== workoutsOn(after, START, d).join(),
+      );
+      assert.equal(addDayPrompt(steps.length, days) !== undefined, changed, `${days} days in`);
+    }
   });
 });

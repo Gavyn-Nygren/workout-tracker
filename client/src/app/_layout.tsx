@@ -1,8 +1,9 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type Theme } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type ErrorBoundaryProps, type Theme } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useMemo } from 'react';
+import { StyleSheet, View } from 'react-native';
 
-import { TAB_BAR_CLEARANCE, ToastProvider, ToastViewport } from '@/components/ui';
+import { ErrorState, TAB_BAR_CLEARANCE, ToastProvider, ToastViewport } from '@/components/ui';
 import { DataProvider } from '@/data/DataProvider';
 import { SaveErrorToasts } from '@/data/SaveErrorToasts';
 import { authStore } from '@/features/auth/authStore';
@@ -18,6 +19,27 @@ import { radius } from '@/theme/tokens';
 
 // Once, before anything can arrive: how notifications show while the app is open.
 setUpNotificationHandler();
+
+/**
+ * Shown instead of the app when a screen throws while rendering, rather than closing the app. It
+ * sits outside RootLayout, so it brings its own theme.
+ */
+export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
+  return (
+    <AppThemeProvider>
+      <ErrorScreen retry={retry} />
+    </AppThemeProvider>
+  );
+}
+
+function ErrorScreen({ retry }: Pick<ErrorBoundaryProps, 'retry'>) {
+  const { colors } = useAppTheme();
+  return (
+    <View style={[styles.fill, { backgroundColor: colors.background }]}>
+      <ErrorState fill title="Something went wrong" onRetry={() => void retry()} />
+    </View>
+  );
+}
 
 export default function RootLayout() {
   return (
@@ -93,8 +115,6 @@ function NavigationRoot() {
           </Stack.Protected>
           <Stack.Protected guard={auth.signedIn && auth.onboarded}>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="dev/gallery" options={{ title: 'Component gallery' }} />
-            <Stack.Screen name="dev/sheet" options={sheet([0.6, 1])} />
             {/* Active workout: a page sheet you can swipe down to minimize to the mini bar. */}
             <Stack.Screen name="workout/index" options={{ presentation: 'modal', headerShown: false }} />
             <Stack.Screen name="workout/set" options={sheet([0.75, 1])} />
@@ -116,6 +136,11 @@ function NavigationRoot() {
             <Stack.Screen name="form/record" options={{ presentation: 'fullScreenModal', headerShown: false, gestureEnabled: false }} />
             <Stack.Screen name="form/report" options={{ presentation: 'modal', headerShown: false }} />
           </Stack.Protected>
+          {/* Developer screens (Profile → Developer): development builds only, so a link can't open them in the real app. */}
+          <Stack.Protected guard={auth.signedIn && auth.onboarded && __DEV__}>
+            <Stack.Screen name="dev/gallery" options={{ title: 'Component gallery' }} />
+            <Stack.Screen name="dev/sheet" options={sheet([0.6, 1])} />
+          </Stack.Protected>
           {/* The tour opens from onboarding and from Profile → About. */}
           <Stack.Protected guard={auth.signedIn}>
             <Stack.Screen name="tutorial" options={{ presentation: 'fullScreenModal', headerShown: false }} />
@@ -134,3 +159,9 @@ function NavigationRoot() {
     </ThemeProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  fill: {
+    flex: 1,
+  },
+});

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 
 import { useBadges, useBodyweight, useFormReports, useGoals, usePersonalRecords, usePreferences, useSessions, useStreak } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
+import { beforeReopens } from '@/data/reopen';
 import type { BodyweightEntry, FormReport, Goal, WorkoutSession } from '@/data/types';
 import { weekDates } from '@/lib/format';
 import { useAgenda } from '../today/useAgenda';
@@ -51,10 +52,13 @@ export function useHomeData() {
   const weekStartsOn = usePreferences().data?.weekStartsOn ?? defaultPreferences.weekStartsOn;
   const week = useMemo(() => weekDates(today, weekStartsOn).map((date) => ({ date, items: agenda.get(date) ?? [] })), [agenda, today, weekStartsOn]);
 
-  /** What goal progress is measured from; also what "Goal reached" celebrations check (goalsReachedBy*). */
+  /**
+   * What goal progress is measured from; also what "Goal reached" celebrations check (goalsReachedBy*).
+   * A reopened workout counts as it was before the reopen (reopen.ts).
+   */
   const goalInput = useMemo<GoalInput>(
     () => ({
-      sessions: sessions.data ?? NO_SESSIONS,
+      sessions: beforeReopens(sessions.data ?? NO_SESSIONS),
       exercisesById,
       bodyweight: bodyweight.data ?? NO_WEIGH_INS,
       formReports: formReports.data ?? NO_REPORTS,

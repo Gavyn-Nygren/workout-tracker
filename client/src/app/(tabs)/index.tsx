@@ -5,15 +5,17 @@ import { ActionSheetIOS, Alert, ScrollView, StyleSheet, View } from 'react-nativ
 import { ErrorState, SectionHeader, Skeleton, useToast } from '@/components/ui';
 import { useDeleteSession, useSaveSession } from '@/data/hooks';
 import type { ISODate } from '@/data/types';
+import { cardMenu } from '@/features/today/cardMenu';
 import { ComingUp } from '@/features/today/ComingUp';
 import { useTodayFocusNonce } from '@/features/today/focusToday';
 import { MissedBanner, useMissedBanner } from '@/features/today/MissedBanner';
 import { RestDayCard } from '@/features/today/RestDayCard';
+import { upcoming } from '@/features/today/upcoming';
 import { useAgenda } from '@/features/today/useAgenda';
 import { WeekStrip } from '@/features/today/WeekStrip';
 import { WorkoutCard } from '@/features/today/WorkoutCard';
 import { WorkoutPager } from '@/features/today/WorkoutPager';
-import { summarizeSession, type Agenda, type DayItem } from '@/features/today/agenda';
+import { summarizeSession, type DayItem } from '@/features/today/agenda';
 import { useActiveWorkout } from '@/features/workout/ActiveWorkoutProvider';
 import { formatMonthDay, formatShortDate, formatWeekday } from '@/lib/format';
 import { newId } from '@/lib/id';
@@ -28,33 +30,25 @@ function headerTitle(date: ISODate, items: DayItem[]): string {
   return `${day} · ${items[0].name.toUpperCase()}${more}`;
 }
 
-function upcoming(agenda: Agenda, after: ISODate, limit: number): DayItem[] {
-  return [...agenda.entries()]
-    .filter(([date]) => date > after)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .flatMap(([, items]) => items.filter((i) => i.status === 'planned'))
-    .slice(0, limit);
-}
-
 export default function TodayScreen() {
   const navigation = useNavigation();
-  const { today, range, agenda, exercisesById, records, units, isLoading, error, retry } = useAgenda();
+  const { today, range, agenda, planStatus, exercisesById, records, units, isLoading, error, retry } = useAgenda();
   const active = useActiveWorkout();
   const { scheme } = useAppTheme();
   const toast = useToast();
   const saveSession = useSaveSession();
   const deleteSession = useDeleteSession();
 
-  /** The card's ⋯ menu: skip a planned or missed workout, or undo a skip (user's pick). */
+  /** The card's ⋯ menu: skip a planned or missed workout, or undo a skip (cardMenu.ts). */
   const menuFor = (item: DayItem) => {
-    const skippable = item.status === 'planned' || item.status === 'missed';
-    if (!item.occurrence || !(skippable || item.status === 'skipped')) return undefined;
+    const menu = cardMenu(item, planStatus, today);
+    if (!menu) return undefined;
     return () =>
       ActionSheetIOS.showActionSheetWithOptions(
-        { title: item.name, options: [item.status === 'skipped' ? 'Unskip workout' : 'Skip workout', 'Cancel'], cancelButtonIndex: 1, userInterfaceStyle: scheme },
+        { title: item.name, options: [menu === 'unskip' ? 'Unskip workout' : 'Skip workout', 'Cancel'], cancelButtonIndex: 1, userInterfaceStyle: scheme },
         (choice) => {
           if (choice !== 0 || !item.occurrence) return;
-          if (item.status === 'skipped' && item.session) {
+          if (menu === 'unskip' && item.session) {
             deleteSession.mutate(item.session.id, { onSuccess: () => toast.show({ message: `${item.name} is back on your plan.` }) });
             return;
           }
@@ -106,7 +100,7 @@ export default function TodayScreen() {
   );
   // The "push plan forward?" prompt, or its Undo after a push (spec 2.5).
   const missedBanner = useMissedBanner(agenda, today, activeSession?.occurrenceId);
-  const coming = useMemo(() => upcoming(agenda, selected < today ? today : selected, 3), [agenda, selected, today]);
+  const coming = useMemo(() => upcoming(agenda, selected, today, 3), [agenda, selected, today]);
 
   useLayoutEffect(() => {
     navigation.setOptions({ headerTitle: isLoading ? 'TODAY' : headerTitle(selected, items) });

@@ -5,6 +5,7 @@ import { AccessibilityInfo, ScrollView, StyleSheet, View, type TextInputInstance
 import { AppText, Button, Icon } from '@/components/ui';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
+import { firstParam } from '@/lib/params';
 import { reportFormErrors, TextFieldWithRef } from '@/features/auth/formErrors';
 import { EMAIL_PATTERN } from '@/features/auth/validation';
 import { readable } from '@/theme/layout';
@@ -12,8 +13,9 @@ import { readable } from '@/theme/layout';
 /** Password reset by email link (spec 2.3). Sending is mocked until Supabase Auth (G5.1). */
 export default function ResetPasswordScreen() {
   const { colors } = useAppTheme();
-  const params = useLocalSearchParams<{ email?: string }>();
-  const [email, setEmail] = useState(params.email ?? '');
+  const params = useLocalSearchParams<{ email?: string | string[] }>();
+  // A link can repeat the key (an array) or leave it out.
+  const [email, setEmail] = useState(() => firstParam(params.email));
   const [sent, setSent] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const emailRef = useRef<TextInputInstance>(null);

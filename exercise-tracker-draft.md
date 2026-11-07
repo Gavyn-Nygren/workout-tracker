@@ -137,7 +137,7 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 **Data export**
 
 - Users can export a **CSV** of workouts and sets and a **full JSON** export from Settings.
-- The export also satisfies data-access requests.
+- The export also satisfies data-access requests, so the JSON includes the onboarding answers kept on the phone (height, limitations and their note).
 
 ### 2.4 Onboarding and preferences
 
@@ -189,7 +189,7 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 - **Several plans can be active at once.** Their workouts merge on the calendar, which is one way a day ends up with multiple workouts. The others are a weekday or a cycle day that holds several, and a push onto a day that already has one.
 - Templates are **copied** into the user's plans. Later changes to a template never rewrite a user's plan or history.
 - **Editing a plan changes unstarted future workouts only.** Completed history and any workout in progress keep their original prescription. Every saved version of a plan is kept, so a missed workout still opens with the prescription it was scheduled with.
-- Pausing or archiving a plan clears its upcoming workouts; resuming schedules them again from today. Deleting a plan removes every workout of it that wasn't started, missed ones included.
+- Pausing or archiving a plan clears its upcoming workouts; resuming schedules them again from today. Deleting a plan removes every workout of it that wasn't started, missed ones included. A logged workout of a deleted plan keeps its name, plan, and prescription from the plan's saved version. Deleting or unskipping one never brings back a workout the plan no longer schedules: for a deleted plan, or a paused or archived one from today on, its day just empties.
 - Users can start from curated starter templates or build custom plans.
 - Starter templates cover bodybuilding, powerlifting, full range of motion, conditioning (rep-based strength circuits), athletic development, bodyweight, and gym/weighted training. They are **AI-drafted original programs reviewed by the developer**; branded programs and trademarked names are not reproduced. The style labels are Bodybuilding, Powerlifting, **Full range** (user's pick; "ATG" is a trademark), Conditioning, Athletic, Bodyweight, and Gym.
 - **The starter catalog** (G3.13, user's pick: 12 programs). Each lives in `client/src/data/content/templates/`, and `CONTENT_REVIEW.md` lists every one in full. All are drafts until the developer approves them (`templates/review.ts`), which is required before release (G6.4).
@@ -234,7 +234,7 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
   Each training day starts as an empty workout to fill in. To put more workouts on a cycle day, add a workout to the plan, then put it on that day in the schedule editor.
 - **Schedule editor** (Edit on the plan's schedule):
   - Weekly and fixed-length plans list the weekdays, each with its workouts as removable chips and a round "+" that adds one; fixed-length plans also set the program length.
-  - Rotating plans list the cycle the same way (user's pick): a row per day ("Day 1", "Day 2"…) with removable chips and a "+" that adds a workout the day doesn't already have. "+" on a rest day makes it a workout day, and removing a day's last workout leaves it "Rest". Add workout day and Add rest day add a day at the end.
+  - Rotating plans list the cycle the same way (user's pick): a row per day ("Day 1", "Day 2"…) with removable chips and a "+" that adds a workout the day doesn't already have. "+" on a rest day makes it a workout day, and removing a day's last workout leaves it "Rest". Add workout day and Add rest day add a day at the end. Once the cycle has gone round, a longer cycle can change today and the days after it, so adding then asks first, like a delete (owner's pick). It doesn't ask when today lands on the same day either way.
   - **Reorder** turns the cycle into a drag list where each day can also be deleted, after a confirmation (every later date then runs a different day). Done returns to the rows.
   - Deleting a workout from the plan takes it off every cycle day it was on. A day left with none becomes a rest day, so the cycle keeps its length and later dates don't move (user's pick).
 - **Workout editor:**
@@ -268,7 +268,7 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
   - **Workout cards:** **dark hero cards**, near-black in both themes, with white text and the baby-blue Start button.
   - **Several workouts on one day:** swipe sideways between the cards; page dots and the button label show the position.
   - **Header:** reads **"THURSDAY · UPPER B"**, with "+1" when more workouts are scheduled that day. On rest days it reads "THURSDAY · REST DAY".
-  - **Below the cards:** a "Coming up" list of the next few planned workouts.
+  - **Below the cards:** a "Coming up" list of the next few planned workouts. From a past day, it starts with today's.
 - **Each card shows** the plan name, a status pill, the workout name, and the estimated time and number of working sets. It lists the exercises with their planned sets × reps; for finished workouts, the top set instead.
 - **Buttons by state:**
   - **Planned, missed, or in progress:** Start or Resume. Future workouts get "Start early" instead.
@@ -282,8 +282,8 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
   - **Weekly plans** move only within the week the missed workout lands in (user's pick). A workout that would be pushed past the end of the week stays on its day, so the next week is exactly as usual.
   - **Fixed-length programs and rotating cycles** move everything later, so a program ends that many days later.
   - "Keep schedule" hides the question for that workout, and the choice is remembered. The missed workout still opens from its date.
-- The shift can be undone in one tap: after a push, the banner reads "Moved… **Undo**" until the end of that day, or until the moved workout is started (user's pick). Undoing puts the unstarted workouts back on their dates.
-- Pushes are stored with the plan, so they survive plan edits and the calendar filling in ahead. Editing the plan never deletes a workout that was pushed, even if its original weekday is no longer in the schedule. Deleting the plan removes them.
+- The shift can be undone in one tap: after a push, the banner reads "Moved… **Undo**" until the end of that day, or until the moved workout is started (user's pick). Undoing puts the unstarted workouts back on their dates. It never leaves a workout on a day that had already passed before the plan had it (one added by an edit after the push is removed instead).
+- Pushes are stored with the plan, so they survive plan edits and the calendar filling in ahead. Editing the plan never deletes a missed workout that was pushed, even if its original weekday is no longer in the schedule. The later workouts a push moved weren't missed, so edits rebuild them like any other. Deleting the plan removes them.
 - Nothing is ever rescheduled automatically.
 
 **Dates and streaks**
@@ -308,20 +308,20 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 **Session lifecycle**
 
 - Active workouts auto-save and resume where the user left off. Changes are saved half a second after each edit and immediately when the app goes to the background. Reopening the app resumes the workout, including a running rest timer.
-- **Skip** lives in a ⋯ menu on the workout card for planned and missed workouts. The same menu offers **Unskip** (user's pick). "Start anyway" on a skipped workout turns the skip into the workout.
+- **Skip** lives in a ⋯ menu on the workout card for planned and missed workouts. The same menu offers **Unskip** (user's pick), except when the plan wouldn't put the workout back: a deleted plan, or a paused or archived one from today on. An unskipped workout ahead comes back as the plan has it now, or not at all if the plan has dropped it since. "Start anyway" on a skipped workout turns the skip into the workout.
 - **Delete** lives in the workout summary's ⋯ menu, with a confirmation (user's pick). Deleting removes the workout's sets and form recordings, stats recalculate, and its scheduled day goes back to planned or missed.
 - **Discarding** an unfinished workout deletes it. Discarding a *reopened* workout restores it exactly as it was.
 - Exercises can be skipped, and a workout can be completed as partial.
-- **Reopen** resumes the *same* session, for example after an accidental finish or to fix a log. Volume, PRs, and badges recalculate.
-- **Repeat** creates a *new* session with the same exercises. It is linked to the original and counted separately.
+- **Reopen** resumes the *same* session, for example after an accidental finish or to fix a log. Volume, PRs, and badges recalculate. Until it's finished again, the workout keeps a copy of itself as it was, which every other screen shows. Finish drops the copy, and Discard restores it. Its clock shows how long it took, frozen.
+- **Repeat** creates a *new* session with the same exercises, as the original did them: with its swaps and added exercises, without the ones it removed. Planned exercises keep the plan's targets and progression; added ones start from what was done. It is linked to the original and counted separately.
 - When a workout finishes, a quick summary appears immediately, including total volume and new PRs.
 - **Summary layout:**
   - A **dark hero card** shows "WORKOUT COMPLETE" or "PARTIAL WORKOUT", the name, the date, and the plan, with time, volume, sets, and PR count.
   - Below it, in order:
-    1. The "update your plan?" prompt, when the workout differed from the plan.
+    1. The "update your plan?" prompt, when the workout differed from the plan. It's offered only while the plan's workout still matches the version the workout was built from, so a missed or in-progress workout done after a plan edit never undoes the edit. An edit that only moved the days still asks.
     2. New PRs, grouped by exercise, each showing its previous value.
     3. A **comparison with the last time** the same workout was done: volume, time, and sets.
-    4. Each exercise's best set and how it changed.
+    4. Each exercise's best set and how it changed. A change that rounds to zero in the user's unit shows as no change, as on Progress. An exercise done more than once is compared by position with last time's entries, like the PREVIOUS column.
   - Increases show in green. Decreases are neutral, never red. Time changes are always neutral.
 - **Celebration:** workouts with new PRs get a 2-second burst of **baby-blue, gold, and white confetti** and a success haptic. It's skipped when celebrations are off or Reduce Motion is on.
 - **Viewing later:** the same summary opens from Today's "View summary" for any past workout. Past summaries don't show confetti or the plan prompt.
@@ -345,7 +345,7 @@ Every set has exactly one **kind** and any number of **modifiers**.
 | Modifiers | AMRAP, to failure, shortened partials, lengthened partials |
 
 - Every set requires weight and reps. A timed hold records duration instead of reps. Bodyweight sets only need reps (added weight defaults to none).
-- Assisted sets log **assistance** (shown as "−LB"), and assisted machines (pull-up, dip) start their sets as assisted.
+- Assisted sets log **assistance** (shown as "−LB"), and assisted machines (pull-up, dip) start their sets as assisted, as does a custom exercise linked to one.
 - Optional fields: effort, rest time, tempo, notes, and partial-rep count.
 - **Effort** is stored as one internal value (RIR = 10 − RPE) and shown as RPE or RIR according to the user's Settings choice.
 
@@ -391,7 +391,7 @@ Every set has exactly one **kind** and any number of **modifiers**.
   - **Top:** every working set done, each at the top of its range.
   - **Miss** (user's pick: below the bottom): any set below the bottom of its range, for example fewer than 8 reps for 8–12. Getting 9–11 isn't a miss: the weight stays and you push for reps. When the last time came from another workout, a miss is judged against that workout's own targets.
 - **Rep range:** hitting the top adds the rule's weight. Anything else keeps the weight, and a miss follows the miss setting.
-- **Weekly %** (user's pick: what you lifted): the first workout of a new week adds the percent to last time's weight, when every set was done with no miss. Weeks are the program's weeks in a fixed-length plan, otherwise calendar weeks. A gap of several weeks still adds only one step.
+- **Weekly %** (user's pick: what you lifted): the first workout of a new week adds the percent to last time's weight, when every set was done with no miss. Weeks are the program's weeks in a fixed-length plan, otherwise calendar weeks. A program workout from the calendar is in the week the plan first put it in, so one pushed or done late keeps its week. A gap of several weeks still adds only one step.
 - **Misses:** "Repeat weight" keeps it. "Deload" counts misses in a row at the same weight, and after N it drops the weight by its percent. A new weight starts a fresh count.
 - **Rounding:** suggestions round to the exercise's increment (below) and always move at least one increment from the weight lifted, so light dumbbells still progress and a deload always drops. Never below zero.
 - **Assisted exercises** progress by taking off assistance, and a deload adds assistance; percentages apply to the assistance. Bodyweight exercises progress the added weight.
@@ -591,7 +591,7 @@ Sumo deadlifts are excluded because they are hard to read from a side view.
     - Plates, for one working set of that exact lift: 1, 2 and 3-Plate Bench; 1 to 4-Plate Squat; 2 to 5-Plate Deadlift; 1-Plate Press. The steps are 135, 225, 315, 405 and 495 lb (60, 100, 140, 180 and 220 kg).
     - Bodyweight ratio: Bodyweight Bench and 1.5× Bodyweight Bench, 1.5× and 2× Bodyweight Squat, 2× and 2.5× Bodyweight Deadlift. Bodyweight is the set's own, else the latest weigh-in by that day.
     - PRs set: 10, 50, 100 and 250 PRs (records; streak records don't count).
-  - **Consistency:** 4, 8, 12, 26 and 52-Week Streak. Perfect Week: every workout scheduled in a week done (a workout pushed out or deleted with its plan still counts as missed). Program Complete: a fixed-length program with at least 3 in 4 of its workouts done, earned from its final week.
+  - **Consistency:** 4, 8, 12, 26 and 52-Week Streak. Perfect Week: every workout scheduled in a week done (a workout pushed out, or deleted with its plan after its day had passed, still counts as missed). Program Complete: a fixed-length program with at least 3 in 4 of its workouts done, earned from its final week.
   - **Form:** Camera Ready (first analysis), Film Study (10 recordings), Director's Cut (50); Squat, Deadlift, Lunge and Calf Raise Study (10 recordings of one movement); 5° and 10° More Range than your first recording of a lift and joint (deeper for knees and hips, higher for ankles).
   - Thresholds are round numbers in each unit, so switching units can move a badge across one. The artwork is the category medallion.
 - **Profile** owns account, settings, data export, deletion, and (later) subscriptions.
@@ -652,7 +652,7 @@ Sumo deadlifts are excluded because they are hard to read from a side view.
   - **Weigh-ins as dots plus a 7-day trend line**, with a legend. **The trend line breaks where weigh-ins are more than 7 days apart** (user's pick) instead of drawing through the gap. No value is labelled "Best".
   - Lowest, highest, and average for the range.
   - The full log. Tapping an entry opens it to fix its weight or date; a long press deletes it.
-- **Log weight:** **Today, Yesterday, or any earlier date** (user's pick). There's one entry per day: logging on a day that has one replaces it, and moving a weigh-in onto such a day asks first.
+- **Log weight:** **Today, Yesterday, or any earlier date** (user's pick). There's one entry per day: logging on a day that has one replaces it, and moving a weigh-in onto such a day asks first. Fixing a weigh-in dated after today (after a time-zone change) keeps its date unless the user picks another.
   - **Typo guard** (user's pick): Save is off outside 25–350 kg (55–770 lb), and the reason shows under the field. A weight more than 10% from the nearest earlier weigh-in asks "Save anyway?". The onboarding weigh-in uses the same range.
 - **Storage:** pinned exercises and saved graphs are saved with the preferences, so they're in the JSON export and reset with the data. The selected range is on-device UI state.
 
@@ -732,7 +732,7 @@ Plan editing and full Progress graphs may need a connection.
 All token values live in `client/src/theme/tokens.ts`. Every text and background pair passes WCAG AA in both themes, and the chart palettes pass colorblind-separation checks against the app's card colors.
 
 - **Active workout layout:** **dense table rows** in the Strong/Hevy style. Each set row shows set, previous, weight, reps, and a complete check. A camera button and a menu sit in the exercise header.
-- **Feedback:** a light haptic on set complete and a stronger one when the timer ends. A brief animated badge appears on a PR, and confetti only when a workout with PRs finishes. Both can be toggled off in Settings.
+- **Feedback:** a light haptic on set complete and a stronger one when the timer ends. A brief animated badge appears on a PR, and confetti only when a workout with PRs finishes. Both can be toggled off in Settings; with PR celebrations off, the badge still shows, without the animation or the success haptic.
 - **Overall style:** athletic and high-contrast, with dark persistent header and navigation, baby-blue primary buttons and active navigation, and high-energy exercise cards.
 - **Voice and copy:** plain and short. No emoji, no hype, no guilt, and neutral wording on misses. No pain, injury, or medical claims, and no brand or trademarked names. Units follow Settings. Content and explanatory text use no "!"; the rest-over bar and a new personal record are the only exclamations. `validateTemplates` checks the starter content against these rules.
 - **iPad layout:** the user picked **two-column dashboards**. A screen counts as wide at **700 pt** or more, which covers every iPad including the iPad mini in portrait.
@@ -909,6 +909,10 @@ any ──delete──▶ tombstone (stats recalculate)
 - Behaviour on logout: what local data is cleared and what happens to unsynced outbox items. (Notifications are cancelled and cleared on sign-out, G3.12.)
 - The sync-status UX.
 - Behaviour when the user disables or changes biometrics, and when reauthentication is needed for deletion or export.
+- Phase 5 sync must skip the outbox while the database holds sample data: Load sample data clears it, but filling the calendar and freezing weeks write sample rows to it again.
+- Found in the 2026-11-07 code review and left for now (rare, and they existed before it):
+  - Pausing and then resuming a plan drops a pushed missed workout if the plan no longer has its original slot. Two rules meet here: pausing clears upcoming workouts, and edits never delete a pushed workout. Which one wins is still to be decided.
+  - A push that kept a done workout whose log is deleted later, followed by another push, can move that workout from one past day to another and leave a later day empty.
 
 ### Design system remainder
 

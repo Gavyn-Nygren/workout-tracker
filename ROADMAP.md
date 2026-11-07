@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G4.1 (EAS development build). Tracker Dev is built and running on the owner's iPhone; what's left is the phone check in [DEV_BUILD.md](DEV_BUILD.md) step 9. The cycle editor (several workouts on a cycle day, G3.7) is also waiting for the owner's phone check. The G3.13 starter programs are waiting for the owner's review (`CONTENT_REVIEW.md`).
+**Current goal:** G4.1 (EAS development build). Tracker Dev is built and running on the owner's iPhone; what's left is the phone check in [DEV_BUILD.md](DEV_BUILD.md) step 9. The cycle editor (several workouts on a cycle day, G3.7) and the fixes from the codebase review (G4.1) are also waiting for the owner's phone checks. The G3.13 starter programs are waiting for the owner's review (`CONTENT_REVIEW.md`).
 
 ## How we work
 
@@ -434,6 +434,41 @@ Everything works on one phone, offline, with no server.
 - [x] Fixes for running outside Expo Go. *Developer copy no longer names Expo Go; Pending notifications lists the rest alarm on its own line. The Face ID lock follows spec 2.3: a passcode-only phone can use it, Face ID denied for the app falls back to the passcode with a row that says so, and a lock that's on can always be turned off (before, denying Face ID left it stuck on). Found on the phone in Tracker Dev: sheets whose ScrollView sat inside a View (notification permission, Log bodyweight, the plan exercise picker) drew blank on iOS 26.6, so the ScrollView is now each sheet's top view and `tests/sheetLayout.test.ts` checks every sheet. The date pickers use `onValueChange` (datetimepicker 9 deprecated `onChange`).*
 - [x] Link the project. *EAS project @gavyn17/exercise-tracker, on the personal account (user's pick); `owner` and `extra.eas.projectId` in `app.json`, pinned by the config test. A pre-build check found nothing that would fail the build; it fixed the tinted icon (Expo fills its transparency with white, so it is now flattened onto black), repeated the upload-relevant `client/.gitignore` rules at the root (EAS CLI on Windows skips nested ones), and brought DEV_BUILD.md in line with eas-cli 27.5.*
 - [x] The owner registers the iPhone, builds and installs it ([DEV_BUILD.md](DEV_BUILD.md) steps 5-8). *First EAS build 2026-11-06 (development profile, build 1); installed with Developer Mode on, and it connects to `npm start` on the PC.*
+- [x] Whole-codebase bug review before G4.2 (owner's request, 2026-11-07).
+  - *Eight area reviewers, each checked by a skeptic that tried to disprove every finding. They found 38 confirmed bugs (9 medium, 29 low, none high), about 32 after merging duplicates. All are fixed with tests (1588 → 1685 tests).*
+  - *The main ones:*
+    - *While open, a reopened workout dropped out of the streak, records, badges and goals, and Progress showed its unsaved edits. It now keeps a copy of itself, `beforeReopen`.*
+    - *Editing a plan after a push kept stale copies of later workouts.*
+    - *Undo after an edit made missed workouts appear on past days.*
+    - *Sets came back out of order after deleting two and adding one.*
+    - *"Update your plan?" could undo a plan edit.*
+    - *Repeat ignored swaps, and failed for deleted plans.*
+    - *A deleted plan's logged workouts lost their names.*
+    - *The Plans tab's today ring, and the weekly-% program week, could be off after pushes.*
+  - *Smaller fixes:*
+    - *Erase or Load sample data while a workout is open*
+    - *Finish tapped twice*
+    - *PR celebrations off still animated the badge*
+    - *Link parameters*
+    - *A root error screen*
+    - *Developer screens now only in development builds*
+    - *The onboarding keyboard*
+    - *The permission sheet closing twice*
+  - *Adding a cycle day now asks first when it would change today's workout (owner's pick).*
+  - *Two rare edge cases that predate the review are listed in spec §6.*
+  - *A last check ran the new code on data saved by the old code. It found one regression, now fixed (old pushes could lose a workout missed beside the pushed one). A few rare cases keep the old behaviour on old data only: Undo of an old push after an edit, Perfect Week for a plan deleted before the update, and a workout already reopened when the update arrives.*
+  - *JS only, so no new EAS build is needed. Reload Expo Go and Tracker Dev.*
+  - [ ] The owner's phone checks:
+    - Reopen a past workout, change a weight and minimize it: Home's streak, badges and Progress don't change. Discard puts it back exactly.
+    - Delete two unlogged warm-ups, add a set, log it and finish: the summary and History keep the order shown.
+    - Swap and add an exercise, finish with "Just this time", then Repeat: the repeat has them.
+    - Finish, confirm, then tap Finish again at once: one summary.
+    - In a cycle that has gone round, Add rest day asks first.
+    - With PR celebrations off, a PR badge appears without the pop-in or the success haptic.
+    - In Tracker Dev, with a workout open, Erase all data says to finish or discard first.
+    - Start a future workout early, log a set and minimize it: its card says Resume.
+    - Plans → New plan → "Or start from a template" lands on Plans with no extra back button.
+    - The onboarding bodyweight field keeps Continue above the keyboard.
 - [ ] Confirm everything from Phases 0-3 still works, plus the native-only checks in [DEV_BUILD.md](DEV_BUILD.md) step 9 (icons, splash, permission prompts, notification taps from a cold start, Face ID lock).
 
 ### G4.2 Camera stack spike (go/no-go)
