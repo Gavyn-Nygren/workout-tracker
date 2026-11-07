@@ -91,7 +91,8 @@ export function everythingJson(input: {
   return JSON.stringify(
     {
       format: 'exercise-tracker-export',
-      version: 1,
+      // 2: a rotating plan's cycle is `steps` (each day's workouts), not `sequence`.
+      version: 2,
       exportedAt: new Date().toISOString(),
       note: 'Weights are in kilograms. Raw videos are not included; they stay on your phone.',
       preferences: input.preferences,

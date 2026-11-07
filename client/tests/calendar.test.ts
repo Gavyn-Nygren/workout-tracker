@@ -11,12 +11,13 @@ import { createSqliteRepository, type SqliteRepository } from '../src/data/db/sq
 import { defaultPreferences } from '../src/data/preferences';
 import { deriveStreak } from '../src/data/progress';
 import { SCHEDULE_AHEAD_DAYS } from '../src/data/repository';
-import { fixedFromPattern, originalDateFor, planShiftFor, scheduleOccurrences, shiftedDate, workoutsOn } from '../src/data/schedule';
+import { fixedFromPattern, originalDateFor, planShiftFor, scheduledWorkoutIds, scheduleOccurrences, shiftedDate, workoutsOn } from '../src/data/schedule';
 import type { Goal, ISODate, LoggedSet, Plan, PlanSchedule, PlanShift, PlanWorkout, ScheduledOccurrence, Weekday, WorkoutSession } from '../src/data/types';
 import { nextWorkout } from '../src/features/plans/position';
 import { buildAgenda, latestMissed, type DayItem } from '../src/features/today/agenda';
 import { askingMessage, askingTitle, missedBannerState, pushedMessage, undoneMessage, type MissedBannerState } from '../src/features/today/missed';
 import { sessionForReopen } from '../src/features/workout/buildSession';
+import { cycle } from './support/cycles';
 import { openTestDatabase } from './support/nodeSqlite';
 
 // ---------------------------------------------------------------------------
@@ -33,7 +34,6 @@ const planWorkout = (id: string, reps = 5): PlanWorkout => ({
 });
 
 function makePlan(id: string, schedule: PlanSchedule, extra: Partial<Plan> = {}): Plan {
-  const ids = schedule.type === 'rotating' ? schedule.sequence.filter((s) => s !== 'rest') : schedule.days.flatMap((d) => d.workoutIds);
   return {
     id,
     name: `Plan ${id}`,
@@ -41,7 +41,7 @@ function makePlan(id: string, schedule: PlanSchedule, extra: Partial<Plan> = {})
     status: 'active',
     startDate: day(0),
     schedule,
-    workouts: [...new Set(ids)].map((w) => planWorkout(w)),
+    workouts: [...scheduledWorkoutIds(schedule)].map((w) => planWorkout(w)),
     createdAt: STAMP,
     updatedAt: STAMP,
     ...extra,
@@ -73,7 +73,7 @@ const program = (extra: Partial<Plan> = {}) =>
 /** An 8-week Monday/Wednesday/Friday program: long enough to run past the 4 weeks the calendar holds. */
 const longProgram = () => makePlan('long', fixedFromPattern(8, { 1: ['x'], 2: [], 3: ['y'], 4: [], 5: ['z'], 6: [], 7: [] }));
 /** Rotating: A, B, rest, repeating whatever the weekday. */
-const rotating = (extra: Partial<Plan> = {}) => makePlan('rotating', { type: 'rotating', sequence: ['a', 'b', 'rest'] }, extra);
+const rotating = (extra: Partial<Plan> = {}) => makePlan('rotating', cycle(['a'], ['b'], []), extra);
 
 let db: ReturnType<typeof openTestDatabase>;
 let today: ISODate;
@@ -287,7 +287,7 @@ describe('the three plan types', () => {
   });
 
   test('a rotating cycle repeats by day with its rest steps, whatever the weekday', async () => {
-    const plan = makePlan('cycle', { type: 'rotating', sequence: ['a', 'b', 'rest', 'c', 'rest'] }, { startDate: day(3) });
+    const plan = makePlan('cycle', cycle(['a'], ['b'], [], ['c'], []), { startDate: day(3) });
     await repo.savePlan(plan);
     const stored = await dated('cycle', day(0), day(17));
     assert.deepEqual(stored, [
@@ -597,6 +597,28 @@ describe('pushing a missed workout forward', () => {
     await assertUsualWeek('twice', day(7));
   });
 
+  test('on a two-workout cycle day, the same: one done stays, the missed one lands today, and every later day moves', async () => {
+    // AM + PM, B, rest, from Monday. Cycles move for good, so the whole cycle runs a day later.
+    const double = () => makePlan('double', cycle(['am', 'pm'], ['b'], []));
+    await plansSavedMonday([double()], day(1));
+    await pushLatestMissed('push');
+    assert.deepEqual(await dated('double', day(0), day(7)), [[day(1), 'am'], [day(1), 'pm'], [day(2), 'b'], [day(4), 'am'], [day(4), 'pm'], [day(5), 'b'], [day(7), 'am'], [day(7), 'pm']]);
+    await assertCalendarFollowsPushes('double');
+
+    await plansSavedMonday([double()], day(1));
+    const am = await occurrenceOf('double', day(0), 'am');
+    await repo.saveSession(finished('am', day(0), am));
+    const pushed = await pushLatestMissed('push');
+    assert.equal(pushed.workout?.id, 'pm', 'only the missed one is asked about');
+    assert.deepEqual((await repo.listPlanShifts()).map((s) => s.keptIds), [[am.id]], 'the push keeps the done one');
+    assert.deepEqual(await dated('double', day(0), day(7)), [[day(0), 'am'], [day(1), 'pm'], [day(2), 'b'], [day(4), 'am'], [day(4), 'pm'], [day(5), 'b'], [day(7), 'am'], [day(7), 'pm']]);
+    assert.deepEqual((await itemsOn(day(0))).map((i) => [i.workout?.id, i.status]), [['am', 'completed']], 'done on Monday, where it was done');
+    await assertCalendarFollowsPushes('double');
+
+    await repo.undoPlanShift('push');
+    assert.deepEqual(await dated('double', day(0), day(4)), [[day(0), 'am'], [day(0), 'pm'], [day(1), 'b'], [day(3), 'am'], [day(3), 'pm'], [day(4), 'b']]);
+  });
+
   for (const status of ['paused', 'archived'] as const) {
     test(`a ${status} plan's missed workout can't be pushed onto today`, async () => {
       // Pausing clears the plan's upcoming workouts, so a push would put one back on its own.
@@ -790,7 +812,8 @@ describe('push, edit, undo, edit: no workout ahead is dropped', () => {
   const kinds = [
     { name: 'a Monday-to-Friday weekly plan', make: () => makePlan('weekdays', weeklyDays([[1, ['a']], [2, ['b']], [3, ['c']], [4, ['d']], [5, ['e']]])) },
     { name: 'an every-day weekly plan', make: () => makePlan('everyday', weeklyDays(([1, 2, 3, 4, 5, 6, 7] as Weekday[]).map((d): [Weekday, string[]] => [d, ['w']]))) },
-    { name: 'a daily cycle', make: () => makePlan('daily', { type: 'rotating', sequence: ['a'] }) },
+    { name: 'a daily cycle', make: () => makePlan('daily', cycle(['a'])) },
+    { name: 'a daily cycle with two workouts a day', make: () => makePlan('daily2', cycle(['a', 'b'])) },
   ];
   const edits = {
     savePlan: async (planId: string) => {
@@ -1594,7 +1617,7 @@ describe('dates and time zones', () => {
   test('a daily plan has one workout each day through a daylight-saving change', () => {
     for (const zone of zones) {
       inZone(zone, () => {
-        const plan = makePlan('daily', { type: 'rotating', sequence: ['a'] }, { startDate: '2026-03-01' });
+        const plan = makePlan('daily', cycle(['a']), { startDate: '2026-03-01' });
         for (const [from, to] of [['2026-03-01', '2026-04-15'], ['2026-09-20', '2026-11-10']]) {
           const dates = scheduleOccurrences(plan, from, to).map((o) => o.scheduledDate);
           assert.equal(dates.length, daysBetween(from, to) + 1, `${zone}: ${from} to ${to}`);

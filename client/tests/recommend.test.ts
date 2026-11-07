@@ -6,6 +6,7 @@ import { describe, test } from 'node:test';
 import { gearForExercises, gearList } from '../src/data/content/gear';
 import { STARTER_TEMPLATES } from '../src/data/content/templates/index';
 import { copyProblems } from '../src/data/content/validateTemplates';
+import { scheduledWorkoutIds } from '../src/data/schedule';
 import type { Equipment, ExperienceLevel, PlanSchedule, PlanWorkout, StarterTemplate, TemplateDayOption, TrainingGoal, Weekday } from '../src/data/types';
 import { recommendTemplates, type RecommendAnswers, type Recommendations } from '../src/features/onboarding/recommend';
 import {
@@ -422,7 +423,7 @@ describe('recommendation rules: every answer combination', () => {
         // workouts' exercises), which is the program's alsoNeeds or part of it.
         const gearLines = p.notes.filter((l) => kind(l) === 'gear');
         const s = p.option.schedule;
-        const scheduled = new Set(s.type === 'rotating' ? s.sequence : s.days.flatMap((d) => d.workoutIds));
+        const scheduled = scheduledWorkoutIds(s);
         const versionGear = gearForExercises(t.workouts.filter((w) => scheduled.has(w.id)).flatMap((w) => w.blocks.flatMap((b) => b.exercises.map((e) => e.exerciseId))));
         if (versionGear.some((g) => !(t.alsoNeeds ?? []).includes(g))) fail(a, `${id}'s version needs gear its alsoNeeds leaves out`);
         const expectedGear = home && versionGear.length ? [COPY.alsoNeeds(gearList(versionGear))] : [];

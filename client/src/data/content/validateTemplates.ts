@@ -5,7 +5,7 @@
 // Every problem is one readable line that starts with the template id and points at the part
 // that's wrong: "tpl_x: Full Body A > block 2 > Plank (set 1): ...".
 import { parseTempo } from '@/data/logging';
-import { trainingDays } from '@/data/schedule';
+import { scheduledWorkoutIds, trainingDays } from '@/data/schedule';
 import type { Equipment, Exercise, ExperienceLevel, ID, PlanSchedule, PlannedExercise, SetPrescription, StarterTemplate } from '@/data/types';
 import { lbToKg } from '@/data/units';
 import { abbreviate } from '@/features/plans/describe';
@@ -171,7 +171,7 @@ export function validateTemplate(t: StarterTemplate, exercisesById: ExercisesByI
   for (const v of versions) {
     const s = v.schedule;
     if (s.type === 'rotating') {
-      for (const id of s.sequence) if (id !== 'rest') scheduled.add(id);
+      for (const id of scheduledWorkoutIds(s)) scheduled.add(id);
       say(v.label, 'is rotating; starter templates are weekly or fixed');
       continue;
     }

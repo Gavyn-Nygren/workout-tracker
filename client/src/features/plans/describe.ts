@@ -37,10 +37,13 @@ export function templateMeta(template: StarterTemplate, option?: Pick<TemplateDa
   return [LEVEL_LABEL[template.level], days, template.durationWeeks ? `${template.durationWeeks} weeks` : 'Ongoing'].join('  ·  ');
 }
 
-/** "Weekly · 4 days" / "Fixed-length · 12 weeks · 3 days" / "Rotating · 4-day cycle" */
+/**
+ * "Weekly · 4 days a week" / "12 weeks · 3 days a week" / "Rotating · 3 workouts in a 3-day
+ * cycle". A cycle counts workouts, not days, so "Push + Cardio, Legs, Rest" is 3 workouts.
+ */
 export function describeSchedule(schedule: PlanSchedule): string {
   const days = trainingDays(schedule);
-  if (schedule.type === 'rotating') return `Rotating · ${plural(days.count, 'workout')} in a ${days.cycleLength}-day cycle`;
+  if (schedule.type === 'rotating') return `Rotating · ${plural(days.workouts ?? 0, 'workout')} in a ${days.cycleLength}-day cycle`;
   const base = `${plural(days.count, 'day')} a week`;
   return schedule.type === 'fixed' ? `${schedule.weeks} weeks · ${base}` : `Weekly · ${base}`;
 }

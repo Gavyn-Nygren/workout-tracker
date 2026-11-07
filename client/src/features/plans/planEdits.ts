@@ -1,6 +1,8 @@
 import { addDays, startOfWeek, todayISO } from '@/data/dates';
-import { weeklyFromPattern, fixedFromPattern, weekPattern } from '@/data/schedule';
+import { cycleSteps, fixedFromPattern, scheduledWorkoutIds, weeklyFromPattern, weekPattern } from '@/data/schedule';
 import type {
+  CycleStep,
+  ID,
   ISODate,
   Plan,
   PlannedBlock,
@@ -123,11 +125,15 @@ export function addWorkout(plan: Plan, name: string): { plan: Plan; workoutId: s
   return { plan: { ...plan, workouts: [...plan.workouts, workout] }, workoutId: workout.id };
 }
 
-/** Removes a workout and every place the schedule uses it. */
+/**
+ * Removes a workout and every place the schedule uses it. A cycle day it was on keeps its place,
+ * as a rest day if nothing else is on it (owner's pick), so the cycle keeps its length and later
+ * dates keep their days.
+ */
 export function removeWorkout(plan: Plan, workoutId: string): Plan {
   const schedule: PlanSchedule =
     plan.schedule.type === 'rotating'
-      ? { ...plan.schedule, sequence: plan.schedule.sequence.filter((s) => s !== workoutId) }
+      ? { type: 'rotating', steps: cycleSteps(plan.schedule).map((step) => ({ workoutIds: step.workoutIds.filter((id) => id !== workoutId) })) }
       : plan.schedule.type === 'weekly'
         ? { ...plan.schedule, days: plan.schedule.days.map((d) => ({ ...d, workoutIds: d.workoutIds.filter((id) => id !== workoutId) })).filter((d) => d.workoutIds.length) }
         : { ...plan.schedule, days: plan.schedule.days.map((d) => ({ ...d, workoutIds: d.workoutIds.filter((id) => id !== workoutId) })).filter((d) => d.workoutIds.length) };
@@ -148,9 +154,50 @@ export function setProgramWeeks(plan: Plan, weeks: number): Plan {
   return { ...plan, schedule: fixedFromPattern(weeks, weekPattern(plan.schedule)) };
 }
 
-export function setSequence(plan: Plan, sequence: (string | 'rest')[]): Plan {
+// Cycle edits, for rotating plans (other plans come back unchanged). A step index is the day's
+// 0-based place in the cycle. Each edit goes through setCycleSteps, so what's saved is always clean.
+
+/**
+ * Replaces a rotating plan's cycle. Each step is copied, without repeats (they'd share an
+ * occurrence id) or ids that aren't the plan's workouts. An empty step is a rest day.
+ */
+export function setCycleSteps(plan: Plan, steps: CycleStep[]): Plan {
   if (plan.schedule.type !== 'rotating') return plan;
-  return { ...plan, schedule: { type: 'rotating', sequence } };
+  const known = new Set(plan.workouts.map((w) => w.id));
+  return { ...plan, schedule: { type: 'rotating', steps: steps.map((step) => ({ workoutIds: [...new Set(step.workoutIds)].filter((id) => known.has(id)) })) } };
+}
+
+/** The plan's cycle, or none for other plans. */
+const stepsOf = (plan: Plan): CycleStep[] => (plan.schedule.type === 'rotating' ? cycleSteps(plan.schedule) : []);
+
+/** Adds a workout to a cycle day (at the end), or takes it off; a day left with none is a rest day. */
+export function toggleCycleWorkout(plan: Plan, stepIndex: number, workoutId: ID): Plan {
+  const steps = stepsOf(plan);
+  const step = steps[stepIndex];
+  if (!step) return plan;
+  const workoutIds = step.workoutIds.includes(workoutId) ? step.workoutIds.filter((id) => id !== workoutId) : [...step.workoutIds, workoutId];
+  return setCycleSteps(plan, steps.map((s, i) => (i === stepIndex ? { workoutIds } : s)));
+}
+
+/** Adds a day to the end of the cycle: these workouts, or a rest day for none. */
+export function addCycleDay(plan: Plan, workoutIds: ID[]): Plan {
+  return setCycleSteps(plan, [...stepsOf(plan), { workoutIds }]);
+}
+
+/** Deletes one day of the cycle; every later date then runs a different day. */
+export function deleteCycleDay(plan: Plan, stepIndex: number): Plan {
+  const steps = stepsOf(plan);
+  if (!steps[stepIndex]) return plan;
+  return setCycleSteps(plan, steps.filter((_, i) => i !== stepIndex));
+}
+
+/** Moves a cycle day from one place to another (ReorderList's drag). */
+export function moveCycleDay(plan: Plan, from: number, to: number): Plan {
+  const steps = [...stepsOf(plan)];
+  if (!steps[from]) return plan;
+  const [moved] = steps.splice(from, 1);
+  steps.splice(Math.max(0, Math.min(steps.length, to)), 0, moved);
+  return setCycleSteps(plan, steps);
 }
 
 /**
@@ -179,11 +226,6 @@ export function templateDayOption(template: Pick<StarterTemplate, 'daysPerWeek' 
   return template.otherDays?.find((o) => o.daysPerWeek === daysPerWeek) ?? fallback;
 }
 
-/** Every workout id a schedule uses, once each. */
-function scheduledWorkoutIds(schedule: PlanSchedule): Set<string> {
-  return new Set(schedule.type === 'rotating' ? schedule.sequence.filter((s) => s !== 'rest') : schedule.days.flatMap((d) => d.workoutIds));
-}
-
 /**
  * Copies a template into a new plan with fresh ids, so later template changes never touch it.
  * `daysPerWeek` picks one of its versions (templateDayOptions); without one, or with a count no
@@ -197,7 +239,7 @@ export function planFromTemplate(template: StarterTemplate, startDate: ISODate, 
   const mapId = (id: string) => workoutIds.get(id) ?? id;
   const schedule: PlanSchedule =
     chosen.type === 'rotating'
-      ? { type: 'rotating', sequence: chosen.sequence.map((s) => (s === 'rest' ? s : mapId(s))) }
+      ? { type: 'rotating', steps: cycleSteps(chosen).map((step) => ({ workoutIds: step.workoutIds.map(mapId) })) }
       : chosen.type === 'weekly'
         ? { type: 'weekly', days: chosen.days.map((d) => ({ ...d, workoutIds: d.workoutIds.map(mapId) })) }
         : { type: 'fixed', weeks: chosen.weeks, days: chosen.days.map((d) => ({ ...d, workoutIds: d.workoutIds.map(mapId) })) };
@@ -240,10 +282,11 @@ export function newPlan(input: {
   let schedule: PlanSchedule;
 
   if (input.type === 'rotating') {
+    // One new workout per workout day, named in cycle order; more can go on a day in the editor.
+    const days = input.cycle.filter((step) => step === 'workout').length;
+    workouts = Array.from({ length: days }, (_, i) => ({ id: newId('pw'), name: `Workout ${names[i] ?? i + 1}`, blocks: [], estimatedMinutes: 45 }));
     let n = 0;
-    const sequence = input.cycle.map((step) => (step === 'rest' ? ('rest' as const) : `w${n++}`));
-    workouts = Array.from({ length: n }, (_, i) => ({ id: newId('pw'), name: `Workout ${names[i] ?? i + 1}`, blocks: [], estimatedMinutes: 45 }));
-    schedule = { type: 'rotating', sequence: sequence.map((s) => (s === 'rest' ? s : workouts[Number(s.slice(1))].id)) };
+    schedule = { type: 'rotating', steps: input.cycle.map((step) => ({ workoutIds: step === 'rest' ? [] : [workouts[n++].id] })) };
   } else {
     const days = sortWeekdays([...new Set(input.weekdays)], input.weekStartsOn);
     workouts = days.map((d) => ({ id: newId('pw'), name: WEEKDAY_LONG[d], blocks: [], estimatedMinutes: 45 }));

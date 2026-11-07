@@ -4,13 +4,14 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { addDays, fromISODate } from '../src/data/dates';
+import { addDays, daysBetween, fromISODate } from '../src/data/dates';
 import { eraseAllData } from '../src/data/db/sampleData';
 import { migrate } from '../src/data/db/schema';
 import { createSqliteRepository } from '../src/data/db/sqliteRepository';
-import { occurrenceIdFor, planShiftFor, programWeek, scheduleOccurrences, shiftCovers, workoutsOn } from '../src/data/schedule';
+import { occurrenceIdFor, planShiftFor, programWeek, scheduledWorkoutIds, scheduleOccurrences, shiftCovers, workoutsOn } from '../src/data/schedule';
 import type { ISODate, Plan, PlanSchedule, PlanShift, ScheduledOccurrence, Weekday, WorkoutSession } from '../src/data/types';
 import { currentProgramWeek, currentRotatingStep, movedFromDate, nextWorkout, shiftsOf } from '../src/features/plans/position';
+import { cycle } from './support/cycles';
 import { openTestDatabase } from './support/nodeSqlite';
 
 // ---------------------------------------------------------------------------
@@ -21,7 +22,6 @@ const day = (n: number): ISODate => addDays('2026-10-19', n);
 const STAMP = '2026-10-19T08:00:00.000Z';
 
 function makePlan(id: string, schedule: PlanSchedule, extra: Partial<Plan> = {}): Plan {
-  const ids = schedule.type === 'rotating' ? schedule.sequence.filter((s) => s !== 'rest') : schedule.days.flatMap((d) => d.workoutIds);
   return {
     id,
     name: `Plan ${id}`,
@@ -29,7 +29,7 @@ function makePlan(id: string, schedule: PlanSchedule, extra: Partial<Plan> = {})
     status: 'active',
     startDate: day(0),
     schedule,
-    workouts: [...new Set(ids)].map((w) => ({ id: w, name: `Workout ${w.toUpperCase()}`, blocks: [] })),
+    workouts: [...scheduledWorkoutIds(schedule)].map((w) => ({ id: w, name: `Workout ${w.toUpperCase()}`, blocks: [] })),
     createdAt: STAMP,
     updatedAt: STAMP,
     ...extra,
@@ -68,7 +68,7 @@ const program = () =>
   });
 
 /** Rotating: A, B, rest, repeating whatever the weekday. */
-const rotating = () => makePlan('rotating', { type: 'rotating', sequence: ['a', 'b', 'rest'] });
+const rotating = () => makePlan('rotating', cycle(['a'], ['b'], []));
 
 /**
  * The plan's pushes after the user, on `on`, pushes the workout the plan first put on `original`
@@ -164,7 +164,7 @@ describe('rotating cycles after a push', () => {
     const plan = rotating();
     assert.equal(currentRotatingStep(plan.schedule, day(3), day(0)), undefined, 'a whole cycle early');
     assert.equal(currentRotatingStep(plan.schedule, day(1), day(0)), undefined);
-    assert.equal(currentRotatingStep({ type: 'rotating', sequence: [] }, day(0), day(2)), undefined, 'empty cycle');
+    assert.equal(currentRotatingStep(cycle(), day(0), day(2)), undefined, 'empty cycle');
   });
 });
 
@@ -251,6 +251,83 @@ describe('after a workout was done before the push', () => {
     assert.equal(step, 0, "still on Wednesday's A");
   });
 
+  test('rotating [A + B, C, rest]: A done, B missed and pushed: the cycle stays on the double day until B is', () => {
+    const plan = makePlan('double', cycle(['a', 'b'], ['c'], []));
+    const [a, b] = ['a', 'b'].map((w) => occurrenceIdFor(plan.id, day(0), w));
+    // On Tuesday, Monday's B is pushed a day; the push keeps the done A on Monday.
+    const shifts = push(plan, day(0), day(1)).map((s) => ({ ...s, occurrenceId: b, keptIds: [a] }));
+    const step = (on: ISODate) => currentRotatingStep(plan.schedule, plan.startDate, on, shifts);
+
+    assert.deepEqual(nextWorkout(plan, day(1), shifts), { date: day(1), name: 'Workout B' }, 'B today, not the done A');
+    assert.equal(step(day(1)), 0, 'still day 1: its B lands today');
+    assert.equal(step(day(2)), 1, 'C, a day late');
+    assert.equal(step(day(3)), 2, 'rest');
+    assert.equal(step(day(4)), 0);
+  });
+
+  test('rotating [A + B, C, rest]: B pushed keeping a skipped A, A unskipped, B started, then A pushed: both on Tuesday are day 1', () => {
+    // Monday's A skipped and B missed. On Tuesday B is pushed (keeping the skipped A), A is
+    // unskipped (so missed again on Monday), B is started, and A is pushed too (keeping B).
+    // The first push still lists A as kept, but the second moved it.
+    for (const startDate of [day(0), day(-9)]) {
+      const plan = makePlan('double', cycle(['a', 'b'], ['c'], []), { startDate });
+      const [a, b] = ['a', 'b'].map((w) => occurrenceIdFor(plan.id, day(0), w));
+      const first = push(plan, day(0), day(1)).map((s) => ({ ...s, occurrenceId: b, keptIds: [a] }));
+      const shifts = push(plan, day(0), day(1), first).map((s, i) => (i === 1 ? { ...s, occurrenceId: a, keptIds: [b] } : s));
+      const step = (on: ISODate) => currentRotatingStep(plan.schedule, plan.startDate, on, shifts);
+
+      assert.deepEqual(
+        scheduleOccurrences(plan, day(1), day(1), shifts).map((o) => [o.planWorkoutId, o.shiftedFromDate]),
+        [
+          ['a', day(0)],
+          ['b', day(0)],
+        ],
+        'Today on Tuesday: A and B, both from Monday',
+      );
+      assert.equal(step(day(1)), 0, `start ${startDate}: day 1, as Today shows`);
+      assert.equal(step(day(2)), 0, 'Wednesday, emptied by the pushes, stays on day 1');
+      assert.equal(step(day(3)), 1, 'C, two days late');
+      assert.equal(step(day(4)), 2, 'rest');
+      assert.equal(step(day(5)), 0);
+    }
+  });
+
+  test('program with A + B on week 2 Monday: B pushed keeping a skipped A, A unskipped, B started, then A pushed: Tuesday is still week 2', () => {
+    // The same pushes as above, on a fixed-length program: its week follows where the workouts are.
+    const plan = makePlan('double-program', {
+      type: 'fixed',
+      weeks: 2,
+      days: [
+        { week: 2, weekday: 1, workoutIds: ['a', 'b'] },
+        { week: 2, weekday: 3, workoutIds: ['c'] },
+      ],
+    });
+    const [a, b] = ['a', 'b'].map((w) => occurrenceIdFor(plan.id, day(7), w));
+    const first = push(plan, day(7), day(8)).map((s) => ({ ...s, occurrenceId: b, keptIds: [a] }));
+    const shifts = push(plan, day(7), day(8), first).map((s, i) => (i === 1 ? { ...s, occurrenceId: a, keptIds: [b] } : s));
+
+    assert.deepEqual(
+      scheduleOccurrences(plan, day(8), day(8), shifts).map((o) => [o.planWorkoutId, o.shiftedFromDate]),
+      [
+        ['a', day(7)],
+        ['b', day(7)],
+      ],
+    );
+    assert.equal(currentProgramWeek(plan, day(8), shifts), 2, 'Today runs week 2 Monday');
+  });
+
+  test('rotating [A, B + C, rest]: B done, C not, then A pushed: a half-done day counts once its last workout lands', () => {
+    const plan = makePlan('double', cycle(['a'], ['b', 'c'], []));
+    // On Wednesday, Monday's A is pushed 2 days; the push keeps the done B on Tuesday and moves C to Thursday.
+    const shifts = push(plan, day(0), day(2)).map((s) => ({ ...s, keptIds: [occurrenceIdFor(plan.id, day(1), 'b')] }));
+    const step = (on: ISODate) => currentRotatingStep(plan.schedule, plan.startDate, on, shifts);
+
+    assert.equal(step(day(2)), 0, "A today, not the done B's day");
+    assert.equal(step(day(3)), 1, 'C today');
+    assert.equal(step(day(4)), 2, 'rest');
+    assert.equal(step(day(5)), 0);
+  });
+
   test("program: H2 done on its Wednesday, then Monday's H1 pushed on Thursday: Next is the real next workout", () => {
     const plan = program();
     const shifts = pushAfterDone(plan, day(0), day(3), [day(2)]);
@@ -328,6 +405,105 @@ describe('through the repository, the pushes the Plans tab reads keep what was d
       }
     });
   }
+});
+
+describe('through the repository, a workout an earlier push moved, then done and kept by a later push', () => {
+  // A workout moved by one push, then done, and kept by the next push still counts as kept, so the
+  // step or week stays with the workout Today shows (a review found the cycle's ring jumping to it).
+  async function calendar(plan: Plan) {
+    const db = openTestDatabase();
+    migrate(db);
+    eraseAllData(db);
+    let today = day(0);
+    const repo = createSqliteRepository(db, { today: () => today });
+    const moveTo = (on: ISODate) => {
+      today = on;
+      repo.forgetCache();
+    };
+    const originallyOn = async (original: ISODate, workout: string) => {
+      const found = (await repo.listOccurrences({ from: day(-7), to: day(60) })).find((o) => (o.shiftedFromDate ?? o.scheduledDate) === original && o.planWorkoutId === workout);
+      assert.ok(found, `${workout} originally on ${original}`);
+      return found;
+    };
+    let sessions = 0;
+    const done = async (original: ISODate, workout: string) => {
+      const o = await originallyOn(original, workout);
+      const at = (h: number) => `${today}T${h}:00:00.000Z`;
+      await repo.saveSession({
+        id: `s${++sessions}`,
+        name: 'Done',
+        occurrenceId: o.id,
+        planId: o.planId,
+        planWorkoutId: o.planWorkoutId,
+        status: 'completed',
+        completion: 'full',
+        scheduledDate: o.scheduledDate,
+        startedAt: at(14),
+        completedAt: at(15),
+        completedDate: today,
+        blocks: [],
+        createdAt: at(14),
+        updatedAt: at(15),
+      });
+    };
+    let pushes = 0;
+    const pushIt = async (original: ISODate, workout: string) => repo.pushPlanForward((await originallyOn(original, workout)).id, `shift_${++pushes}`);
+    /** The original date of the plan's unstarted workouts on Today, when they all come from one. */
+    const todaysOriginal = async (on: ISODate) => {
+      const originals = new Set((await repo.listOccurrences({ from: on, to: on })).filter((o) => o.planId === plan.id && !o.sessionId).map((o) => o.shiftedFromDate ?? o.scheduledDate));
+      return originals.size === 1 ? [...originals][0] : undefined;
+    };
+    await repo.savePlan(plan);
+    return { repo, moveTo, done, pushIt, todaysOriginal, shifts: async () => shiftsOf(plan.id, await repo.listPlanShifts()) };
+  }
+
+  test("rotating [A, B, C]: A pushed and done, C done where the push put it, then B pushed: Friday is B's step, not the done C's", async () => {
+    const plan = makePlan('rot', cycle(['a'], ['b'], ['c']));
+    const cal = await calendar(plan);
+    cal.moveTo(day(1));
+    await cal.pushIt(day(0), 'a'); // Monday's A, done on Tuesday
+    await cal.done(day(0), 'a');
+    cal.moveTo(day(3));
+    await cal.done(day(2), 'c'); // the first push moved C to Thursday
+    cal.moveTo(day(4));
+    await cal.pushIt(day(1), 'b'); // B, missed on Wednesday, pushed on Friday (keeping C)
+    const shifts = await cal.shifts();
+    assert.deepEqual(shifts.map((s) => s.keptIds ?? []), [[], [occurrenceIdFor(plan.id, day(2), 'c')]]);
+
+    const step = (on: ISODate) => currentRotatingStep(plan.schedule, plan.startDate, on, shifts);
+    assert.equal(step(day(4)), 1, 'B on Friday');
+    assert.equal(step(day(5)), 1, 'Saturday, emptied by the push, stays on B');
+    assert.equal(step(day(6)), 0);
+    assert.equal(step(day(7)), 1);
+    for (const on of [day(4), day(6), day(7)]) {
+      cal.moveTo(on);
+      const original = await cal.todaysOriginal(on);
+      assert.ok(original, `${on}: one day's workouts on Today`);
+      assert.equal(step(on), daysBetween(plan.startDate, original) % 3, `${on}: the step of what Today shows`);
+    }
+  });
+
+  test('program: H3 pushed and missed again, L1 done where the push put it, then H3 pushed again: still week 1', async () => {
+    const plan = program();
+    const cal = await calendar(plan);
+    await cal.done(day(0), 'h1');
+    cal.moveTo(day(2));
+    await cal.done(day(2), 'h2');
+    cal.moveTo(day(5));
+    await cal.pushIt(day(4), 'h3'); // Friday's H3 to Saturday, then missed again
+    cal.moveTo(day(8));
+    await cal.done(day(7), 'l1'); // on Tuesday, where the push put it
+    cal.moveTo(day(9));
+    await cal.pushIt(day(4), 'h3'); // H3 again, on Wednesday (keeping L1)
+
+    const shifts = await cal.shifts();
+    const week = (on: ISODate) => currentProgramWeek(plan, on, shifts);
+    cal.moveTo(day(9));
+    assert.equal(await cal.todaysOriginal(day(9)), day(4), "Wednesday: week 1's H3");
+    assert.equal(week(day(9)), 1);
+    assert.equal(week(day(12)), 1);
+    assert.equal(week(day(13)), 2);
+  });
 });
 
 describe('Next without pushes keeps its rules', () => {

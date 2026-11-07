@@ -9,7 +9,7 @@ import { createSqliteRepository, type SqliteRepository } from '../src/data/db/sq
 import { roundingIncrementFor } from '../src/data/logging';
 import { defaultRounding } from '../src/data/preferences';
 import { SCHEDULE_AHEAD_DAYS } from '../src/data/repository';
-import { scheduleOccurrences, trainingDays } from '../src/data/schedule';
+import { scheduledWorkoutIds, scheduleOccurrences, trainingDays } from '../src/data/schedule';
 import type {
   Equipment,
   LoggedSet,
@@ -31,6 +31,7 @@ import { CATEGORY_LABEL, describeProgression, shownIncrement, templateMeta } fro
 import { planFromTemplate, templateDayOption, templateDayOptions } from '../src/features/plans/planEdits';
 import { buildAgenda } from '../src/features/today/agenda';
 import { progressionFor } from '../src/features/workout/progression';
+import { cycle } from './support/cycles';
 import { openTestDatabase } from './support/nodeSqlite';
 
 const MONDAY = '2026-10-19';
@@ -71,7 +72,7 @@ describe('scheduling the three plan types', () => {
   });
 
   test('rotating cycles repeat by day, whatever the weekday', () => {
-    const p = plan('r', { type: 'rotating', sequence: ['a', 'b', 'rest'] }, [workout('a'), workout('b')], { startDate: addDays(MONDAY, 2) });
+    const p = plan('r', cycle(['a'], ['b'], []), [workout('a'), workout('b')], { startDate: addDays(MONDAY, 2) });
     const occ = scheduleOccurrences(p, MONDAY, addDays(MONDAY, 8));
     // Nothing before the start date; then A, B, rest, A, B, rest, A.
     assert.deepEqual(occ.map((o) => [o.scheduledDate, o.planWorkoutId]), [
@@ -116,7 +117,7 @@ describe('plans on the calendar', () => {
 
   test('several active plans merge onto the same day', async () => {
     await repo.savePlan(plan('lift', every(['squat']), [workout('squat')]));
-    await repo.savePlan(plan('cond', { type: 'rotating', sequence: ['run'] }, [workout('run')]));
+    await repo.savePlan(plan('cond', cycle(['run']), [workout('run')]));
     const day = addDays(MONDAY, 3);
     assert.deepEqual((await occurrencesOn(day)).map((o) => o.planId).sort(), ['cond', 'lift']);
     assert.equal((await agendaOn(day)).length, 2);
@@ -204,7 +205,7 @@ describe('templates', () => {
     }
     // The schedule points at the plan's own workouts.
     const ids = new Set(p.workouts.map((w) => w.id));
-    const scheduled = p.schedule.type === 'rotating' ? p.schedule.sequence.filter((s) => s !== 'rest') : p.schedule.days.flatMap((d) => d.workoutIds);
+    const scheduled = [...scheduledWorkoutIds(p.schedule)];
     assert.ok(scheduled.length > 0 && scheduled.every((id) => ids.has(id)));
     // Editing the plan never reaches the template.
     p.workouts[0].blocks[0].exercises[0].sets[0].targetReps = 99;
@@ -419,7 +420,7 @@ describe('template day versions', () => {
         const label = `${template.id} on ${option.daysPerWeek} days`;
         const p = planFromTemplate(template, MONDAY, { daysPerWeek: option.daysPerWeek });
         assert.equal(trainingDays(p.schedule).count, trainingDays(option.schedule).count, label);
-        const scheduled = new Set(p.schedule.type === 'rotating' ? p.schedule.sequence.filter((s) => s !== 'rest') : p.schedule.days.flatMap((d) => d.workoutIds));
+        const scheduled = scheduledWorkoutIds(p.schedule);
         assert.deepEqual(new Set(p.workouts.map((w) => w.id)), scheduled, `${label} copies only what it schedules`);
       }
     }

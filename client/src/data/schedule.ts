@@ -1,5 +1,5 @@
 import { addDays, daysBetween, isoWeekday, startOfWeek } from './dates';
-import type { ID, ISODate, Plan, PlanSchedule, PlanShift, ScheduledOccurrence, Weekday } from './types';
+import type { CycleStep, ID, ISODate, Plan, PlanSchedule, PlanShift, ScheduledOccurrence, Weekday } from './types';
 
 /**
  * Whether a push covers a workout originally on `original`. A weekly push covers the missed day
@@ -41,8 +41,15 @@ export function occurrenceIdFor(planId: ID, original: ISODate, workoutId: ID): I
  * Where the plan's own pattern has got to by `date`, after its pushes: the latest original date
  * whose workouts have landed on or before `date`. The Plans tab uses it for a rotating cycle's
  * current step and a program's current week, so they agree with Today after a push.
+ * `landedOn` says where a day's workouts land (its last one); without it, where the pushes move
+ * the date, which ignores what they kept.
  */
-export function originalDateFor(date: ISODate, shifts: readonly PlanShift[], kept: (original: ISODate) => boolean = () => false): ISODate {
+export function originalDateFor(
+  date: ISODate,
+  shifts: readonly PlanShift[],
+  kept: (original: ISODate) => boolean = () => false,
+  landedOn: (original: ISODate) => ISODate = (original) => shiftedDate(original, shifts),
+): ISODate {
   const reach = shifts.reduce((sum, s) => sum + Math.max(0, s.days), 0);
   const floor = addDays(date, -reach);
   // Days whose workouts a push kept in place are skipped, even past the floor (a kept day can sit
@@ -50,7 +57,7 @@ export function originalDateFor(date: ISODate, shifts: readonly PlanShift[], kep
   const limit = addDays(floor, -400);
   for (let original = date; ; original = addDays(original, -1)) {
     if (kept(original) && original > limit) continue;
-    if (original <= floor || shiftedDate(original, shifts) <= date) return original;
+    if (original <= floor || landedOn(original) <= date) return original;
   }
 }
 
@@ -110,23 +117,52 @@ export function planShiftFor(input: { id: ID; plan: Plan; occurrence: ScheduledO
   };
 }
 
-/** Workout ids a schedule puts on one date. */
+/**
+ * A cycle as plans stored it before a day could hold several workouts (`sequence`), as steps:
+ * 'rest' (or anything that isn't an id) is a rest day, and an id a one-workout day. Order and
+ * length are kept, so every date runs the same workout as before. Not a list gives no steps.
+ */
+export function stepsFromSequence(sequence: unknown): CycleStep[] {
+  if (!Array.isArray(sequence)) return [];
+  return sequence.map((s) => ({ workoutIds: typeof s === 'string' && s !== 'rest' ? [s] : [] }));
+}
+
+/**
+ * A cycle's steps. Every reader goes through this: a row stored in the old shape that the startup
+ * upgrade (db/upgradeCycleSteps.ts) somehow missed still schedules as it did, instead of stopping
+ * the app from opening (the repository schedules every active plan at startup).
+ */
+export function cycleSteps(schedule: Extract<PlanSchedule, { type: 'rotating' }>): CycleStep[] {
+  if (Array.isArray(schedule.steps)) return schedule.steps;
+  return stepsFromSequence((schedule as unknown as { sequence?: unknown }).sequence);
+}
+
+/** Every workout id a schedule uses, once each. */
+export function scheduledWorkoutIds(schedule: PlanSchedule): Set<ID> {
+  const days = schedule.type === 'rotating' ? cycleSteps(schedule) : schedule.days;
+  return new Set(days.flatMap((d) => d.workoutIds));
+}
+
+/** Without repeats: two copies of a workout on one date would share an occurrence id. */
+const once = (ids: readonly string[] | undefined): string[] => [...new Set(ids ?? [])];
+
+/** Workout ids a schedule puts on one date, each once. */
 export function workoutsOn(schedule: PlanSchedule, startDate: ISODate, date: ISODate): string[] {
   const offset = daysBetween(startDate, date);
   if (offset < 0) return [];
   const weekday = isoWeekday(date);
   switch (schedule.type) {
     case 'weekly':
-      return schedule.days.find((d) => d.weekday === weekday)?.workoutIds ?? [];
+      return once(schedule.days.find((d) => d.weekday === weekday)?.workoutIds);
     case 'fixed': {
       const week = Math.floor(offset / 7) + 1;
       if (week > schedule.weeks) return [];
-      return schedule.days.find((d) => d.week === week && d.weekday === weekday)?.workoutIds ?? [];
+      return once(schedule.days.find((d) => d.week === week && d.weekday === weekday)?.workoutIds);
     }
     case 'rotating': {
-      if (!schedule.sequence.length) return [];
-      const step = schedule.sequence[offset % schedule.sequence.length];
-      return step === 'rest' ? [] : [step];
+      const steps = cycleSteps(schedule);
+      if (!steps.length) return [];
+      return once(steps[offset % steps.length].workoutIds);
     }
   }
 }
@@ -169,10 +205,15 @@ export function weeklyFromPattern(pattern: Record<Weekday, string[]>): PlanSched
   };
 }
 
-/** Training days per week (or per cycle length for rotating plans). */
-export function trainingDays(schedule: PlanSchedule): { count: number; per: 'week' | 'cycle'; cycleLength?: number } {
+/**
+ * Training days per week, or per cycle for rotating plans: days with at least one workout, so a
+ * cycle day with two workouts is one day. A cycle also gives `workouts`, the workouts on all its
+ * days added up (a repeat on one day counts once), for the plan card's "3 workouts in a 3-day cycle".
+ */
+export function trainingDays(schedule: PlanSchedule): { count: number; per: 'week' | 'cycle'; cycleLength?: number; workouts?: number } {
   if (schedule.type === 'rotating') {
-    return { count: schedule.sequence.filter((s) => s !== 'rest').length, per: 'cycle', cycleLength: schedule.sequence.length };
+    const perStep = cycleSteps(schedule).map((s) => once(s.workoutIds).length);
+    return { count: perStep.filter((n) => n > 0).length, per: 'cycle', cycleLength: perStep.length, workouts: perStep.reduce((sum, n) => sum + n, 0) };
   }
   return { count: Object.values(weekPattern(schedule)).filter((ids) => ids.length).length, per: 'week' };
 }

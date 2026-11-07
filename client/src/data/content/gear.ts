@@ -1,3 +1,4 @@
+import { scheduledWorkoutIds } from '../schedule';
 import type { Gear, ID, PlanSchedule, PlanWorkout } from '../types';
 
 /**
@@ -150,6 +151,6 @@ export function gearForExercises(exerciseIds: Iterable<ID>): Gear[] {
  * onboarding's cards both show this for the version they start, not the program's `alsoNeeds`.
  */
 export function gearForSchedule(workouts: readonly Pick<PlanWorkout, 'id' | 'blocks'>[], schedule: PlanSchedule): Gear[] {
-  const used = new Set<ID>(schedule.type === 'rotating' ? schedule.sequence : schedule.days.flatMap((d) => d.workoutIds));
+  const used = scheduledWorkoutIds(schedule);
   return gearForExercises(workouts.filter((w) => used.has(w.id)).flatMap((w) => w.blocks.flatMap((b) => b.exercises.map((e) => e.exerciseId))));
 }

@@ -1,4 +1,4 @@
-import type { PlannedBlock, PlannedExercise, PlanWorkout, SetPrescription, StarterTemplate } from '../../src/data/types';
+import type { ID, PlannedBlock, PlannedExercise, PlanSchedule, PlanWorkout, SetPrescription, StarterTemplate } from '../../src/data/types';
 import { lbToKg } from '../../src/data/units';
 
 /**
@@ -7,7 +7,18 @@ import { lbToKg } from '../../src/data/units';
  * what db/blankPlanRests.ts cleans, and LEGACY_TEMPLATE_RESTS_SEC lists their exercises' old
  * rests. Moved unchanged from src/data/fake/plans.ts (only `levels` and `goals` were added, which
  * StarterTemplate now requires). Never edit them, and never ship them: tpl_calisthenics is retired.
+ *
+ * tpl_calisthenics keeps the cycle shape of its time, `sequence` (one workout or 'rest' a day): it is
+ * what plans copied from it stored. So these are typed as LegacyStarterTemplate, not StarterTemplate,
+ * and a test reads the cycle as steps with stepsFromSequence, as the startup upgrade does
+ * (db/upgradeCycleSteps.ts).
  */
+
+/** A rotating cycle as it was stored before a day could hold several workouts. */
+export type LegacyCycle = { type: 'rotating'; sequence: (ID | 'rest')[] };
+
+/** A template of that time: its schedule may be a cycle in the old shape. */
+export type LegacyStarterTemplate = Omit<StarterTemplate, 'schedule'> & { schedule: PlanSchedule | LegacyCycle };
 
 function working(count: number, reps: SetPrescription['targetReps'], extra: Partial<SetPrescription> = {}): SetPrescription[] {
   return Array.from({ length: count }, () => ({ kind: 'normal' as const, modifiers: [], targetReps: reps, targetRir: 2, ...extra }));
@@ -134,7 +145,7 @@ export const legacyPpl: StarterTemplate = {
 };
 
 /** The old Bodyweight Basics (a rotating cycle; its id is retired). */
-export const legacyCalisthenics: StarterTemplate = {
+export const legacyCalisthenics: LegacyStarterTemplate = {
   id: 'tpl_calisthenics',
   name: 'Bodyweight Basics',
   category: 'bodyweight',
@@ -149,4 +160,4 @@ export const legacyCalisthenics: StarterTemplate = {
 };
 
 /** Both frozen stand-ins. */
-export const LEGACY_TEMPLATES: readonly StarterTemplate[] = [legacyPpl, legacyCalisthenics];
+export const LEGACY_TEMPLATES: readonly LegacyStarterTemplate[] = [legacyPpl, legacyCalisthenics];

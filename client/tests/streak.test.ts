@@ -12,9 +12,11 @@ import { buildFakeDataset } from '../src/data/fake';
 import { INVALIDATES } from '../src/data/invalidation';
 import { defaultPreferences } from '../src/data/preferences';
 import { deriveStreak } from '../src/data/progress';
+import { scheduledWorkoutIds } from '../src/data/schedule';
 import type { FrozenWeekTarget, Goal, ISODate, LoggedSet, Plan, PlanSchedule, ScheduledOccurrence, StreakWeek, Weekday, WorkoutSession } from '../src/data/types';
 import { flatWeekTargets, liveWeekTargets, plannedPerWeek, targetFor, weekTarget, type WeekTargetLookup } from '../src/data/weekTargets';
 import { sessionForReopen } from '../src/features/workout/buildSession';
+import { cycle } from './support/cycles';
 import { openTestDatabase } from './support/nodeSqlite';
 
 // ---------------------------------------------------------------------------
@@ -57,7 +59,6 @@ function finished(id: string, date: ISODate, occurrence?: ScheduledOccurrence, o
 }
 
 function makePlan(id: string, schedule: PlanSchedule): Plan {
-  const ids = schedule.type === 'rotating' ? schedule.sequence.filter((s) => s !== 'rest') : schedule.days.flatMap((d) => d.workoutIds);
   return {
     id,
     name: `Plan ${id}`,
@@ -65,7 +66,7 @@ function makePlan(id: string, schedule: PlanSchedule): Plan {
     status: 'active',
     startDate: day(0),
     schedule,
-    workouts: [...new Set(ids)].map((w) => ({ id: w, name: w, blocks: [] })),
+    workouts: [...scheduledWorkoutIds(schedule)].map((w) => ({ id: w, name: w, blocks: [] })),
     createdAt: STAMP,
     updatedAt: STAMP,
   };
@@ -257,6 +258,20 @@ describe('the weekly target, through the repository', () => {
     assert.equal(streak.currentWeeks, 1);
   });
 
+  test('a cycle day with two workouts adds 2 to the week: both count toward the target', async () => {
+    // AM + PM, rest, C, rest from Monday: 2 + 1 + 2 + 1 = 6 workouts in the first week.
+    await plansFromMonday(makePlan('double', cycle(['am', 'pm'], [], ['c'], [])));
+    let streak = await repo.getStreak();
+    assert.deepEqual([streak.thisWeekTarget, streak.thisWeekSource, streak.thisWeekPlanned], [6, 'plan', 6]);
+
+    // Only one of a double day's two done: the week isn't met.
+    for (const [id, n] of [['am0', 0], ['pm0', 0], ['c2', 2], ['am4', 4], ['c6', 6]] as const) await repo.saveSession(finished(id, day(n)));
+    setToday(day(7));
+    assert.deepEqual(await weekOf(day(0)), { weekStart: day(0), target: 6, source: 'plan', planned: 6, completed: 5, met: false, frozen: true });
+    streak = await repo.getStreak();
+    assert.equal(streak.currentWeeks, 0);
+  });
+
   test('a weekly goal beats the plans; the planned count is still reported', async () => {
     await plansFromMonday(weekly('a', [1, 3, 5]));
     setToday(day(9));
@@ -418,7 +433,7 @@ describe('finished weeks keep their target', () => {
 describe('the week-start setting', () => {
   // A, B, rest, repeating from Monday day(0): Monday weeks hold 5 workouts each; the Sunday week
   // ending Saturday day(5) holds 4, the next one 5.
-  const rotating = () => makePlan('r', { type: 'rotating', sequence: ['a', 'b', 'rest'] });
+  const rotating = () => makePlan('r', cycle(['a'], ['b'], []));
 
   test("after a switch, a week keeps the stored target of the old week it shares most days with; switching back finds the old rows", async () => {
     await plansFromMonday(rotating());
@@ -481,7 +496,7 @@ describe('the week-start setting', () => {
     // Every other day from Monday day(0). Sunday weeks hold 3, then 4; the Monday week day(7)-day(13) holds 3.
     fresh(day(-1));
     await weekStartingOn(7);
-    await repo.savePlan(makePlan('eod', { type: 'rotating', sequence: ['a', 'rest'] }));
+    await repo.savePlan(makePlan('eod', cycle(['a'], [])));
     for (const n of [0, 2, 4, 6, 8, 10, 12]) {
       setToday(day(n));
       await repo.saveSession(finished(`w${n}`, day(n)));
@@ -500,7 +515,7 @@ describe('the week-start setting', () => {
 
   test('a switch keeps whether each past week was met, though its workouts are regrouped (G3.10 review)', async () => {
     // Every other day from Monday day(0): Monday weeks plan 4, 3, 4; Sunday weeks 3, 4, 3.
-    await plansFromMonday(makePlan('eod', { type: 'rotating', sequence: ['a', 'rest'] }));
+    await plansFromMonday(makePlan('eod', cycle(['a'], [])));
     for (const n of [0, 2, 4, 6, 8, 10, 12, 14]) {
       setToday(day(n));
       await repo.saveSession(finished(`w${n}`, day(n)));

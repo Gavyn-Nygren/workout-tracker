@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G4.1 (EAS development build). Tracker Dev is built and running on the owner's iPhone; what's left is the phone check in [DEV_BUILD.md](DEV_BUILD.md) step 9. The G3.13 starter programs are waiting for the owner's review (`CONTENT_REVIEW.md`).
+**Current goal:** G4.1 (EAS development build). Tracker Dev is built and running on the owner's iPhone; what's left is the phone check in [DEV_BUILD.md](DEV_BUILD.md) step 9. The cycle editor (several workouts on a cycle day, G3.7) is also waiting for the owner's phone check. The G3.13 starter programs are waiting for the owner's review (`CONTENT_REVIEW.md`).
 
 ## How we work
 
@@ -306,6 +306,12 @@ Everything works on one phone, offline, with no server.
   - *Pushes are stored with the plan (a new `plan_shifts` table), so they survive plan edits and the calendar filling in ahead. A plan edit never deletes a pushed workout. A moved workout says "Moved from …" for a week after the push.*
 - [x] Multi-workout days.
   - *Workouts from different plans, or two on one day after a push, show as swipeable cards, and the pager moves to the workout a push just brought to today.*
+- [x] Several workouts on one cycle day (owner's request, 2026-11-06), for example "Day 1: Push + Cardio, Day 2: Legs, Day 3: Rest". Weekly and fixed-length plans already allowed several on a weekday.
+  - *The cycle editor looks like the weekly one (user's pick): a row per day with removable workout chips and a "+" that adds a workout the day doesn't have; removing a day's last workout leaves it "Rest". Reorder swaps in a drag list where a day can also be deleted, after a confirmation; it replaces Remove last day.*
+  - *Deleting a workout from the plan takes it off every cycle day, and a day left empty becomes a rest day, so the cycle keeps its length and later dates don't move (user's pick). The plan card counts workouts: "Rotating · 3 workouts in a 3-day cycle" (user's pick).*
+  - *Today, streaks, Perfect Week, reminders, the missed banner and push forward already worked per workout, so they're unchanged. Stored plans and saved versions are rewritten once from the old one-workout-a-day cycle (`db/upgradeCycleSteps.ts`), keeping every date's workout. The JSON export is now version 2. Tests cover the cycle helpers, double cycle days through the calendar, pushes and undo, streak targets, the plan grid's today ring, and the upgrade.*
+  - *JS only, so no new EAS build: Expo Go and Tracker Dev each need a full reload so the upgrade runs on their own database.*
+  - [ ] The owner checks the cycle editor on the phone.
 - [x] Decide time zone and week-start handling.
   - *Calendar dates are the phone's local dates and don't move when you travel. Completion times are stored in UTC and shown in local time. Day math is safe across daylight saving changes.*
   - *Week start is Monday by default, with a Sunday option under Units & logging (user's pick). The streak, Home's week, the week strip, and the plan week grids all follow it.*

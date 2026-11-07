@@ -7,6 +7,7 @@ import { gearForSchedule, gearList } from '@/data/content/gear';
 import { useToday } from '@/data/DataProvider';
 import { succeeded, useExercises, usePreferences, useSavePlan, useTemplates } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
+import { scheduledWorkoutIds } from '@/data/schedule';
 import type { BlockType } from '@/data/types';
 import { formatShortDate, plural } from '@/lib/format';
 import { CATEGORY_LABEL, describeSchedule, exerciseName, PLAN_TYPE_LABEL, prescriptionSummary, spokenPrescription, templateMeta, workoutDays } from '@/features/plans/describe';
@@ -52,7 +53,7 @@ export default function TemplateScreen() {
   const option = templateDayOption(template, days);
   const { schedule } = option;
   // Only the workouts this version schedules, in the template's order, and the gear they need.
-  const scheduled = new Set<string>(schedule.type === 'rotating' ? schedule.sequence : schedule.days.flatMap((d) => d.workoutIds));
+  const scheduled = scheduledWorkoutIds(schedule);
   const workouts = template.workouts.filter((w) => scheduled.has(w.id));
   const gear = gearForSchedule(template.workouts, schedule);
 

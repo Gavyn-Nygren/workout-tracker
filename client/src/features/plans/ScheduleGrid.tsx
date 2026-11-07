@@ -5,11 +5,12 @@ import { AppText, Icon } from '@/components/ui';
 import { isoWeekday } from '@/data/dates';
 import { usePreferences } from '@/data/hooks';
 import { defaultPreferences } from '@/data/preferences';
-import { weekPattern } from '@/data/schedule';
+import { cycleSteps, weekPattern } from '@/data/schedule';
 import type { ISODate, PlanSchedule, PlanShift, PlanWorkout, Weekday } from '@/data/types';
 import { WEEKDAY_LETTER, WEEKDAY_LONG, weekdayOrder } from '@/lib/format';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
+import { cycleDayNames, nameList } from './cycleLabels';
 import { abbreviate } from './describe';
 import { currentRotatingStep } from './position';
 
@@ -27,7 +28,8 @@ type Props = {
 /**
  * The plan's schedule at a glance (user's pick: week grid). Weekly and fixed plans show seven day
  * columns with workout chips, starting on the user's week start; rotating plans show the cycle as
- * a row of steps.
+ * a row of day pills, each listing its workouts one per line ("Rest" when it has none), with
+ * today's day ringed.
  */
 export function ScheduleGrid({ schedule, workouts, today, startDate, shifts, onPressDay }: Props) {
   const { colors } = useAppTheme();
@@ -36,29 +38,38 @@ export function ScheduleGrid({ schedule, workouts, today, startDate, shifts, onP
 
   if (schedule.type === 'rotating') {
     const step = today && startDate ? currentRotatingStep(schedule, startDate, today, shifts) : undefined;
+    const steps = cycleSteps(schedule).map((s) => cycleDayNames(s, names));
     return (
       <View
         style={styles.cycle}
         accessible
-        accessibilityLabel={`${schedule.sequence.length}-day cycle: ${schedule.sequence
-          .map((s, i) => `day ${i + 1}, ${s === 'rest' ? 'rest' : (names.get(s) ?? 'workout')}${i === step ? ', today' : ''}`)
+        accessibilityLabel={`${steps.length}-day cycle: ${steps
+          .map((s, i) => `day ${i + 1}, ${s.length ? nameList(s) : 'rest'}${i === step ? ', today' : ''}`)
           .join('; ')}. Then it repeats.`}
       >
-        {schedule.sequence.map((s, i) => (
-          <Fragment key={`${s}-${i}`}>
+        {steps.map((s, i) => (
+          <Fragment key={i}>
             <View
               style={[
                 styles.step,
-                { backgroundColor: s === 'rest' ? colors.input : colors.accentSubtle },
+                { backgroundColor: s.length ? colors.accentSubtle : colors.input },
                 i === step && { borderColor: colors.accentText, borderWidth: 2 },
               ]}
             >
               <AppText variant="caption" tone="secondary" numeric>{`Day ${i + 1}`}</AppText>
-              <AppText variant="subhead" weight="700" tone={s === 'rest' ? 'secondary' : 'accent'} numberOfLines={1}>
-                {s === 'rest' ? 'Rest' : (names.get(s) ?? 'Workout')}
-              </AppText>
+              {s.length ? (
+                s.map((name, j) => (
+                  <AppText key={j} variant="subhead" weight="700" tone="accent" numberOfLines={1}>
+                    {name}
+                  </AppText>
+                ))
+              ) : (
+                <AppText variant="subhead" weight="700" tone="secondary" numberOfLines={1}>
+                  Rest
+                </AppText>
+              )}
             </View>
-            <Icon name={i === schedule.sequence.length - 1 ? 'arrow.counterclockwise' : 'chevron.right'} color={colors.textTertiary} size={12} />
+            <Icon name={i === steps.length - 1 ? 'arrow.counterclockwise' : 'chevron.right'} color={colors.textTertiary} size={12} />
           </Fragment>
         ))}
       </View>
@@ -143,10 +154,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
+  // At most the row's width, so a long name is cut off instead of running off the card.
   step: {
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     minWidth: 72,
+    maxWidth: '100%',
   },
 });

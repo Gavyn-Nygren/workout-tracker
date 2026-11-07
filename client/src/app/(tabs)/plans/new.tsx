@@ -20,7 +20,7 @@ type PlanType = PlanSchedule['type'];
 const TYPES: { type: PlanType; title: string; body: string; icon: SFSymbol }[] = [
   { type: 'weekly', title: 'Weekly', body: 'Workouts on set weekdays, repeating every week. Most splits work this way.', icon: 'calendar' },
   { type: 'fixed', title: 'Fixed-length', body: 'A program with an end, like 12 weeks, usually with weekly progression.', icon: 'flag.checkered' },
-  { type: 'rotating', title: 'Rotating', body: 'A cycle of workout and rest days that repeats regardless of weekday.', icon: 'arrow.triangle.2.circlepath' },
+  { type: 'rotating', title: 'Rotating', body: 'A cycle of workout and rest days that repeats regardless of weekday. A day can hold more than one workout.', icon: 'arrow.triangle.2.circlepath' },
 ];
 
 /** New plan setup (user's pick): type → name and start → days or cycle, then the plan editor. */
@@ -157,7 +157,7 @@ export default function NewPlanScreen() {
         <View style={styles.section}>
           <StepTitle title="Build the cycle" focusRef={titleRef} />
           <AppText variant="subhead" tone="secondary">
-            The cycle repeats from your start date. Tap a day to remove it.
+            The cycle repeats from your start date. Tap a day to remove it. To put two workouts on one day, add another workout to the plan, then add it to that day in Schedule.
           </AppText>
           <View style={styles.wrap}>
             {cycle.map((s, i) => (

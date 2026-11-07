@@ -8,12 +8,12 @@ import { migrate } from '../src/data/db/schema';
 import type { SqlDb } from '../src/data/db/sql';
 import { createSqliteRepository, type SqliteRepository } from '../src/data/db/sqliteRepository';
 import { fakePlans } from '../src/data/fake/plans';
-import { trainingDays } from '../src/data/schedule';
-import type { Exercise, Plan, PlannedBlock, PlannedExercise, PlanWorkout, SetPrescription, Weekday, WorkoutSession } from '../src/data/types';
+import { stepsFromSequence, trainingDays } from '../src/data/schedule';
+import type { Exercise, Plan, PlannedBlock, PlannedExercise, PlanWorkout, SetPrescription, StarterTemplate, Weekday, WorkoutSession } from '../src/data/types';
 import { autoRestHint, prescriptionSummary, spokenPrescription } from '../src/features/plans/describe';
 import { addExercise, planFromTemplate, supersetWithNext, templateDayOptions, ungroup, withWarmupSet } from '../src/features/plans/planEdits';
 import { restAfterSet } from '../src/features/workout/rest';
-import { LEGACY_TEMPLATES } from './support/legacyTemplates';
+import { LEGACY_TEMPLATES, type LegacyStarterTemplate } from './support/legacyTemplates';
 import { openTestDatabase } from './support/nodeSqlite';
 
 // G3.8, user's pick "Leave plan rest blank": new plan sets get no rest, so they use the exercise's
@@ -444,8 +444,11 @@ const oldUngroup = (p: Plan, workoutId: string, blockId: string): Plan => ({
         },
   ),
 });
+/** A frozen stand-in with an old-shaped cycle read as steps, the way the startup upgrade reads a stored one. */
+const withSteps = (t: LegacyStarterTemplate): StarterTemplate =>
+  'sequence' in t.schedule ? { ...t, schedule: { type: 'rotating', steps: stepsFromSequence(t.schedule.sequence) } } : { ...t, schedule: t.schedule };
 /** "Use template" before G3.8, on one of the stand-in templates of the time (tests/support/legacyTemplates.ts). */
-const oldFromTemplate = (templateId: string) => withOldRests(planFromTemplate(LEGACY_TEMPLATES.find((t) => t.id === templateId)!, MONDAY));
+const oldFromTemplate = (templateId: string) => withOldRests(planFromTemplate(withSteps(LEGACY_TEMPLATES.find((t) => t.id === templateId)!), MONDAY));
 
 /** Saves each stage through the repository as the old app did, then opens the database as the new app first does. */
 async function cleanedAfter(stages: Plan[]): Promise<SqliteRepository> {

@@ -430,7 +430,7 @@ describe('push and undo through the repository', () => {
     const realToday = toISODate(new Date());
     let today = addDays(realToday, -2);
     const repo = createSqliteRepository(db, { today: () => today });
-    await repo.savePlan(plan('r', { startDate: today, schedule: { type: 'rotating', sequence: ['a', 'b'] } }));
+    await repo.savePlan(plan('r', { startDate: today, schedule: { type: 'rotating', steps: [{ workoutIds: ['a'] }, { workoutIds: ['b'] }] } }));
     today = realToday;
 
     const state = async () => {

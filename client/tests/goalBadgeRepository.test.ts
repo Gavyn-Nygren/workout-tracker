@@ -282,7 +282,7 @@ describe('badges from the stored history', () => {
   });
 
   describe('Perfect Week after a week-start switch (G3.10 review 3)', () => {
-    const everyOtherDay: Plan = { ...program, id: 'eod', schedule: { type: 'rotating', sequence: ['a', 'rest'] }, workouts: [{ id: 'a', name: 'A', blocks: [] }] };
+    const everyOtherDay: Plan = { ...program, id: 'eod', schedule: { type: 'rotating', steps: [{ workoutIds: ['a'] }, { workoutIds: [] }] }, workouts: [{ id: 'a', name: 'A', blocks: [] }] };
     const mwf: Plan = { ...program, id: 'mwf', schedule: { type: 'weekly', days: ([1, 3, 5] as Weekday[]).map((weekday) => ({ weekday, workoutIds: [`w${weekday}`] })) } };
     const doneOn = async (date: ISODate) => {
       setToday(date);

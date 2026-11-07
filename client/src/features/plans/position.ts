@@ -1,5 +1,5 @@
 import { addDays, daysBetween, localDateOf } from '@/data/dates';
-import { occurrenceIdFor, originalDateFor, programWeek, scheduleOccurrences, shiftCovers, workoutsOn } from '@/data/schedule';
+import { cycleSteps, occurrenceIdFor, originalDateFor, programWeek, scheduleOccurrences, shiftCovers, shiftedDate, workoutsOn } from '@/data/schedule';
 import type { ID, ISODate, Plan, PlanSchedule, PlanShift, ScheduledOccurrence } from '@/data/types';
 
 // Where a plan "is" today, for the Plans tab. Everything here reads the plan's pushes forward
@@ -35,17 +35,40 @@ export function nextWorkout(plan: Plan, today: ISODate, shifts: readonly PlanShi
  */
 export function currentProgramWeek(plan: Plan, today: ISODate, shifts: readonly PlanShift[] = []): number | undefined {
   const own = shiftsOf(plan.id, shifts);
-  return programWeek(plan, originalDateFor(today, own, keptOn(plan.schedule, plan.startDate, own)));
+  return programWeek(plan, originalDateFor(today, own, keptOn(plan.schedule, plan.startDate, own), landedOn(plan.schedule, plan.startDate, own)));
 }
 
-/** Whether every workout the plan first put on a day was kept there by a push (done or started early). */
+/**
+ * Whether every workout the plan first put on a day was kept by a push (done or started early):
+ * by the latest push that covers it, since a later push can move one an earlier push kept. One
+ * an earlier push moved before it was done, then kept, still counts.
+ */
 function keptOn(schedule: PlanSchedule, startDate: ISODate, shifts: readonly PlanShift[]) {
   return (original: ISODate) => {
     const workouts = workoutsOn(schedule, startDate, original);
     return (
       workouts.length > 0 &&
-      workouts.every((w) => shifts.some((s) => shiftCovers(s, original) && !!s.keptIds?.includes(occurrenceIdFor(s.planId, original, w))))
+      workouts.every((w) => {
+        // Ties go to the later one in the list, as shiftedDate's stable sort applies them.
+        const latest = shifts
+          .filter((s) => shiftCovers(s, original, occurrenceIdFor(s.planId, original, w)))
+          .reduce<PlanShift | undefined>((a, b) => (a && a.createdAt > b.createdAt ? a : b), undefined);
+        return !!latest?.keptIds?.includes(occurrenceIdFor(latest.planId, original, w));
+      })
     );
+  };
+}
+
+/**
+ * Where the last workout the plan first put on a day lands after its pushes, reading what each
+ * push kept. A rest day moves as the pushes move its date. `shifts` must be one plan's own.
+ */
+function landedOn(schedule: PlanSchedule, startDate: ISODate, shifts: readonly PlanShift[]) {
+  return (original: ISODate) => {
+    const [first] = shifts;
+    if (!first) return original;
+    const dates = workoutsOn(schedule, startDate, original).map((w) => shiftedDate(original, shifts, occurrenceIdFor(first.planId, original, w)));
+    return dates.length ? dates.reduce((a, b) => (a > b ? a : b)) : shiftedDate(original, shifts);
   };
 }
 
@@ -54,9 +77,10 @@ function keptOn(schedule: PlanSchedule, startDate: ISODate, shifts: readonly Pla
  * this plan's own. Undefined for other plan types, an empty cycle, or before the plan starts.
  */
 export function currentRotatingStep(schedule: PlanSchedule, startDate: ISODate, today: ISODate, shifts: readonly PlanShift[] = []): number | undefined {
-  if (schedule.type !== 'rotating' || !schedule.sequence.length) return undefined;
-  const offset = daysBetween(startDate, originalDateFor(today, shifts, keptOn(schedule, startDate, shifts)));
-  return offset < 0 ? undefined : offset % schedule.sequence.length;
+  const length = schedule.type === 'rotating' ? cycleSteps(schedule).length : 0;
+  if (!length) return undefined;
+  const offset = daysBetween(startDate, originalDateFor(today, shifts, keptOn(schedule, startDate, shifts), landedOn(schedule, startDate, shifts)));
+  return offset < 0 ? undefined : offset % length;
 }
 
 /**

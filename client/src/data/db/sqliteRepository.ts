@@ -30,6 +30,7 @@ import { plannedPerWeek, weekTargetsFromHistory, type WeekTarget, type WeekTarge
 import { blankAutoFilledPlanRests } from './blankPlanRests';
 import { insertRowIfMissing, joinSessions, nowISO, PREFERENCES_ID, putRow, readAll, readAllSync, readOne, readOneSync, splitSession, tombstone } from './rows';
 import type { SqlDb, SqlValue } from './sql';
+import { upgradeCycleSteps } from './upgradeCycleSteps';
 import { legacyStreakRule, upgradeToG310 } from './upgradeG310';
 
 
@@ -488,6 +489,8 @@ export function createSqliteRepository(db: SqlDb, options: Options = {}): Sqlite
   blankAutoFilledPlanRests(db);
   // Once per database that had workouts or goals before G3.10: keep what they meant then.
   upgradeToG310(db, today());
+  // Cycles stored one workout a day become steps (see upgradeCycleSteps.ts); before anything schedules.
+  upgradeCycleSteps(db);
   ensureSchedule();
 
   return {

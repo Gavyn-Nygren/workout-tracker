@@ -130,10 +130,22 @@ export type PlanWorkout = {
   estimatedMinutes?: number;
 };
 
+/**
+ * One day of a rotating cycle: its workouts, or none for a rest day. A workout is listed at most
+ * once, since an occurrence's id is plan + date + workout (occurrenceIdFor in schedule.ts).
+ */
+export type CycleStep = { workoutIds: ID[] };
+
 export type PlanSchedule =
   | { type: 'weekly'; days: { weekday: Weekday; workoutIds: ID[] }[] }
   | { type: 'fixed'; weeks: number; days: { week: number; weekday: Weekday; workoutIds: ID[] }[] }
-  | { type: 'rotating'; sequence: (ID | 'rest')[] };
+  /**
+   * The cycle's days in order from the start date, then repeating: a date runs step
+   * `days since start % steps.length`, so the order and the number of steps decide every date.
+   * Plans saved before cycle days could hold several workouts stored `sequence: (ID | 'rest')[]`;
+   * db/upgradeCycleSteps.ts converts them, and readers go through cycleSteps (schedule.ts).
+   */
+  | { type: 'rotating'; steps: CycleStep[] };
 
 export type TemplateCategory =
   | 'bodybuilding'

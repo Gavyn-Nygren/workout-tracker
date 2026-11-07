@@ -182,11 +182,11 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 | --- | --- |
 | **Weekly** | Workouts are assigned to weekdays and repeat. |
 | **Fixed-length program** | For example 12 weeks. Every week repeats the same days, and the progression rules move the weights from week to week. |
-| **Rotating cycle** | A day-based sequence (for example A, B, rest, C, rest) that repeats regardless of weekday. |
+| **Rotating cycle** | A day-based sequence (for example A, B, rest, C, rest) that repeats regardless of weekday. A cycle day can hold several workouts (for example Push + Cardio, Legs, rest). |
 
 **Plans and templates**
 
-- **Several plans can be active at once.** Their workouts merge on the calendar, which is one way a day ends up with multiple workouts.
+- **Several plans can be active at once.** Their workouts merge on the calendar, which is one way a day ends up with multiple workouts. The others are a weekday or a cycle day that holds several, and a push onto a day that already has one.
 - Templates are **copied** into the user's plans. Later changes to a template never rewrite a user's plan or history.
 - **Editing a plan changes unstarted future workouts only.** Completed history and any workout in progress keep their original prescription. Every saved version of a plan is kept, so a missed workout still opens with the prescription it was scheduled with.
 - Pausing or archiving a plan clears its upcoming workouts; resuming schedules them again from today. Deleting a plan removes every workout of it that wasn't started, missed ones included.
@@ -217,12 +217,12 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
 
 - A segmented control at the top switches between **My plans / Templates / Exercises**.
 - **My plans:**
-  - Each plan is a card with its type, training days, a mini week grid, and the next workout.
+  - Each plan is a card with its type, training days, a mini week grid, and the next workout. A rotating plan counts its workouts instead: "Rotating · 3 workouts in a 3-day cycle" for Push + Cardio, Legs, rest (user's pick).
   - Active plans come first, then paused or archived ones.
 - **Plan detail:**
   - A status card, then the **week grid** for the schedule.
     - Weekly and fixed-length plans show seven day columns with workout chips.
-    - Rotating plans show the cycle as a row of steps.
+    - Rotating plans show the cycle as a row of steps, each listing its workouts one per line (or Rest), with today's step ringed.
     - Fixed-length plans also show "Week N of M".
   - Below the grid, the plan's workouts.
   - The menu offers rename, pause/resume, and delete. Deleting removes upcoming workouts; logged history stays.
@@ -231,7 +231,12 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
   2. Name and start date (today or next Monday).
   3. Training days and program length, or the rotating cycle.
 
-  Each training day starts as an empty workout to fill in.
+  Each training day starts as an empty workout to fill in. To put more workouts on a cycle day, add a workout to the plan, then put it on that day in the schedule editor.
+- **Schedule editor** (Edit on the plan's schedule):
+  - Weekly and fixed-length plans list the weekdays, each with its workouts as removable chips and a round "+" that adds one; fixed-length plans also set the program length.
+  - Rotating plans list the cycle the same way (user's pick): a row per day ("Day 1", "Day 2"…) with removable chips and a "+" that adds a workout the day doesn't already have. "+" on a rest day makes it a workout day, and removing a day's last workout leaves it "Rest". Add workout day and Add rest day add a day at the end.
+  - **Reorder** turns the cycle into a drag list where each day can also be deleted, after a confirmation (every later date then runs a different day). Done returns to the rows.
+  - Deleting a workout from the plan takes it off every cycle day it was on. A day left with none becomes a rest day, so the cycle keeps its length and later dates don't move (user's pick).
 - **Workout editor:**
   - Exercises show their sets × reps, rest, and progression.
   - The ⋯ menu offers edit sets & reps, swap, superset with next / split up, move up or down, and remove.
@@ -786,7 +791,7 @@ All entities below are versioned and use client-generated IDs. Deletions are sto
 | --- | --- |
 | Account | user (via Supabase Auth), preferences (units, effort scale, theme, rounding increments, rest defaults, notification settings), devices, push tokens (only once a server feature needs them; every V1 notification is local), consents, onboarding/tutorial state |
 | Exercises | built-in exercise (stable ID), custom exercise (optional base-movement link), aliases |
-| Plans | template, user plan (copied from a template, with type weekly/fixed/rotating), plan version, scheduled occurrence |
+| Plans | template, user plan (copied from a template, with type weekly/fixed/rotating; a rotating plan's cycle is a list of days, each with its workouts, none on a rest day), plan version, scheduled occurrence |
 | Workouts | session, block (single/superset/circuit/warm-up), prescription (target values), logged set (kind + modifiers + actual values + bodyweight snapshot) |
 | Body | bodyweight entries |
 | Progress | goals, PR records, badges earned, streak state |
@@ -939,7 +944,7 @@ any ──delete──▶ tombstone (stats recalculate)
 
 **Calendar**
 
-- Tests cover all three plan types, multiple active plans, multi-workout days, the missed-workout shift and its undo, completion-date attribution, and weekly streaks including partial sessions.
+- Tests cover all three plan types, multiple active plans, multi-workout days (cycle days with several workouts too), the missed-workout shift and its undo, completion-date attribution, weekly streaks including partial sessions, and the one-time upgrade of plans stored with the old one-workout-a-day cycle.
 
 **Timers**
 

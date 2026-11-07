@@ -313,7 +313,7 @@ describe('schedules and day versions', () => {
   test('no rotating schedules', () => {
     expectOnly(
       problemsAfter((t) => {
-        t.schedule = { type: 'rotating', sequence: ['tpl_fixture_a', 'rest', 'tpl_fixture_b', 'rest', 'tpl_fixture_c', 'rest', 'rest'] };
+        t.schedule = { type: 'rotating', steps: [['tpl_fixture_a'], [], ['tpl_fixture_b'], [], ['tpl_fixture_c'], [], []].map((workoutIds) => ({ workoutIds })) };
         delete t.otherDays;
       }),
       /schedule \(3 days\): is rotating; starter templates are weekly or fixed/,
