@@ -71,7 +71,7 @@ final class HybridFormPose: HybridFormPoseSpec {
     let orientation: UIImage.Orientation
     switch orientationMode {
     case .frame: orientation = frame.orientation.formPoseImageOrientation(swapped: false)
-    case .frameSwapped: orientation = frame.orientation.formPoseImageOrientation(swapped: true)
+    case .frameswapped: orientation = frame.orientation.formPoseImageOrientation(swapped: true)
     case .raw: orientation = .up
     }
     let count = seq
