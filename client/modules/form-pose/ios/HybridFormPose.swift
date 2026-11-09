@@ -21,7 +21,7 @@ final class HybridFormPose: HybridFormPoseSpec {
   private let lock = NSLock()
   private var runner: PoseRunner?
   private var lastConfig: PoseConfig?
-  private var usesFrameOrientation = true
+  private var orientationMode: PoseOrientationMode = .frame
   private var seq: Double = 0
 
   var hostTimeMs: Double {
@@ -30,18 +30,13 @@ final class HybridFormPose: HybridFormPoseSpec {
 
   func configure(config: PoseConfig) throws -> PoseConfigureResult {
     let start = CACurrentMediaTime()
-    let frameOrientation: Bool
-    switch config.orientationMode {
-    case .frame: frameOrientation = true
-    case .raw: frameOrientation = false
-    }
     do {
       // Build the new engine outside the lock (loading a model takes a while), then swap it in.
       let next = try makeRunner(config)
       lock.lock()
       runner = next
       lastConfig = config
-      usesFrameOrientation = frameOrientation
+      orientationMode = config.orientationMode
       lock.unlock()
       return PoseConfigureResult(ok: true, error: nil, delegateActive: next.delegateActive, loadMs: (CACurrentMediaTime() - start) * 1000)
     } catch {
@@ -73,7 +68,12 @@ final class HybridFormPose: HybridFormPoseSpec {
       height = Double(CVPixelBufferGetHeight(pixelBuffer))
     }
     // Mirroring is left to the JS overlay: the engines get only the rotation.
-    let orientation: UIImage.Orientation = usesFrameOrientation ? frame.orientation.formPoseImageOrientation() : .up
+    let orientation: UIImage.Orientation
+    switch orientationMode {
+    case .frame: orientation = frame.orientation.formPoseImageOrientation(swapped: false)
+    case .frameSwapped: orientation = frame.orientation.formPoseImageOrientation(swapped: true)
+    case .raw: orientation = .up
+    }
     let count = seq
 
     return autoreleasepool { () -> PoseResult in
@@ -194,12 +194,17 @@ protocol PoseRunner: AnyObject {
 
 extension CameraOrientation {
   /// The UIImage orientation the engines expect, without mirroring (the overlay mirrors in JS).
-  func formPoseImageOrientation() -> UIImage.Orientation {
+  ///
+  /// The labels mean opposite turns. VisionCamera's 'left' says the scene's top runs along the
+  /// buffer's left edge (FrameCoordinateSystemConverter turns it clockwise to stand it up), which
+  /// UIImage and EXIF call .right (EXIF 6, the back camera held upright). `swapped` hands over the
+  /// other quarter turn instead, for checking on the phone without a new build.
+  func formPoseImageOrientation(swapped: Bool) -> UIImage.Orientation {
     switch self {
     case .up: return .up
     case .down: return .down
-    case .left: return .left
-    case .right: return .right
+    case .left: return swapped ? .left : .right
+    case .right: return swapped ? .right : .left
     }
   }
 }

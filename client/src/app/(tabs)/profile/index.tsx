@@ -212,6 +212,13 @@ export default function ProfileScreen() {
                 <Card padding="none">
                   <ListRow title="Component gallery" subtitle="Every shared component, in the current theme" icon="square.grid.2x2" onPress={() => router.push('/dev/gallery')} />
                   <ListRow
+                    title="Camera spike"
+                    subtitle="Live pose detection with frame rate, latency, heat and battery readings"
+                    icon="camera.viewfinder"
+                    accessibilityHint="Opens the camera with the pose skeleton and timed test runs"
+                    onPress={() => router.push('/dev/camera')}
+                  />
+                  <ListRow
                     title="Preview notifications"
                     subtitle="A reminder, a missed workout, and a weekly summary in about 5 seconds"
                     icon="bell.badge"

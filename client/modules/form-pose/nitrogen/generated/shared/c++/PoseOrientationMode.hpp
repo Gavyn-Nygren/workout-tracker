@@ -30,7 +30,8 @@ namespace margelo::nitro::formpose {
    */
   enum class PoseOrientationMode {
     FRAME      SWIFT_NAME(frame) = 0,
-    RAW      SWIFT_NAME(raw) = 1,
+    FRAMESWAPPED      SWIFT_NAME(frameswapped) = 1,
+    RAW      SWIFT_NAME(raw) = 2,
   } CLOSED_ENUM;
 
 } // namespace margelo::nitro::formpose
@@ -44,6 +45,7 @@ namespace margelo::nitro {
       std::string unionValue = JSIConverter<std::string>::fromJSI(runtime, arg);
       switch (hashString(unionValue.c_str(), unionValue.size())) {
         case hashString("frame"): return margelo::nitro::formpose::PoseOrientationMode::FRAME;
+        case hashString("frameSwapped"): return margelo::nitro::formpose::PoseOrientationMode::FRAMESWAPPED;
         case hashString("raw"): return margelo::nitro::formpose::PoseOrientationMode::RAW;
         default: [[unlikely]]
           throw std::invalid_argument("Cannot convert \"" + unionValue + "\" to enum PoseOrientationMode - invalid value!");
@@ -52,6 +54,7 @@ namespace margelo::nitro {
     static inline jsi::Value toJSI(jsi::Runtime& runtime, margelo::nitro::formpose::PoseOrientationMode arg) {
       switch (arg) {
         case margelo::nitro::formpose::PoseOrientationMode::FRAME: return JSIConverter<std::string>::toJSI(runtime, "frame");
+        case margelo::nitro::formpose::PoseOrientationMode::FRAMESWAPPED: return JSIConverter<std::string>::toJSI(runtime, "frameSwapped");
         case margelo::nitro::formpose::PoseOrientationMode::RAW: return JSIConverter<std::string>::toJSI(runtime, "raw");
         default: [[unlikely]]
           throw std::invalid_argument("Cannot convert PoseOrientationMode to JS - invalid value: "
@@ -65,6 +68,7 @@ namespace margelo::nitro {
       std::string unionValue = JSIConverter<std::string>::fromJSI(runtime, value);
       switch (hashString(unionValue.c_str(), unionValue.size())) {
         case hashString("frame"):
+        case hashString("frameSwapped"):
         case hashString("raw"):
           return true;
         default:

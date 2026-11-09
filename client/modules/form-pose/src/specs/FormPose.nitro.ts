@@ -8,10 +8,13 @@ export type PoseModel = 'lite' | 'full' | 'heavy';
 /** Where MediaPipe runs. Apple Vision picks its own hardware. */
 export type PoseDelegate = 'cpu' | 'gpu';
 /**
- * 'frame' hands the engine the frame's orientation, so it sees the person upright.
- * 'raw' hands it the buffer as it is (orientation up), for comparing the two.
+ * 'frame' hands the engine the frame's orientation, so it sees the person upright. VisionCamera's
+ * 'left' (the scene's top along the buffer's left edge) is UIImage .right: turn the buffer clockwise.
+ * 'frameSwapped' hands it the opposite quarter turn, a hedge in case the phone shows that reading is
+ * wrong for a camera (the front camera's mirrored buffer is unverified).
+ * 'raw' hands it the buffer as it is (orientation up), for comparing.
  */
-export type PoseOrientationMode = 'frame' | 'raw';
+export type PoseOrientationMode = 'frame' | 'frameSwapped' | 'raw';
 
 export interface PoseConfig {
   engine: PoseEngine;
@@ -49,7 +52,11 @@ export interface PoseResult {
   /** The buffer's size as delivered, before any rotation. */
   bufferWidth: number;
   bufferHeight: number;
-  /** 33 landmarks × [x, y, z, visibility, presence], x and y as 0-1 fractions of the image the engine saw. Empty when no pose. */
+  /**
+   * 33 landmarks × [x, y, z, visibility, presence], x and y as 0-1 fractions, or empty when no pose.
+   * MediaPipe gives them in the raw buffer's axes (it turns the image only to look); Apple Vision
+   * gives them in the upright image's.
+   */
   landmarks: number[];
   /** MediaPipe's 33 world landmarks × [x, y, z] in metres, hip-centred. Empty for Apple Vision. */
   world: number[];

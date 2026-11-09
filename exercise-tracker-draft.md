@@ -83,7 +83,7 @@ The repository is still a scaffold: an Expo starter client and an empty Flask en
   - Personal records, streaks, and badges are calculated from the stored history rather than stored, so edits never leave them stale.
   - Small on-device UI state (the Progress range, theme, sign-in state) lives in expo-sqlite's key-value store. Progress's pinned exercises and saved graphs are saved with the preferences, so they're exported, reset, and synced with them.
 - Charts: **custom react-native-svg charts** for now. Victory Native XL was the plan, but its current release needs Skia 2.15+ while Expo SDK 58 / Expo Go ships Skia 2.14. The charts follow the dataviz rules (one axis, hairline grid, 2px lines, ringed markers, labelled endpoints, drag-to-read crosshair). Revisit Victory once an Expo SDK supports Skia 2.15+ (a development build still uses the SDK's Skia version).
-- Form analysis: Vision Camera, MediaPipe Pose Landmarker, and Skia overlays, **all running on-device**.
+- Form analysis: Vision Camera, MediaPipe Pose Landmarker, and Skia overlays, **all running on-device**. Chosen in the G4.2 spike: VisionCamera 5 (on Nitro Modules), the app's own frame-processor plugin (`client/modules/form-pose`) running MediaPipe Pose Landmarker 1.0.0 from CocoaPods, with Apple Vision's body pose as a fallback engine (it has no foot points, so it can't give calf-raise ankle angles), and a Skia overlay drawn over the camera preview.
 - Live Activity rest timer: a native iOS widget extension.
 - React Native Web stays possible but is not built or tested for V1.
 
@@ -474,6 +474,7 @@ Editing, deleting, or reopening a workout recalculates the affected PRs, volume,
 - Camera analysis is always optional and can be used for as many or as few sets as the user chooses.
 - Analysis runs **entirely on-device**: video and pose data never leave the phone.
 - **Recording is in-app only.** Importing video from the camera roll is not supported in V1.
+- Recordings have **no sound**, so the app asks only for the camera (owner's pick). The camera prompt reads: "The camera records your sets so the app can check your form. Videos stay on this phone."
 
 **V1 verified movement families** (lower body only)
 
@@ -881,7 +882,9 @@ any ──delete──▶ tombstone (stats recalculate)
 
 - Local database library: expo-sqlite, op-sqlite, or WatermelonDB.
 - Flask hosting vendor, email delivery through Supabase or a custom SMTP provider, environments, CI/CD (for example EAS Build/Submit), secrets management, and the release process.
-- Validate the integration of Vision Camera + MediaPipe + Skia + the Live Activity extension in an Expo development build **before building features on top of it** (spike first).
+- Validate the integration of Vision Camera + MediaPipe + Skia + the Live Activity extension in an Expo development build **before building features on top of it** (spike first). The camera half is the G4.2 spike: built, and waiting for the owner's runs. The Live Activity is validated on its own in G4.7 (owner's pick).
+- MediaPipe's releases after 1.0.0 are only on Swift Package Manager, since CocoaPods trunk goes read-only in December 2026. Revisit when Expo moves iOS builds to SwiftPM (React Native 0.89 plans it).
+- An App Store build may need a microphone purpose string even with no sound recorded, if Apple's check finds VisionCamera's audio code in the binary. Check at G6.3.
 - The context mentions a June 2026 full architecture specification that is not in the repository. Confirm that this document now supersedes it.
 
 ### Form-analysis engineering

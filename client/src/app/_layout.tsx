@@ -140,6 +140,8 @@ function NavigationRoot() {
           <Stack.Protected guard={auth.signedIn && auth.onboarded && __DEV__}>
             <Stack.Screen name="dev/gallery" options={{ title: 'Component gallery' }} />
             <Stack.Screen name="dev/sheet" options={sheet([0.6, 1])} />
+            {/* The camera spike (G4.2) takes the whole screen; a swipe down would cut a timed run short. */}
+            <Stack.Screen name="dev/camera" options={{ presentation: 'fullScreenModal', headerShown: false, gestureEnabled: false }} />
           </Stack.Protected>
           {/* The tour opens from onboarding and from Profile → About. */}
           <Stack.Protected guard={auth.signedIn}>

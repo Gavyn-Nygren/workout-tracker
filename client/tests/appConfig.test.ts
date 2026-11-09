@@ -69,3 +69,39 @@ describe('native settings', () => {
     assert.deepEqual(plugin('expo-dev-client'), { toolsButton: false, showMenuAtLaunch: false });
   });
 });
+
+describe('camera stack (G4.2)', () => {
+  const pkg = read('package.json');
+  const formPose = JSON.parse(readFileSync(new URL('../modules/form-pose/package.json', import.meta.url), 'utf8'));
+  const podspec = readFileSync(new URL('../modules/form-pose/FormPose.podspec', import.meta.url), 'utf8');
+
+  test("the camera prompt says why, in the owner's words, and there's no microphone prompt (no sound)", () => {
+    assert.equal(app.ios.infoPlist.NSCameraUsageDescription, 'The camera records your sets so the app can check your form. Videos stay on this phone.');
+    assert.equal(app.ios.infoPlist.NSMicrophoneUsageDescription, undefined);
+  });
+
+  test('VisionCamera 5 with its Nitro and worklets packages, pinned exactly', () => {
+    for (const name of ['react-native-vision-camera', 'react-native-vision-camera-worklets', 'react-native-nitro-modules', 'react-native-nitro-image']) {
+      assert.match(pkg.dependencies[name], /^\d+\.\d+\.\d+$/, `${name} is pinned`);
+    }
+    assert.match(pkg.dependencies['react-native-vision-camera'], /^5\./);
+    // 0.37.2 fixed a launch crash on iOS 17 for apps built with Xcode 27 (EAS's SDK 58 image).
+    const [major, minor, patch] = pkg.dependencies['react-native-nitro-modules'].split('.').map(Number);
+    assert.ok(major > 0 || minor > 37 || (minor === 37 && patch >= 2), 'Nitro 0.37.2 or later');
+    assert.equal(pkg.devDependencies.nitrogen, pkg.dependencies['react-native-nitro-modules'], 'nitrogen matches Nitro');
+  });
+
+  test('Reanimated and Worklets build from source, the same on EAS as on the GitHub compile check', () => {
+    assert.deepEqual(pkg.expo.autolinking.ios.buildFromSource, ['react-native-reanimated', 'react-native-worklets']);
+  });
+
+  test('the pose plugin is a private local module with MediaPipe pinned to the last CocoaPods release', () => {
+    assert.equal(formPose.private, true);
+    assert.match(podspec, /s\.dependency "MediaPipeTasksVision", "1\.0\.0"/);
+    assert.match(podspec, /:ios => "17\.0"/);
+    assert.match(podspec, /"FormPoseModels" => \["ios\/models\/\*\.task"\]/);
+    for (const model of ['lite', 'full', 'heavy']) {
+      assert.ok(readFileSync(new URL(`../modules/form-pose/ios/models/pose_landmarker_${model}.task`, import.meta.url)).length > 1_000_000, `${model} model is bundled`);
+    }
+  });
+});

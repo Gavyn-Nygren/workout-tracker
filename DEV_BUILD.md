@@ -75,7 +75,7 @@ Either way nothing is used up, because this happens before the upload. Wait, the
 
 - **Developer menu:** shake the phone (or press `m` in the terminal). Press `r` in the terminal to reload.
 - **If it can't connect:** run `npx expo start --tunnel` instead. It's slower, but it gets through Wi-Fi and firewall problems.
-- **To use Expo Go meanwhile:** run `npm run start:go` instead. Expo Go keeps working until G4.2 adds the camera.
+- **To use Expo Go meanwhile:** run `npm run start:go` instead. Expo Go runs everything except the camera spike (G4.2), which needs Tracker Dev.
 
 ## 9. Check it on the phone
 
@@ -95,6 +95,43 @@ This is the G4.1 check: everything from before should still work, and these thin
   2. Then try Settings → Tracker Dev → turn Face ID off: the Privacy row should say your passcode unlocks it, and the switch still turns off.
 - **Everything else:** log a full workout, start a program, check Progress charts, export data (share sheet), the date pickers, haptics, and the tour with VoiceOver and with Reduce Motion.
 
+## 10. The camera spike (G4.2)
+
+G4.2 adds the camera, pose detection and a live skeleton, so it needs **build 2** of Tracker Dev. Until it's installed, Profile → Developer → Camera spike says it needs the new build, and everything else works as before (Expo Go too).
+
+### Make and install build 2
+
+1. In VS Code, check the bottom-left corner says the branch **g4.2-spike** (the camera code lives there until the spike is done).
+2. In the `client` terminal, run `eas build --profile development --platform ios` again. Answer as in step 6: reuse the certificate and the profile. A GitHub Mac has already compiled this exact code, so the build should go through; it takes longer than build 1 because of the pose library.
+3. Install it as in step 7 (scan the QR code, tap Install). It replaces build 1 and keeps the app's data. Developer Mode is already on.
+4. Run `npm start` and open Tracker Dev as in step 8.
+
+### Set up once
+
+- Put the phone upright (portrait) on a stand at about hip height, side-on to where you'll stand, about 3 m away, facing the light. The skeleton is only drawn right with the phone upright in this spike. With nobody to film, a side-view squat video playing on a TV or monitor works too.
+- For runs that measure battery and heat: unplug the phone, battery between 30% and 90%, Low Power Mode off, Auto-Brightness off (Settings → Accessibility → Display & Text Size, at the bottom) with brightness about half, a normal room temperature, and the phone in its usual case.
+- Start each run with the phone cool. Wait about 15 minutes between runs.
+
+### Run it
+
+1. Profile → Developer → **Camera spike**. Allow the camera when iOS asks.
+2. Tap **R0 Smoke test** (1 minute) with you or the video in view. Check the top panel:
+   - The engine line names MediaPipe on the GPU.
+   - "Overlay check: matches" (back camera). If it says "off by", open Settings at the bottom and try **Quarter turns** → Swapped; the line updates within a second.
+   - The skeleton sits on the body. If the check matches but the skeleton is off or sideways, try **Points are** → Upright, then Buffer. If the skeleton is upside down, or the pose is rarely found, try **Engine sees** → Other turn.
+   - Tell me which settings worked, if you changed any.
+   - No red "Clock check failed" line.
+3. Tap **Export** when R0 finishes, and save the file to iCloud Drive or OneDrive, or mail it to yourself.
+4. Then the other runs, one per sitting, with the phone cool and settings as they were for R0. Export each one.
+   - **R1 Engine sweep**, 12 minutes: every engine in turn.
+   - **R2 Soak**, 30 minutes nonstop.
+   - **R3 Real session**, about 28 minutes: ten 1-minute sets with the camera off between them.
+   - **R4 Battery baseline**, 30 minutes with pose detection off.
+5. **Live sets:** do 2-3 sets each of squats, split squats, RDLs, and standing and seated calf raises, side-on. Watch whether the heel and toe dots stay on your foot and the knee angle in the top panel looks right.
+6. Put the exported files on the PC and tell me where they are. I'll read them and propose the targets.
+
+The screen stays awake during a run. Closing it mid-run saves what it has, marked as stopped. Each run also saves itself every 30 seconds.
+
 ## When a new build is needed
 
-Code changes reload from the PC as before, with no new build. A new build (step 6 again, then step 7) is only needed when a native package or a native setting changes: `app.json`, `app.config.ts`, `eas.json` or an app icon. I'll say so whenever a change needs one. G4.2 (camera) will be the first.
+Code changes reload from the PC as before, with no new build. A new build (step 6 again, then step 7) is only needed when a native package or a native setting changes: `app.json`, `app.config.ts`, `eas.json`, an app icon, or the native code in `client/modules/`. I'll say so whenever a change needs one. Before a build, a GitHub Mac compiles the native code for free (the "iOS compile check" on GitHub), so a build is only spent on code that compiles.

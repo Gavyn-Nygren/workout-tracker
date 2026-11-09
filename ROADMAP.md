@@ -4,7 +4,7 @@ Work goals for building the Exercise Tracker. [exercise-tracker-draft.md](exerci
 
 **Priority: get the look right first, then add functionality.** Phases 0-2 build every screen with fake data so the design can be reviewed and approved on an iPhone before any real logic exists.
 
-**Current goal:** G4.1 (EAS development build). Tracker Dev is built and running on the owner's iPhone; what's left is the phone check in [DEV_BUILD.md](DEV_BUILD.md) step 9. The cycle editor (several workouts on a cycle day, G3.7) and the fixes from the codebase review (G4.1) are also waiting for the owner's phone checks. The G3.13 starter programs are waiting for the owner's review (`CONTENT_REVIEW.md`).
+**Current goal:** G4.2 (camera stack spike), on the `g4.2-spike` branch. The camera, pose plugin and spike screen are built and compile on a GitHub Mac; next the owner makes Tracker Dev build 2 and runs the spike ([DEV_BUILD.md](DEV_BUILD.md) step 10), and the exported numbers set the targets. Still waiting for the owner's phone checks: G4.1 (DEV_BUILD.md step 9 and the codebase-review fixes) and the cycle editor (G3.7); build 2 carries all of them. The G3.13 starter programs are waiting for the owner's review (`CONTENT_REVIEW.md`).
 
 ## How we work
 
@@ -473,9 +473,41 @@ Everything works on one phone, offline, with no server.
 
 ### G4.2 Camera stack spike (go/no-go)
 
-- [ ] Vision Camera + MediaPipe Pose Landmarker + Skia overlay running on an iPhone 12+.
-- [ ] Measure frame rate, latency, battery use, and heat.
+- [x] The stack, chosen after a researched, fact-checked comparison (2026-11-08).
+  - *VisionCamera 5.2.4: v4 is no longer maintained. v5 runs on Nitro 0.37.2, a hard minimum because older Nitro built with Xcode 27 crashes at launch on iOS 17. Its frame processors use the same react-native-worklets 0.13 as Reanimated 4.7.1.*
+  - *No existing MediaPipe plugin supports VisionCamera 5, so the app has its own: `client/modules/form-pose`, a local Nitro module.*
+    - *It runs MediaPipe Pose Landmarker, pinned to pod 1.0.0, the last release on CocoaPods trunk before it goes read-only in December 2026. The lite, full and heavy models are bundled.*
+    - *Apple Vision is the switchable fallback (owner's pick: both engines). It has no foot points, so it can't measure calf-raise ankle angles.*
+  - *The skeleton is a Skia 2.14 canvas over the normal preview, drawn on the UI thread. VisionCamera's Skia camera was left out: on this exact stack it runs out of memory.*
+- [x] The camera prompt (owner's pick): "The camera records your sets so the app can check your form. Videos stay on this phone." There's no sound, so there's no microphone prompt. The Live Activity stays in G4.7 (owner's pick).
+- [x] A free compile check on a GitHub Mac (owner's OK to push the branch): `.github/workflows/ios-compile.yml` builds the development build for a device, once without MediaPipe to tell problems apart, and launches it in the simulator for 30 seconds. Its Xcode 27.1 build matches EAS's SDK 58 image. The first run built VisionCamera, Nitro, the plugin and MediaPipe for a device first time.
+- [x] Profile → Developer → Camera spike.
+  - *The live camera with the skeleton.*
+  - *Once a second:*
+    - *frames in and processed, and frame drops by reason*
+    - *inference time, pose age and the UI lag, adding up to capture-to-screen*
+    - *heat and camera pressure, battery, CPU and memory*
+    - *the live joint angles*
+    - *a check of the overlay maths against VisionCamera's own conversions*
+  - *Settings for every engine choice, plus the overlay's orientation guesses, so a wrong guess is fixed with a reload, not a build.*
+  - *Five timed runs (R0-R4) that play by themselves and record 1-minute clips (measured, then deleted). Each run saves a JSON report every 30 seconds, and Export shares it.*
+  - *Pure, tested modules for the maths:*
+    - *joint angles in pixels, so a 16:9 frame doesn't skew them*
+    - *MediaPipe's 33 landmarks*
+    - *the overlay transform*
+    - *the metrics, runs and report*
+- [x] A review of the spike code before the build (four reviewers, each checked by a skeptic, against the installed library sources). Fixed:
+  - *Both engines were handed the opposite quarter turn: VisionCamera's 'left' is UIImage's .right. An "Engine sees → Other turn" setting stays in as a hedge, so the phone can settle it without another build.*
+  - *MediaPipe returns points in the raw buffer's axes, not upright ones. The overlay now picks by engine, and the angles stand the points upright first.*
+  - *The overlay check turned points twice. It now compares buffer points through VisionCamera's preview, back camera only.*
+  - *"720p" analysis frames are really the camera format's 1920 × 1080 while recording, so they're labelled as such and each second records the size.*
+  - *The clip recorder stopped for good after a recording error. It now restarts, waits for the video output to connect, and never leaves a stray recording.*
+  - *Summaries left the R3 rests in the overlay and CPU figures. Rests are out now, seconds that straddle an engine load are skipped, and each step gets its own summary (R1's engines).*
+  - *Apple Vision now stays on the same person instead of taking whichever result comes first.*
+- [ ] Owner: Tracker Dev build 2, then R0-R4 and live sets of each movement family (DEV_BUILD.md step 10), exporting each run.
+- [ ] Measure frame rate, latency, battery use, and heat (from the exported runs).
 - [ ] Set the analysis latency, battery, and storage targets the spec left open.
+- [ ] Go/no-go, then merge the branch.
 
 ### G4.3 Capture flow
 

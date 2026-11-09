@@ -1,6 +1,7 @@
 import type { FormMovementFamily, Joint } from '@/data/types';
+import { angleAt, type Pt } from './angles';
 
-export type Pt = { x: number; y: number };
+export type { Pt };
 export type Pose = { head: Pt; shoulder: Pt; hip: Pt; knee: Pt; ankle: Pt; toe: Pt; heel: Pt; angles: Record<Joint, number> };
 
 /** Side view in a 200×240 box, facing right. Segment lengths are roughly athletic proportions. */
@@ -24,14 +25,6 @@ export const PRIMARY_JOINT: Record<FormMovementFamily, Joint> = { squat: 'knee',
 
 const rad = (deg: number) => (deg * Math.PI) / 180;
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-
-/** Interior angle at B, in degrees. */
-function angleAt(a: Pt, b: Pt, c: Pt): number {
-  const v1 = { x: a.x - b.x, y: a.y - b.y };
-  const v2 = { x: c.x - b.x, y: c.y - b.y };
-  const cos = (v1.x * v2.x + v1.y * v2.y) / (Math.hypot(v1.x, v1.y) * Math.hypot(v2.x, v2.y));
-  return (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI;
-}
 
 /**
  * Joint positions at `depth` (0 = top of the rep, 1 = bottom). A stand-in for real pose

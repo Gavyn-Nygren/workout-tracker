@@ -19,6 +19,8 @@ public extension PoseOrientationMode {
     switch string {
       case "frame":
         self = .frame
+      case "frameSwapped":
+        self = .frameswapped
       case "raw":
         self = .raw
       default:
@@ -33,6 +35,8 @@ public extension PoseOrientationMode {
     switch self {
       case .frame:
         return "frame"
+      case .frameswapped:
+        return "frameSwapped"
       case .raw:
         return "raw"
     }

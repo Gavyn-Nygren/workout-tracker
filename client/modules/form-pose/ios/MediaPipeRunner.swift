@@ -4,16 +4,17 @@
 //
 //  MediaPipe Pose Landmarker in VIDEO mode: one person, 33 landmarks including heels and toes.
 //  The CI compile check also builds without MediaPipe (FORM_POSE_MEDIAPIPE=0), so this file
-//  compiles to nothing when the pod isn't there.
+//  compiles to just the model lookup when the pod isn't there.
 //
+
+import CoreMedia
+import Foundation
+import NitroModules
+import UIKit
 
 #if canImport(MediaPipeTasksVision)
 
-  import CoreMedia
-  import Foundation
   import MediaPipeTasksVision
-  import NitroModules
-  import UIKit
 
   final class MediaPipeRunner: PoseRunner {
     let delegateActive: PoseDelegate

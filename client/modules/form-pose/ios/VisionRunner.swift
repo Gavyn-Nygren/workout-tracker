@@ -17,6 +17,8 @@ final class VisionRunner: PoseRunner {
   /// Vision picks its own hardware (CPU, GPU or Neural Engine); this only fills the result field.
   let delegateActive: PoseDelegate = .cpu
   private let request = VNDetectHumanBodyPoseRequest()
+  /// The centre of the person picked last frame, to stay on them (Vision doesn't track).
+  private var lastCentre: CGPoint?
 
   /// Vision joint → MediaPipe landmark index. Both name sides from the person's point of view.
   private static let slots: [(VNHumanBodyPoseObservation.JointName, Int)] = [
@@ -29,7 +31,10 @@ final class VisionRunner: PoseRunner {
   func detect(sampleBuffer: CMSampleBuffer, orientation: UIImage.Orientation, timestampMs: Double) throws -> PoseOutput {
     let handler = VNImageRequestHandler(cmSampleBuffer: sampleBuffer, orientation: CGImagePropertyOrientation(formPose: orientation), options: [:])
     try handler.perform([request])
-    guard let observation = request.results?.first else { return .none }
+    guard let observation = pick(request.results ?? []) else {
+      lastCentre = nil
+      return .none
+    }
     let points = try observation.recognizedPoints(.all)
     var landmarks = [Double](repeating: 0, count: 33 * 5)
     for (joint, slot) in VisionRunner.slots {
@@ -41,6 +46,31 @@ final class VisionRunner: PoseRunner {
       landmarks[slot * 5 + 4] = Double(point.confidence)
     }
     return PoseOutput(found: true, landmarks: landmarks, world: [])
+  }
+}
+
+extension VisionRunner {
+  /// Vision returns one observation per person, in no set order. Stay on the person closest to last
+  /// frame's pick; otherwise take the biggest (the lifter is usually nearest the camera).
+  fileprivate func pick(_ observations: [VNHumanBodyPoseObservation]) -> VNHumanBodyPoseObservation? {
+    var best: (observation: VNHumanBodyPoseObservation, score: Double, centre: CGPoint)?
+    for observation in observations {
+      guard let points = try? observation.recognizedPoints(.all) else { continue }
+      let seen = points.values.filter { $0.confidence > 0.1 }.map { $0.location }
+      guard seen.count >= 4, let minX = seen.map({ $0.x }).min(), let maxX = seen.map({ $0.x }).max(),
+        let minY = seen.map({ $0.y }).min(), let maxY = seen.map({ $0.y }).max()
+      else { continue }
+      let centre = CGPoint(x: (minX + maxX) / 2, y: (minY + maxY) / 2)
+      let score: Double
+      if let last = lastCentre {
+        score = -Double(hypot(centre.x - last.x, centre.y - last.y))
+      } else {
+        score = Double((maxX - minX) * (maxY - minY))
+      }
+      if best == nil || score > best!.score { best = (observation, score, centre) }
+    }
+    lastCentre = best?.centre
+    return best?.observation
   }
 }
 
