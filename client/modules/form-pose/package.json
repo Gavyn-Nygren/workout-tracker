@@ -1,0 +1,17 @@
+{
+  "name": "form-pose",
+  "version": "0.1.0",
+  "private": true,
+  "description": "On-device pose detection for form recording: MediaPipe Pose Landmarker and Apple Vision behind one VisionCamera frame-processor plugin (roadmap G4.2).",
+  "main": "src/index.ts",
+  "react-native": "src/index.ts",
+  "source": "src/index.ts",
+  "author": "Exercise Tracker",
+  "license": "UNLICENSED",
+  "homepage": "https://github.com/Gavyn-Nygren/workout-tracker",
+  "peerDependencies": {
+    "react-native": "*",
+    "react-native-nitro-modules": "*",
+    "react-native-vision-camera": "*"
+  }
+}

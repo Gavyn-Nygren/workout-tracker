@@ -1,0 +1,172 @@
+# Compiles the iOS app on a GitHub-hosted Mac before an EAS build is spent (roadmap G4.2).
+# There's no Mac on the development PC, so this is the only way to see native compile errors without
+# using up one of the free plan's 15 iOS builds a month. Free for this public repo.
+#
+# The xcode-27 runner's default Xcode (27.1, 27A9275) is the same build as EAS's SDK 58 image.
+# Jobs:
+#   device (full):          the development build as EAS makes it, for a real iPhone, unsigned.
+#   device (no-mediapipe):  the same without MediaPipe, to tell a MediaPipe link problem apart.
+#   simulator-launch:       builds for the simulator and opens the app for 30 s, to catch crashes at launch.
+# `expo prebuild` runs here only: the checkout is thrown away afterwards (never run it in client/ on the PC).
+
+name: iOS compile check
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'g4.*']
+    paths:
+      - 'client/package.json'
+      - 'client/package-lock.json'
+      - 'client/app.json'
+      - 'client/app.config.ts'
+      - 'client/modules/**'
+      - '.github/workflows/ios-compile.yml'
+
+concurrency:
+  group: ios-compile-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  APP_VARIANT: development
+  CI: '1'
+  EXPO_NO_TELEMETRY: '1'
+
+jobs:
+  device:
+    name: device (${{ matrix.variant }})
+    runs-on: xcode-27
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [full, no-mediapipe]
+    defaults:
+      run:
+        working-directory: client
+    env:
+      FORM_POSE_MEDIAPIPE: ${{ matrix.variant == 'no-mediapipe' && '0' || '1' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - name: Tool versions
+        run: |
+          xcodebuild -version
+          pod --version
+          node --version
+          df -h /
+      - run: npm ci
+      - name: Generate the native project
+        run: npx expo prebuild --platform ios --no-install --clean
+      - uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/CocoaPods
+          key: pods-${{ runner.os }}-${{ matrix.variant }}-${{ hashFiles('client/package-lock.json', 'client/modules/**/*.podspec') }}
+          restore-keys: pods-${{ runner.os }}-${{ matrix.variant }}-
+      - name: pod install
+        working-directory: client/ios
+        run: pod install
+      - name: Build for a device (Debug, unsigned)
+        run: |
+          set -o pipefail
+          WORKSPACE=$(ls -d ios/*.xcworkspace | head -1)
+          SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+          echo "Workspace $WORKSPACE, scheme $SCHEME"
+          xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration Debug \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO build \
+            | tee xcodebuild.log | xcbeautify --renderer github-actions
+      - name: App size
+        if: success()
+        run: |
+          APP=$(ls -d build/Build/Products/Debug-iphoneos/*.app | head -1)
+          du -sh "$APP"
+          du -sh "$APP"/FormPoseModels.bundle 2>/dev/null || true
+          df -h /
+      - name: Errors from the build log
+        if: failure()
+        run: |
+          test -f xcodebuild.log || exit 0
+          grep -n -E "error:|fatal error|ld: |duplicate symbol|Undefined symbol" xcodebuild.log | head -150 || true
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: logs-device-${{ matrix.variant }}
+          path: |
+            client/xcodebuild.log
+            client/ios/Podfile.lock
+          if-no-files-found: ignore
+
+  simulator-launch:
+    runs-on: xcode-27
+    timeout-minutes: 100
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - name: Generate the native project
+        run: npx expo prebuild --platform ios --no-install --clean
+      - uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/CocoaPods
+          key: pods-${{ runner.os }}-full-${{ hashFiles('client/package-lock.json', 'client/modules/**/*.podspec') }}
+          restore-keys: pods-${{ runner.os }}-full-
+      - name: pod install
+        working-directory: client/ios
+        run: pod install
+      - name: Build for the simulator (Debug)
+        run: |
+          set -o pipefail
+          WORKSPACE=$(ls -d ios/*.xcworkspace | head -1)
+          SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+          xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO build \
+            | tee xcodebuild.log | xcbeautify --renderer github-actions
+      - name: Open the app for 30 seconds
+        run: |
+          APP=$(ls -d build/Build/Products/Debug-iphonesimulator/*.app | head -1)
+          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")
+          DEVICE=$(xcrun simctl list devices available -j | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const d=JSON.parse(s).devices;for(const [rt,list] of Object.entries(d)){if(!/iOS/.test(rt))continue;const p=list.find(x=>/^iPhone/.test(x.name));if(p){console.log(p.udid);return}}process.exit(1)})")
+          echo "App $APP ($BUNDLE_ID) on simulator $DEVICE"
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" "$APP"
+          PID=$(xcrun simctl launch "$DEVICE" "$BUNDLE_ID" | awk -F': ' '{print $2}')
+          echo "Launched, pid $PID"
+          sleep 30
+          if kill -0 "$PID" 2>/dev/null; then
+            echo "Still running after 30 s."
+          else
+            echo "::error::The app quit within 30 s of launch."
+            xcrun simctl spawn "$DEVICE" log show --last 2m --style compact --predicate 'process CONTAINS "Tracker"' | tail -200 || true
+            ls ~/Library/Logs/DiagnosticReports 2>/dev/null | tail -5
+            exit 1
+          fi
+      - name: Errors from the build log
+        if: failure()
+        run: |
+          test -f xcodebuild.log || exit 0
+          grep -n -E "error:|fatal error|ld: |duplicate symbol|Undefined symbol" xcodebuild.log | head -150 || true
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: logs-simulator
+          path: |
+            client/xcodebuild.log
+            client/ios/Podfile.lock
+          if-no-files-found: ignore
